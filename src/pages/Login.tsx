@@ -29,7 +29,7 @@ export default function Login() {
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: window.location.origin + '/AccountResearcherPortal/',
+        emailRedirectTo: 'https://dbarrett-art.github.io/AccountResearcherPortal',
       },
     });
     setSending(false);
