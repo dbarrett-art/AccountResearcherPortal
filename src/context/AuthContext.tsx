@@ -38,7 +38,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const loadProfile = useCallback(async (sess: Session | null) => {
+  const applySession = useCallback(async (sess: Session | null) => {
     if (sess?.user) {
       setUser(sess.user);
       setSession(sess);
@@ -53,31 +53,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    // Check if there's an auth token in the URL hash (magic link callback)
-    const hasAuthHash = window.location.hash.includes('access_token');
+    let mounted = true;
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
-      loadProfile(s);
-    });
+    // Register listener first — supabase-js v2 replays current auth state
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, sess) => {
+        if (mounted) applySession(sess);
+      }
+    );
 
-    supabase.auth.getSession().then(({ data: { session: s } }) => {
-      // If there's a hash token, wait for onAuthStateChange to handle it
-      // instead of resolving with null immediately
-      if (!s && hasAuthHash) return;
-      loadProfile(s);
-    });
+    // Also explicitly check — handles cases where the event already fired
+    // before our listener was registered (race with _initialize())
+    const init = async () => {
+      // Wait for supabase internal _initialize() to complete.
+      // In v2, getSession() awaits the internal initialization lock,
+      // so it returns the correct session even after hash processing.
+      const { data: { session: sess } } = await supabase.auth.getSession();
 
-    // Safety timeout: if hash processing hasn't resolved after 3s, stop loading
-    let timeout: ReturnType<typeof setTimeout> | undefined;
-    if (hasAuthHash) {
-      timeout = setTimeout(() => setLoading(false), 3000);
-    }
+      if (mounted) {
+        if (sess) {
+          applySession(sess);
+        } else if (window.location.hash.includes('access_token')) {
+          // Hash is present but getSession() returned null.
+          // _initialize() may have failed or is somehow stuck.
+          // Give it one more chance with a retry.
+          setTimeout(async () => {
+            if (!mounted) return;
+            const { data: { session: retrySession } } = await supabase.auth.getSession();
+            if (mounted) applySession(retrySession);
+          }, 1000);
+        } else {
+          applySession(null);
+        }
+      }
+    };
+
+    init();
 
     return () => {
+      mounted = false;
       subscription.unsubscribe();
-      if (timeout) clearTimeout(timeout);
     };
-  }, [loadProfile]);
+  }, [applySession]);
 
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
