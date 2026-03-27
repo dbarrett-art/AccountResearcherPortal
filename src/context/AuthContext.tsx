@@ -53,15 +53,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session: s } }) => {
-      loadProfile(s);
-    });
+    // Check if there's an auth token in the URL hash (magic link callback)
+    const hasAuthHash = window.location.hash.includes('access_token');
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
       loadProfile(s);
     });
 
-    return () => subscription.unsubscribe();
+    supabase.auth.getSession().then(({ data: { session: s } }) => {
+      // If there's a hash token, wait for onAuthStateChange to handle it
+      // instead of resolving with null immediately
+      if (!s && hasAuthHash) return;
+      loadProfile(s);
+    });
+
+    // Safety timeout: if hash processing hasn't resolved after 3s, stop loading
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    if (hasAuthHash) {
+      timeout = setTimeout(() => setLoading(false), 3000);
+    }
+
+    return () => {
+      subscription.unsubscribe();
+      if (timeout) clearTimeout(timeout);
+    };
   }, [loadProfile]);
 
   const signOut = useCallback(async () => {
