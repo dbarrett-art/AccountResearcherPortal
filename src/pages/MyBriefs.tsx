@@ -3,7 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import Layout from '../components/Layout';
+import Banner from '../components/Banner';
 import StatusBadge from '../components/StatusBadge';
+import TableSkeleton from '../components/TableSkeleton';
+import usePageTitle from '../hooks/usePageTitle';
 import { FileText, Table, RefreshCw } from 'lucide-react';
 
 interface Run {
@@ -29,6 +32,7 @@ function relativeTime(dateStr: string): string {
 }
 
 export default function MyBriefs() {
+  usePageTitle('My Briefs');
   const { session, userProfile } = useAuth();
   const navigate = useNavigate();
   const [runs, setRuns] = useState<Run[]>([]);
@@ -47,11 +51,8 @@ export default function MyBriefs() {
     setLoading(false);
   }, [userProfile]);
 
-  useEffect(() => {
-    fetchRuns();
-  }, [fetchRuns]);
+  useEffect(() => { fetchRuns(); }, [fetchRuns]);
 
-  // Health check
   useEffect(() => {
     fetch('https://go.accountresearch.workers.dev/health')
       .then((r) => setHealthOk(r.ok))
@@ -64,9 +65,7 @@ export default function MyBriefs() {
     const channel = supabase
       .channel('my-runs')
       .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'runs',
+        event: 'UPDATE', schema: 'public', table: 'runs',
         filter: `user_id=eq.${userProfile.id}`,
       }, (payload) => {
         setRuns((prev) =>
@@ -74,15 +73,12 @@ export default function MyBriefs() {
         );
       })
       .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'runs',
+        event: 'INSERT', schema: 'public', table: 'runs',
         filter: `user_id=eq.${userProfile.id}`,
       }, (payload) => {
         setRuns((prev) => [payload.new as Run, ...prev]);
       })
       .subscribe();
-
     return () => { supabase.removeChannel(channel); };
   }, [userProfile]);
 
@@ -92,30 +88,23 @@ export default function MyBriefs() {
     try {
       await fetch('https://go.accountresearch.workers.dev/retry', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
-        },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
         body: JSON.stringify({ run_id: runId }),
       });
     } catch { /* handled by realtime */ }
     setRetrying(null);
   };
 
-  if (loading) {
-    return (
-      <Layout>
-        <div style={{ color: 'var(--text-tertiary)', padding: 40 }}>Loading...</div>
-      </Layout>
-    );
-  }
+  const thStyle: React.CSSProperties = {
+    fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', padding: '10px 16px', textAlign: 'left',
+  };
 
   return (
     <Layout>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)', paddingBottom: 20, marginBottom: 24 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <h1 style={{ fontSize: 16, fontWeight: 600, margin: 0 }}>My Briefs</h1>
-          {runs.length > 0 && (
+          {!loading && runs.length > 0 && (
             <span style={{ fontSize: 12, color: 'var(--text-tertiary)', background: 'var(--bg-surface)', padding: '2px 8px', borderRadius: 4 }}>
               {runs.length} brief{runs.length !== 1 ? 's' : ''}
             </span>
@@ -124,12 +113,14 @@ export default function MyBriefs() {
       </div>
 
       {!healthOk && (
-        <div style={{ marginBottom: 16, padding: '10px 14px', borderRadius: 6, fontSize: 13, border: '1px solid rgba(220,38,38,0.2)', background: 'rgba(220,38,38,0.08)', color: 'var(--status-failed-text)' }}>
+        <Banner type="error" style={{ marginBottom: 16 }}>
           Worker health check failed — runs may be delayed.
-        </div>
+        </Banner>
       )}
 
-      {runs.length === 0 ? (
+      {loading ? (
+        <TableSkeleton rows={4} cols={5} />
+      ) : runs.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '80px 0' }}>
           <FileText size={32} style={{ color: 'var(--text-tertiary)', marginBottom: 12 }} />
           <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 4 }}>No briefs yet</div>
@@ -148,22 +139,21 @@ export default function MyBriefs() {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ background: 'var(--bg-surface)', borderBottom: '1px solid var(--border)' }}>
-                <th style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', padding: '10px 16px', textAlign: 'left' }}>Company</th>
-                <th style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', padding: '10px 16px', textAlign: 'left' }}>Submitted</th>
-                <th style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', padding: '10px 16px', textAlign: 'left' }}>Status</th>
-                <th style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', padding: '10px 16px', textAlign: 'left' }}>Summary</th>
-                <th style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', padding: '10px 16px', textAlign: 'center', width: 80 }}>Files</th>
+                <th style={thStyle}>Company</th>
+                <th style={thStyle}>Submitted</th>
+                <th style={thStyle}>Status</th>
+                <th style={thStyle}>Summary</th>
+                <th style={{ ...thStyle, textAlign: 'center', width: 80 }}>Files</th>
               </tr>
             </thead>
             <tbody>
               {runs.map((run) => (
-                <tr
-                  key={run.id}
+                <tr key={run.id}
                   style={{ borderBottom: '1px solid var(--border)', transition: 'background 80ms' }}
                   onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-elevated)')}
                   onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                 >
-                  <td style={{ padding: '11px 16px', fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{run.company}</td>
+                  <td style={{ padding: '11px 16px', fontSize: 13, fontWeight: 500 }}>{run.company}</td>
                   <td style={{ padding: '11px 16px', fontSize: 13, color: 'var(--text-secondary)' }} title={new Date(run.created_at).toLocaleString()}>
                     {relativeTime(run.created_at)}
                   </td>

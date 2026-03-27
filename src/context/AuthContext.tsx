@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, useCallback, type React
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 
-interface UserProfile {
+export interface UserProfile {
   id: string;
   email: string;
   name: string;
@@ -16,20 +16,52 @@ interface AuthContextType {
   session: Session | null;
   userProfile: UserProfile | null;
   loading: boolean;
+  authError: string | null;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
+  clearAuthError: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-async function fetchProfile(userId: string): Promise<UserProfile | null> {
+async function fetchOrCreateProfile(user: User): Promise<UserProfile | null> {
+  // Try to fetch existing profile
   const { data, error } = await supabase
     .from('users')
     .select('id, email, name, role, credits_remaining, manager_id')
-    .eq('id', userId)
+    .eq('id', user.id)
     .single();
-  if (error || !data) return null;
-  return data as UserProfile;
+
+  if (data) return data as UserProfile;
+
+  // If not found (PGRST116 = no rows), auto-provision
+  if (error?.code === 'PGRST116') {
+    const name = user.user_metadata?.name
+      || user.email?.split('@')[0]
+      || 'User';
+    const { data: created, error: insertErr } = await supabase
+      .from('users')
+      .insert({
+        id: user.id,
+        email: user.email,
+        name,
+        role: 'ae',
+        credits_remaining: 5,
+      })
+      .select('id, email, name, role, credits_remaining, manager_id')
+      .single();
+    if (insertErr) {
+      console.error('Failed to create user profile:', insertErr);
+      return null;
+    }
+    return created as UserProfile;
+  }
+
+  // RLS or other error
+  if (error) {
+    console.error('Profile fetch error:', error);
+  }
+  return null;
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -37,13 +69,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   const applySession = useCallback(async (sess: Session | null) => {
     if (sess?.user) {
       setUser(sess.user);
       setSession(sess);
-      const profile = await fetchProfile(sess.user.id);
+      const profile = await fetchOrCreateProfile(sess.user);
       setUserProfile(profile);
+      if (!profile) {
+        setAuthError('Unable to load your profile. Please try signing out and back in.');
+      }
     } else {
       setUser(null);
       setSession(null);
@@ -55,28 +91,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let mounted = true;
 
-    // Register listener first — supabase-js v2 replays current auth state
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, sess) => {
         if (mounted) applySession(sess);
       }
     );
 
-    // Also explicitly check — handles cases where the event already fired
-    // before our listener was registered (race with _initialize())
     const init = async () => {
-      // Wait for supabase internal _initialize() to complete.
-      // In v2, getSession() awaits the internal initialization lock,
-      // so it returns the correct session even after hash processing.
       const { data: { session: sess } } = await supabase.auth.getSession();
-
       if (mounted) {
         if (sess) {
           applySession(sess);
         } else if (window.location.hash.includes('access_token')) {
-          // Hash is present but getSession() returned null.
-          // _initialize() may have failed or is somehow stuck.
-          // Give it one more chance with a retry.
           setTimeout(async () => {
             if (!mounted) return;
             const { data: { session: retrySession } } = await supabase.auth.getSession();
@@ -101,17 +127,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setSession(null);
     setUserProfile(null);
+    setAuthError(null);
   }, []);
 
   const refreshProfile = useCallback(async () => {
     if (session?.user) {
-      const profile = await fetchProfile(session.user.id);
+      const profile = await fetchOrCreateProfile(session.user);
       setUserProfile(profile);
     }
   }, [session]);
 
+  const clearAuthError = useCallback(() => setAuthError(null), []);
+
   return (
-    <AuthContext.Provider value={{ user, session, userProfile, loading, signOut, refreshProfile }}>
+    <AuthContext.Provider value={{
+      user, session, userProfile, loading, authError,
+      signOut, refreshProfile, clearAuthError,
+    }}>
       {children}
     </AuthContext.Provider>
   );

@@ -1,24 +1,18 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import Layout from '../components/Layout';
 import StatusBadge from '../components/StatusBadge';
+import TableSkeleton from '../components/TableSkeleton';
+import usePageTitle from '../hooks/usePageTitle';
 import { FileText, Table } from 'lucide-react';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 
-interface UserEntry {
-  id: string;
-  name: string;
-  email: string;
-}
-
+interface UserEntry { id: string; name: string; email: string; }
 interface Run {
-  id: string;
-  company: string;
-  created_at: string;
+  id: string; company: string; created_at: string;
   status: 'queued' | 'running' | 'complete' | 'failed';
-  summary: string | null;
-  pdf_url: string | null;
-  excel_url: string | null;
+  summary: string | null; pdf_url: string | null; excel_url: string | null;
 }
 
 function relativeTime(dateStr: string): string {
@@ -28,26 +22,25 @@ function relativeTime(dateStr: string): string {
   if (mins < 60) return `${mins}m ago`;
   const hrs = Math.floor(mins / 60);
   if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.floor(hrs / 24);
-  return `${days}d ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
 }
 
 export default function TeamView() {
+  usePageTitle('Team View');
   const { userProfile } = useAuth();
   const [users, setUsers] = useState<UserEntry[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [runs, setRuns] = useState<Run[]>([]);
   const [loading, setLoading] = useState(true);
+  const [runsLoading, setRunsLoading] = useState(false);
+  const channelRef = useRef<RealtimeChannel | null>(null);
 
   useEffect(() => {
     if (!userProfile) return;
     (async () => {
-      let query;
-      if (userProfile.role === 'admin') {
-        query = supabase.from('users').select('id, name, email').order('name');
-      } else {
-        query = supabase.from('users').select('id, name, email').eq('manager_id', userProfile.id).order('name');
-      }
+      const query = userProfile.role === 'admin'
+        ? supabase.from('users').select('id, name, email').order('name')
+        : supabase.from('users').select('id, name, email').eq('manager_id', userProfile.id).order('name');
       const { data } = await query;
       if (data && data.length > 0) {
         setUsers(data as UserEntry[]);
@@ -58,39 +51,61 @@ export default function TeamView() {
   }, [userProfile]);
 
   const fetchRuns = useCallback(async (userId: string) => {
+    setRunsLoading(true);
     const { data } = await supabase
       .from('runs')
       .select('id, company, created_at, status, summary, pdf_url, excel_url')
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
     if (data) setRuns(data as Run[]);
+    setRunsLoading(false);
   }, []);
 
   useEffect(() => {
     if (selectedUserId) fetchRuns(selectedUserId);
   }, [selectedUserId, fetchRuns]);
 
-  // Realtime
+  // Realtime — properly cleanup on user switch
   useEffect(() => {
     if (!selectedUserId) return;
+
+    // Remove previous channel
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current);
+    }
+
     const channel = supabase
-      .channel('team-runs')
+      .channel(`team-runs-${selectedUserId}`)
       .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'runs',
+        event: 'UPDATE', schema: 'public', table: 'runs',
         filter: `user_id=eq.${selectedUserId}`,
       }, (payload) => {
         setRuns((prev) =>
           prev.map((r) => (r.id === (payload.new as Run).id ? { ...r, ...payload.new } as Run : r))
         );
       })
+      .on('postgres_changes', {
+        event: 'INSERT', schema: 'public', table: 'runs',
+        filter: `user_id=eq.${selectedUserId}`,
+      }, (payload) => {
+        setRuns((prev) => [payload.new as Run, ...prev]);
+      })
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+
+    channelRef.current = channel;
+
+    return () => {
+      supabase.removeChannel(channel);
+      channelRef.current = null;
+    };
   }, [selectedUserId]);
 
+  const thStyle: React.CSSProperties = {
+    fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', padding: '10px 16px', textAlign: 'left',
+  };
+
   if (loading) {
-    return <Layout><div style={{ color: 'var(--text-tertiary)', padding: 40 }}>Loading...</div></Layout>;
+    return <Layout><TableSkeleton rows={4} cols={5} /></Layout>;
   }
 
   return (
@@ -120,7 +135,9 @@ export default function TeamView() {
             </select>
           </div>
 
-          {runs.length === 0 ? (
+          {runsLoading ? (
+            <TableSkeleton rows={4} cols={5} />
+          ) : runs.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--text-tertiary)', fontSize: 13 }}>
               No briefs for this user.
             </div>
@@ -129,22 +146,21 @@ export default function TeamView() {
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ background: 'var(--bg-surface)', borderBottom: '1px solid var(--border)' }}>
-                    <th style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', padding: '10px 16px', textAlign: 'left' }}>Company</th>
-                    <th style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', padding: '10px 16px', textAlign: 'left' }}>Submitted</th>
-                    <th style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', padding: '10px 16px', textAlign: 'left' }}>Status</th>
-                    <th style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', padding: '10px 16px', textAlign: 'left' }}>Summary</th>
-                    <th style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', padding: '10px 16px', textAlign: 'center', width: 80 }}>Files</th>
+                    <th style={thStyle}>Company</th>
+                    <th style={thStyle}>Submitted</th>
+                    <th style={thStyle}>Status</th>
+                    <th style={thStyle}>Summary</th>
+                    <th style={{ ...thStyle, textAlign: 'center', width: 80 }}>Files</th>
                   </tr>
                 </thead>
                 <tbody>
                   {runs.map((run) => (
-                    <tr
-                      key={run.id}
+                    <tr key={run.id}
                       style={{ borderBottom: '1px solid var(--border)', transition: 'background 80ms' }}
                       onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-elevated)')}
                       onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                     >
-                      <td style={{ padding: '11px 16px', fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{run.company}</td>
+                      <td style={{ padding: '11px 16px', fontSize: 13, fontWeight: 500 }}>{run.company}</td>
                       <td style={{ padding: '11px 16px', fontSize: 13, color: 'var(--text-secondary)' }} title={new Date(run.created_at).toLocaleString()}>
                         {relativeTime(run.created_at)}
                       </td>
