@@ -11,7 +11,7 @@ if (path) window.history.replaceState(null, '', path);
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <BrowserRouter>
+    <BrowserRouter basename="/AccountResearcherPortal">
       <AuthProvider>
         <App />
       </AuthProvider>
