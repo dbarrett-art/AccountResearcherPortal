@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import Layout from '../components/Layout';
 import TableSkeleton from '../components/TableSkeleton';
 import usePageTitle from '../hooks/usePageTitle';
-import { ArrowLeft, MessageSquare, FileText, Table, X, ChevronDown, ExternalLink, Send } from 'lucide-react';
+import { ArrowLeft, MessageSquare, FileText, Table, X, ChevronDown, ExternalLink, Send, Trash2 } from 'lucide-react';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -954,7 +954,7 @@ function BriefContent({ pov, personas }: { pov: any; personas: any }) {
 export default function BriefView() {
   const { run_id } = useParams<{ run_id: string }>();
   const navigate = useNavigate();
-  const { session } = useAuth();
+  const { session, userProfile } = useAuth();
   usePageTitle('Brief');
 
   const [run, setRun] = useState<Run | null>(null);
@@ -965,6 +965,31 @@ export default function BriefView() {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [streaming, setStreaming] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      const res = await fetch(
+        `https://go.accountresearch.workers.dev/run/${run_id}`,
+        {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${session?.access_token}` },
+        }
+      );
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Delete failed' }));
+        alert(err.error || 'Delete failed');
+        return;
+      }
+      navigate('/my-briefs');
+    } catch (err: any) {
+      alert('Delete failed: ' + err.message);
+    } finally {
+      setDeleting(false);
+    }
+  };
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -1177,6 +1202,49 @@ export default function BriefView() {
               }}>
                 <Table size={14} /> Excel
               </a>
+            )}
+            {userProfile?.role === 'admin' && (
+              <>
+                {!deleteConfirm ? (
+                  <button
+                    onClick={() => setDeleteConfirm(true)}
+                    style={{
+                      background: 'transparent',
+                      border: '1px solid var(--border-strong)',
+                      color: 'var(--text-tertiary)',
+                      padding: '6px 12px', fontSize: 13, borderRadius: 6,
+                      cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+                    }}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.borderColor = 'var(--status-failed)';
+                      e.currentTarget.style.color = 'var(--status-failed)';
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.borderColor = 'var(--border-strong)';
+                      e.currentTarget.style.color = 'var(--text-tertiary)';
+                    }}
+                  >
+                    <Trash2 size={14} />
+                    Delete
+                  </button>
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 12, color: 'var(--status-running-text)' }}>
+                      Delete permanently?
+                    </span>
+                    <button onClick={handleDelete} disabled={deleting} style={{
+                      background: 'var(--status-failed)', border: 'none', color: '#fff',
+                      padding: '4px 12px', fontSize: 12, borderRadius: 4, cursor: 'pointer',
+                      fontWeight: 500, opacity: deleting ? 0.6 : 1,
+                    }}>{deleting ? 'Deleting...' : 'Yes, delete'}</button>
+                    <button onClick={() => setDeleteConfirm(false)} style={{
+                      background: 'transparent', border: '1px solid var(--border-strong)',
+                      color: 'var(--text-secondary)', padding: '4px 10px',
+                      fontSize: 12, borderRadius: 4, cursor: 'pointer',
+                    }}>Cancel</button>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>

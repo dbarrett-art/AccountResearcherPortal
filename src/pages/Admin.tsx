@@ -5,7 +5,7 @@ import Layout from '../components/Layout';
 import StatusBadge from '../components/StatusBadge';
 import TableSkeleton from '../components/TableSkeleton';
 import usePageTitle from '../hooks/usePageTitle';
-import { Users, Activity, Heart, BarChart3, ExternalLink, Cpu, FileText, X, RefreshCw } from 'lucide-react';
+import { Users, Activity, Heart, BarChart3, ExternalLink, Cpu, FileText, X, RefreshCw, Trash2 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 type Tab = 'users' | 'runs' | 'health' | 'credits' | 'api-credits';
@@ -209,7 +209,7 @@ interface LogData {
 }
 
 function RunMonitorTab() {
-  const { session } = useAuth();
+  const { session, userProfile } = useAuth();
   const [runs, setRuns] = useState<RunRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('all');
@@ -218,6 +218,28 @@ function RunMonitorTab() {
   const [logModal, setLogModal] = useState<string | null>(null);
   const [logData, setLogData] = useState<LogData | null>(null);
   const [logsLoading, setLogsLoading] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+
+  const handleDelete = async (runId: string) => {
+    try {
+      const res = await fetch(
+        `https://go.accountresearch.workers.dev/run/${runId}`,
+        {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${session?.access_token}` },
+        }
+      );
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Delete failed' }));
+        alert(err.error || 'Delete failed');
+        return;
+      }
+      setRuns(prev => prev.filter(r => r.id !== runId));
+      setDeleteConfirm(null);
+    } catch (err: any) {
+      alert('Delete failed: ' + err.message);
+    }
+  };
 
   const fetchLogs = async (runId: string) => {
     setLogModal(runId);
@@ -300,7 +322,7 @@ function RunMonitorTab() {
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ background: 'var(--bg-surface)', borderBottom: '1px solid var(--border)' }}>
-              {['User', 'Company', 'Status', 'Submitted', 'Duration', 'PDF', 'GHA'].map((h) => (
+              {['User', 'Company', 'Status', 'Submitted', 'Duration', 'PDF', 'GHA', ...(userProfile?.role === 'admin' ? [''] : [])].map((h) => (
                 <th key={h} style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', padding: '10px 16px', textAlign: 'left' }}>{h}</th>
               ))}
             </tr>
@@ -347,6 +369,23 @@ function RunMonitorTab() {
                     </div>
                   ) : '—'}
                 </td>
+                {userProfile?.role === 'admin' && (
+                  <td style={{ padding: '11px 8px' }}>
+                    <button
+                      onClick={() => setDeleteConfirm(r.id)}
+                      title="Delete run"
+                      style={{
+                        background: 'transparent', border: 'none',
+                        color: 'var(--text-tertiary)', cursor: 'pointer',
+                        padding: 4, borderRadius: 4, transition: '80ms',
+                      }}
+                      onMouseEnter={e => (e.currentTarget.style.color = 'var(--status-failed)')}
+                      onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-tertiary)')}
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
@@ -416,6 +455,49 @@ function RunMonitorTab() {
             }}>
               {logsLoading ? 'Loading logs...' : (logData?.error || logData?.logs || 'No logs available')}
             </pre>
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirmation modal */}
+      {deleteConfirm && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 300,
+        }} onClick={() => setDeleteConfirm(null)}>
+          <div onClick={e => e.stopPropagation()} style={{
+            background: 'var(--bg-surface)', border: '1px solid var(--border)',
+            borderRadius: 8, padding: 24, width: 360,
+          }}>
+            <div style={{ fontWeight: 500, marginBottom: 8 }}>Delete this brief?</div>
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 20, lineHeight: 1.5 }}>
+              This will permanently delete the run record, brief data, and any uploaded PDF/Excel files.
+              This cannot be undone.
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setDeleteConfirm(null)}
+                style={{
+                  background: 'transparent', border: '1px solid var(--border-strong)',
+                  color: 'var(--text-secondary)', padding: '6px 14px',
+                  fontSize: 13, borderRadius: 6, cursor: 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleDelete(deleteConfirm)}
+                style={{
+                  background: 'var(--status-failed)', border: 'none',
+                  color: '#fff', padding: '6px 14px',
+                  fontSize: 13, borderRadius: 6, cursor: 'pointer',
+                  fontWeight: 500,
+                }}
+              >
+                Delete permanently
+              </button>
+            </div>
           </div>
         </div>
       )}
