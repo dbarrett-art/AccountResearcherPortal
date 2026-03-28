@@ -5,7 +5,8 @@ import { useAuth } from '../context/AuthContext';
 import Layout from '../components/Layout';
 import TableSkeleton from '../components/TableSkeleton';
 import usePageTitle from '../hooks/usePageTitle';
-import { ArrowLeft, MessageSquare, FileText, Table, X, ChevronDown, ExternalLink, Send, Trash2, Target, Zap, TrendingUp, Wrench, Building2, Users, Briefcase, BookOpen, Link2, Share2 } from 'lucide-react';
+import { ArrowLeft, MessageSquare, FileText, Table, X, ChevronDown, ExternalLink, Send, Trash2, Target, Zap, TrendingUp, Wrench, Building2, Users, Briefcase, BookOpen, Link2, Share2, Sun, Moon, Globe, Layers, Handshake } from 'lucide-react';
+import { useTheme } from '../context/ThemeContext';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -45,56 +46,31 @@ interface Brief {
 /*  Utility components                                                 */
 /* ------------------------------------------------------------------ */
 
-const SECTION_ICONS: Record<string, React.ReactNode> = {
-  'ICP FIT':            <Target size={14} />,
-  'WHY NOW':            <Zap size={14} />,
-  'WHY ANYTHING':       <TrendingUp size={14} />,
-  'WHY FIGMA':          <Wrench size={14} />,
-  'ABOUT':              <Building2 size={14} />,
-  'KEY EXECUTIVES':     <Users size={14} />,
-  'JOB SIGNALS':        <Briefcase size={14} />,
-  'PROOF POINTS':       <BookOpen size={14} />,
-  'SOURCES':            <Link2 size={14} />,
-  'CONTACT MATRIX':     <Users size={14} />,
-  'ORGANISATION STRUCTURE': <Building2 size={14} />,
-};
-
-function Section({ title, children, collapsible = false }: {
-  title: string; children: React.ReactNode; collapsible?: boolean
+function SectionRow({
+  icon, title, count, defaultOpen = false, children
+}: {
+  icon: React.ReactNode; title: string;
+  count?: string; defaultOpen?: boolean; children: React.ReactNode;
 }) {
-  const [open, setOpen] = useState(!collapsible);
-  const icon = SECTION_ICONS[title.toUpperCase()];
+  const [open, setOpen] = useState(defaultOpen);
   return (
-    <div style={{ marginBottom: 48 }}>
-      <div onClick={collapsible ? () => setOpen(o => !o) : undefined} style={{
-        display: 'flex', alignItems: 'center', gap: 8,
-        marginBottom: open ? 20 : 0, paddingBottom: 12,
-        borderBottom: '1px solid var(--border)',
-        cursor: collapsible ? 'pointer' : 'default', userSelect: 'none',
-      }}>
-        <div style={{ width: 3, height: 16, background: 'var(--accent)', borderRadius: 2, flexShrink: 0 }} />
-        {icon && <span style={{ color: 'var(--accent)', display: 'flex' }}>{icon}</span>}
-        <h2 style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)',
-                     textTransform: 'uppercase', letterSpacing: '0.08em', margin: 0, flex: 1 }}>
-          {title}
-        </h2>
-        {collapsible && (
-          <ChevronDown size={14} style={{ color: 'var(--text-tertiary)',
-            transform: open ? 'rotate(180deg)' : 'none', transition: '150ms' }} />
-        )}
+    <div style={{ borderTop: '0.5px solid var(--border)' }}>
+      <div
+        onClick={() => setOpen(o => !o)}
+        style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '13px 0', cursor: 'pointer', userSelect: 'none' }}
+      >
+        <div style={{ width: 20, height: 20, borderRadius: 5, background: 'var(--bg-elevated)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          {icon}
+        </div>
+        <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-secondary)', flex: 1 }}>{title}</span>
+        {count && <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{count}</span>}
+        <ChevronDown size={14} style={{ color: 'var(--text-tertiary)', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.18s', flexShrink: 0 }} />
       </div>
-      {open && children}
+      {open && <div style={{ paddingBottom: 14 }}>{children}</div>}
     </div>
   );
 }
 
-/* Truncate to N chars at a word boundary */
-function truncateToLine(text: string, maxChars = 120): string {
-  if (!text || text.length <= maxChars) return text;
-  const cut = text.slice(0, maxChars);
-  const lastSpace = cut.lastIndexOf(' ');
-  return (lastSpace > 80 ? cut.slice(0, lastSpace) : cut) + '\u2026';
-}
 
 function CitedProse({ text }: { text: string | undefined | null }) {
   if (!text) return null;
@@ -491,8 +467,10 @@ function ContactMatrix({ personas }: { personas: any }) {
 
   const rfm = personas?.recommended_first_move;
 
+  const totalContacts = FUNCTIONS.reduce((n, f) => n + TIERS.reduce((m, t) => m + (matrix?.[f]?.[t]?.length || 0), 0), 0);
+
   return (
-    <Section title="Contact Matrix">
+    <SectionRow icon={<Users size={11} />} title="Contact Matrix" count={totalContacts > 0 ? `${totalContacts} contacts` : undefined}>
       {rfm && (
         <div style={{
           background: 'var(--accent-subtle)', border: '1px solid rgba(94,106,210,0.2)',
@@ -535,7 +513,7 @@ function ContactMatrix({ personas }: { personas: any }) {
       ) : (
         currentContacts.map((c, i) => <ContactRow key={c?.url || c?.name || i} contact={c} />)
       )}
-    </Section>
+    </SectionRow>
   );
 }
 
@@ -594,10 +572,11 @@ function JobSignalsSection({ signals, extracted }: { signals: any; extracted?: a
   const gaps = signals?.gaps_noted;
   const synthesis = signals?.strategic_synthesis;
 
+  const signalCount = (hasExtracted ? (extracted.signals?.length || 0) : 0) + design.length + other.length;
   if (!hasExtracted && design.length === 0 && other.length === 0 && !gaps) return null;
 
   return (
-    <Section title="Job Signals">
+    <SectionRow icon={<Briefcase size={11} />} title="Job Signals" count={signalCount > 0 ? `${signalCount} signals` : undefined}>
       {/* Strategic synthesis */}
       {synthesis && (
         <div style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.6, marginBottom: 16, padding: '12px 16px', background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 8, borderLeft: '3px solid var(--accent)' }}>
@@ -726,7 +705,7 @@ function JobSignalsSection({ signals, extracted }: { signals: any; extracted?: a
           </div>
         </div>
       )}
-    </Section>
+    </SectionRow>
   );
 }
 
@@ -780,7 +759,7 @@ function ValuePyramid({ pyramid }: { pyramid: any }) {
   if (!strategic && !operational?.length && !tactical?.length) return null;
 
   return (
-    <Section title="Value Pyramid">
+    <SectionRow icon={<Layers size={11} />} title="Value Pyramid" count={`${(operational?.length || 0) + (tactical?.length || 0)} items`}>
       {/* Strategic — top of pyramid */}
       {strategic && (
         <div style={{
@@ -832,7 +811,7 @@ function ValuePyramid({ pyramid }: { pyramid: any }) {
           ))}
         </div>
       )}
-    </Section>
+    </SectionRow>
   );
 }
 
@@ -982,11 +961,6 @@ function FeedbackPanel({ runId, session }: { runId: string; session: any }) {
 function BriefContent({ pov, personas, runId, session }: { pov: any; personas: any; runId?: string; session?: any }) {
   const [showAllSources, setShowAllSources] = useState(false);
 
-  const strongestAngle = pov?.why_figma?.strongest_angle;
-  const topTrigger = pov?.why_now?.triggers?.[0]?.trigger;
-  const rfm = personas?.recommended_first_move;
-  const topContact = rfm ? { name: rfm.contact_name, title: rfm.title } : null;
-
   const allSources = pov?.sources_used || [];
   const cleanSources = allSources.filter((s: any) => {
     const url = typeof s === 'string' ? s : (s?.url || s?.source || '');
@@ -998,74 +972,23 @@ function BriefContent({ pov, personas, runId, session }: { pov: any; personas: a
   const visibleSources = showAllSources ? cleanSources : cleanSources.slice(0, MAX_VISIBLE);
   const hiddenCount = cleanSources.length - MAX_VISIBLE;
 
+  const triggers = pov?.why_now?.triggers || [];
+  const divisions = pov?.org_structure?.divisions || [];
+  const proofPoints = pov?.proof_points || [];
+  const digitalProducts = pov?.digital_products || [];
+  const techPartners = pov?.technology_partnerships || [];
+  const executives = pov?.executives || [];
+  const products = pov?.why_figma?.primary_products || [];
+
   return (
     <>
-      {/* 1. Quick Summary card */}
-      {(strongestAngle || topTrigger || topContact) && (
-        <div style={{
-          background: 'var(--bg-surface)',
-          border: '1px solid var(--border)',
-          borderRadius: 8,
-          padding: '16px 20px',
-          marginBottom: 24,
-          display: 'grid',
-          gridTemplateColumns: topContact ? '1fr 1fr' : '1fr',
-          gap: '12px 24px',
-        }}>
-          <div style={{ gridColumn: '1 / -1', fontSize: 11, fontWeight: 600,
-                        color: 'var(--text-tertiary)', letterSpacing: '0.06em',
-                        marginBottom: 4 }}>
-            QUICK SUMMARY
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {strongestAngle && (
-              <div>
-                <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 2 }}>
-                  STRONGEST ANGLE
-                </div>
-                <div style={{ fontSize: 13, color: 'var(--text-primary)' }}>
-                  {truncateToLine(strongestAngle, 120)}
-                </div>
-              </div>
-            )}
-            {topTrigger && (
-              <div>
-                <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 2 }}>
-                  TOP TRIGGER
-                </div>
-                <div style={{ fontSize: 13, color: 'var(--text-primary)' }}>
-                  {truncateToLine(topTrigger, 120)}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {topContact && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <div>
-                <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 2 }}>
-                  LEAD CONTACT
-                </div>
-                <div style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 500 }}>
-                  {topContact.name}
-                </div>
-                <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                  {topContact.title}
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* 2. Research Gaps — amber warning banner */}
+      {/* 1. Research Gaps — amber warning banner */}
       {pov?.research_gaps && (
         <details style={{
           background: 'rgba(217,119,6,0.08)',
           border: '1px solid rgba(217,119,6,0.2)',
           borderRadius: 6,
-          marginBottom: 24,
+          marginBottom: 12,
           cursor: 'pointer',
         }}>
           <summary style={{
@@ -1099,9 +1022,30 @@ function BriefContent({ pov, personas, runId, session }: { pov: any; personas: a
         </details>
       )}
 
-      {/* 3. About */}
+      {/* 2. Why Now hero — ALWAYS VISIBLE, never collapsible */}
+      {pov?.why_now && (
+        <div style={{ background: 'var(--bg-surface)', borderRadius: 11, padding: '18px 20px', marginBottom: 2 }}>
+          <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-tertiary)', marginBottom: 7 }}>Why Now</div>
+          {pov.why_now.urgency_rationale && (
+            <CollapsibleProse text={pov.why_now.urgency_rationale} maxLength={400} />
+          )}
+          {triggers.length > 0 && (
+            <>
+              <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-tertiary)', margin: '14px 0 10px' }}>Top triggers</div>
+              {triggers.slice(0, 3).map((t: any, i: number) => <TriggerCard key={i} trigger={t} />)}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* 3. ICP Fit */}
+      <SectionRow icon={<Target size={11} />} title="ICP Fit" count={pov?.icp_fit?.score || undefined}>
+        <CitedProse text={pov?.icp_fit?.rationale} />
+      </SectionRow>
+
+      {/* 4. About */}
       {pov?.about && (
-        <Section title="About" collapsible>
+        <SectionRow icon={<Building2 size={11} />} title="About">
           {pov.about.who_they_are && (
             <CitedProse text={pov.about.who_they_are} />
           )}
@@ -1112,83 +1056,31 @@ function BriefContent({ pov, personas, runId, session }: { pov: any; personas: a
               <CitedProse text={pov.about.how_they_make_money} />
             </div>
           )}
-
-          {/* Digital products */}
-          {pov?.digital_products?.length > 0 && (
-            <DataTable
-              headers={['Product', 'Description']}
-              rows={pov.digital_products.map((p: any) => [p?.product, p?.description])}
-            />
-          )}
-
-          {/* Technology partnerships */}
-          {pov?.technology_partnerships?.length > 0 && (
-            <DataTable
-              headers={['Partner', 'Details']}
-              rows={pov.technology_partnerships.map((p: any) => [p?.partner, p?.details])}
-            />
-          )}
-
-          {/* Executives — stacked card layout */}
-          {pov?.executives?.length > 0 && (
-            <div style={{ marginTop: 16 }}>
-              <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 8 }}>KEY EXECUTIVES</div>
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                {pov.executives.map((exec: any, i: number) => (
-                  <div key={i} style={{
-                    padding: '12px 0',
-                    borderBottom: i < pov.executives.length - 1 ? '1px solid var(--border)' : 'none',
-                    display: 'grid',
-                    gridTemplateColumns: '180px 1fr',
-                    gap: '0 16px',
-                    alignItems: 'start',
-                  }}>
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>
-                        {exec?.name}
-                      </div>
-                      <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
-                        {exec?.title}
-                      </div>
-                    </div>
-                    <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                      {exec?.significance || exec?.relevance || exec?.description || '\u2014'}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </Section>
+        </SectionRow>
       )}
 
-      {/* Org Structure */}
+      {/* 5. Organisation Structure */}
       {pov?.org_structure && pov.org_structure.structure_type !== 'simple' && (
-        <Section title="Organisation Structure" collapsible>
+        <SectionRow icon={<Building2 size={11} />} title="Organisation Structure" count={divisions.length > 0 ? `${divisions.length} divisions` : undefined}>
           {pov.org_structure.structure_summary && (
             <p style={{ fontSize: 13, lineHeight: 1.7, marginBottom: 12 }}>{pov.org_structure.structure_summary}</p>
           )}
-          {pov.org_structure.divisions?.length > 0 && (
+          {divisions.length > 0 && (
             <DataTable
               headers={['Division', 'Description', 'Headcount']}
-              rows={pov.org_structure.divisions.map((d: any) => [
+              rows={divisions.map((d: any) => [
                 d?.name,
                 d?.description,
                 d?.estimated_headcount || (d?.headcount_est ? `~${d.headcount_est.toLocaleString()}` : null),
               ])}
             />
           )}
-        </Section>
+        </SectionRow>
       )}
 
-      {/* 4. ICP Fit */}
-      <Section title="ICP Fit">
-        <CitedProse text={pov?.icp_fit?.rationale} />
-      </Section>
-
-      {/* 5. Why Anything */}
+      {/* 6. Why Anything */}
       {pov?.why_anything && (
-        <Section title="Why Anything" collapsible>
+        <SectionRow icon={<TrendingUp size={11} />} title="Why Anything" count={pov.why_anything.strategic_objectives?.length ? `${pov.why_anything.strategic_objectives.length} objectives` : undefined}>
           {pov.why_anything.corporate_strategy && (
             <div style={{
               background: 'rgba(94,106,210,0.06)', border: '1px solid rgba(94,106,210,0.15)',
@@ -1219,24 +1111,21 @@ function BriefContent({ pov, personas, runId, session }: { pov: any; personas: a
           {pov.why_anything.narrative && (
             <CollapsibleProse text={pov.why_anything.narrative} />
           )}
-        </Section>
+        </SectionRow>
       )}
 
-      {/* 6. Why Now */}
-      {pov?.why_now && (
-        <Section title="Why Now">
-          {pov.why_now.urgency_rationale && (
-            <CollapsibleProse text={pov.why_now.urgency_rationale} />
-          )}
-          {pov.why_now.triggers?.map((t: any, i: number) => (
+      {/* 7. Why Now — all triggers */}
+      {triggers.length > 0 && (
+        <SectionRow icon={<Zap size={11} />} title="Why Now — all triggers" count={`${triggers.length} triggers`}>
+          {triggers.map((t: any, i: number) => (
             <TriggerCard key={i} trigger={t} />
           ))}
-        </Section>
+        </SectionRow>
       )}
 
-      {/* 7. Why Figma */}
+      {/* 8. Why Figma */}
       {pov?.why_figma && (
-        <Section title="Why Figma">
+        <SectionRow icon={<Wrench size={11} />} title="Why Figma" count={products.length > 0 ? `${products.length} products` : undefined}>
           {pov.why_figma.strongest_angle && (
             <div style={{
               background: 'var(--accent-subtle)', border: '1px solid rgba(94,106,210,0.2)',
@@ -1251,26 +1140,76 @@ function BriefContent({ pov, personas, runId, session }: { pov: any; personas: a
           {pov.why_figma.rationale && (
             <CollapsibleProse text={pov.why_figma.rationale} />
           )}
-          {pov.why_figma.primary_products?.length > 0 && (
+          {products.length > 0 && (
             <div style={{ marginTop: 16 }}>
-              {pov.why_figma.primary_products.map((p: any, i: number) => (
+              {products.map((p: any, i: number) => (
                 <CopyableProductCard key={i} product={p} />
               ))}
             </div>
           )}
-        </Section>
+        </SectionRow>
       )}
 
-      {/* Value Pyramid */}
-      <ValuePyramid pyramid={pov?.value_pyramid} />
+      {/* 9. Value Pyramid */}
+      {pov?.value_pyramid && <ValuePyramid pyramid={pov.value_pyramid} />}
 
-      {/* 8. Job Signals */}
+      {/* 10. Job Signals */}
       <JobSignalsSection signals={pov?.job_signals} extracted={pov?.job_signals_extracted} />
 
-      {/* 9. Proof Points */}
-      {pov?.proof_points?.length > 0 && (
-        <Section title="Proof Points">
-          {pov.proof_points.map((pp: any, i: number) => (
+      {/* 11. Digital Products */}
+      {digitalProducts.length > 0 && (
+        <SectionRow icon={<Globe size={11} />} title="Digital Products" count={`${digitalProducts.length} products`}>
+          <DataTable
+            headers={['Product', 'Description']}
+            rows={digitalProducts.map((p: any) => [p?.product, p?.description])}
+          />
+        </SectionRow>
+      )}
+
+      {/* 12. Key Executives */}
+      {executives.length > 0 && (
+        <SectionRow icon={<Users size={11} />} title="Key Executives" count={`${executives.length} found`}>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            {executives.map((exec: any, i: number) => (
+              <div key={i} style={{
+                padding: '12px 0',
+                borderBottom: i < executives.length - 1 ? '1px solid var(--border)' : 'none',
+                display: 'grid',
+                gridTemplateColumns: '180px 1fr',
+                gap: '0 16px',
+                alignItems: 'start',
+              }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>
+                    {exec?.name}
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
+                    {exec?.title}
+                  </div>
+                </div>
+                <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                  {exec?.significance || exec?.relevance || exec?.description || '\u2014'}
+                </div>
+              </div>
+            ))}
+          </div>
+        </SectionRow>
+      )}
+
+      {/* 13. Technology Partnerships */}
+      {techPartners.length > 0 && (
+        <SectionRow icon={<Handshake size={11} />} title="Technology Partnerships" count={`${techPartners.length} partners`}>
+          <DataTable
+            headers={['Partner', 'Details']}
+            rows={techPartners.map((p: any) => [p?.partner, p?.details])}
+          />
+        </SectionRow>
+      )}
+
+      {/* 14. Proof Points */}
+      {proofPoints.length > 0 && (
+        <SectionRow icon={<BookOpen size={11} />} title="Proof Points" count={`${proofPoints.length} found`}>
+          {proofPoints.map((pp: any, i: number) => (
             <div key={i} style={{
               background: 'var(--bg-surface)', border: '1px solid var(--border)',
               borderRadius: 8, padding: '12px 16px', marginBottom: 8,
@@ -1286,18 +1225,12 @@ function BriefContent({ pov, personas, runId, session }: { pov: any; personas: a
               )}
             </div>
           ))}
-        </Section>
+        </SectionRow>
       )}
 
-      {/* Contact Matrix */}
-      {personas && <ContactMatrix personas={personas} />}
-
-      {/* Feedback */}
-      {runId && session && <FeedbackPanel runId={runId} session={session} />}
-
-      {/* 10. Sources */}
+      {/* 15. Sources */}
       {cleanSources.length > 0 && (
-        <Section title="Sources">
+        <SectionRow icon={<Link2 size={11} />} title="Sources" count={`${cleanSources.length} sources`}>
           <div style={{ margin: 0 }}>
             {visibleSources.map((s: any, i: number) => {
               const url = typeof s === 'string' ? s : (s?.url || s?.source || '');
@@ -1328,8 +1261,14 @@ function BriefContent({ pov, personas, runId, session }: { pov: any; personas: a
               + {hiddenCount} more sources
             </button>
           )}
-        </Section>
+        </SectionRow>
       )}
+
+      {/* 16. Contact Matrix */}
+      {personas && <ContactMatrix personas={personas} />}
+
+      {/* 17. Feedback */}
+      {runId && session && <FeedbackPanel runId={runId} session={session} />}
     </>
   );
 }
@@ -1353,6 +1292,8 @@ export default function BriefView() {
   const [shareStatus, setShareStatus] = useState<'idle' | 'loading' | 'copied'>('idle');
   const [runningEnglish, setRunningEnglish] = useState(false);
   const [englishSubmitted, setEnglishSubmitted] = useState(false);
+
+  const { theme, toggle: toggleTheme } = useTheme();
 
   const handleRunInEnglish = async () => {
     if (!session || !run) return;
@@ -1606,6 +1547,17 @@ export default function BriefView() {
             )}
           </div>
           <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+            <button onClick={toggleTheme} style={{
+              width: 30, height: 30, borderRadius: 7,
+              border: '0.5px solid var(--border-strong)',
+              background: 'var(--bg-surface)',
+              color: 'var(--text-secondary)',
+              cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              flexShrink: 0,
+            }}>
+              {theme === 'dark' ? <Sun size={13} /> : <Moon size={13} />}
+            </button>
             <button onClick={handleShare} disabled={shareStatus === 'loading'} style={{
               background: 'transparent', color: shareStatus === 'copied' ? 'var(--status-complete-text)' : 'var(--text-secondary)',
               padding: '6px 14px', fontSize: 13, fontWeight: 500, borderRadius: 6,

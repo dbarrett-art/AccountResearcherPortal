@@ -31,6 +31,31 @@
   --font-mono: 'JetBrains Mono', 'Fira Code', 'Menlo', monospace;
 }
 
+[data-theme="light"] {
+  --bg-app: #f8f7f4;
+  --bg-sidebar: #ffffff;
+  --bg-surface: #f5f4f0;
+  --bg-elevated: #eeedea;
+  --bg-input: #ffffff;
+  --border: rgba(0,0,0,0.10);
+  --border-strong: rgba(0,0,0,0.20);
+  --text-primary: #1a1a18;
+  --text-secondary: #5f5e5a;
+  --text-tertiary: #99978f;
+  --text-disabled: #c5c3bc;
+  --accent: #4a5abf;
+  --accent-hover: #3d4db0;
+  --accent-subtle: rgba(74,90,191,0.10);
+  --status-queued: #b0aea6;
+  --status-running: #d97706;
+  --status-complete: #16a34a;
+  --status-failed: #dc2626;
+  --status-queued-text: #6b6960;
+  --status-running-text: #b45309;
+  --status-complete-text: #15803d;
+  --status-failed-text: #b91c1c;
+}
+
 body {
   font-family: var(--font);
   background: var(--bg-app);
