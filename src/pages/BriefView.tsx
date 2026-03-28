@@ -56,6 +56,34 @@ function CitedProse({ text }: { text: string | undefined | null }) {
   return <p style={{ fontSize: 13, lineHeight: 1.7, color: 'var(--text-primary)' }} dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
+function CollapsibleProse({ text, maxLength = 320 }: { text: string; maxLength?: number }) {
+  const [expanded, setExpanded] = useState(false);
+  if (!text) return null;
+  const isLong = text.length > maxLength;
+  const display = isLong && !expanded ? text.slice(0, maxLength).trim() + '...' : text;
+
+  return (
+    <div>
+      <p style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.7,
+                  margin: '0 0 8px 0' }}>
+        {display}
+      </p>
+      {isLong && (
+        <button
+          onClick={() => setExpanded(e => !e)}
+          style={{
+            fontSize: 12, color: 'var(--accent)', background: 'none',
+            border: 'none', cursor: 'pointer', padding: '0 0 8px 0',
+            display: 'block'
+          }}
+        >
+          {expanded ? '\u2191 Show less' : '\u2193 Read more'}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function IcpBadge({ score }: { score: string | undefined }) {
   if (!score) return null;
   const colors: Record<string, { bg: string; text: string }> = {
@@ -116,20 +144,119 @@ function TierBadge({ tier }: { tier: string }) {
 }
 
 function TriggerCard({ trigger }: { trigger: any }) {
+  const [copied, setCopied] = useState(false);
+
+  const copyText = () => {
+    const text = `${trigger?.trigger || ''}${trigger?.evidence ? '\n\n' + trigger.evidence : ''}`;
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+
   return (
     <div style={{
+      position: 'relative',
       background: 'var(--bg-surface)', border: '1px solid var(--border)',
-      borderRadius: 8, padding: '12px 16px', marginBottom: 8,
-    }}>
+      borderRadius: 8, padding: '14px 16px', marginBottom: 8,
+    }}
+    onMouseEnter={e => {
+      const btn = e.currentTarget.querySelector('.copy-btn') as HTMLElement;
+      if (btn) btn.style.opacity = '1';
+    }}
+    onMouseLeave={e => {
+      const btn = e.currentTarget.querySelector('.copy-btn') as HTMLElement;
+      if (btn && !copied) btn.style.opacity = '0';
+    }}
+    >
+      <button
+        className="copy-btn"
+        onClick={copyText}
+        style={{
+          position: 'absolute', top: 10, right: 10,
+          background: 'none', border: 'none', cursor: 'pointer',
+          color: copied ? 'var(--status-complete-text)' : 'var(--text-tertiary)',
+          opacity: 0, transition: '80ms', padding: 4, fontSize: 14,
+        }}
+        title="Copy to clipboard"
+      >
+        {copied ? '\u2713' : '\u2398'}
+      </button>
+
       {trigger?.type && (
-        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>
+        <div style={{
+          position: 'absolute', top: 10, right: 34,
+          fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)',
+          background: 'var(--bg-elevated)', borderRadius: 3,
+          padding: '2px 6px', letterSpacing: '0.04em',
+          textTransform: 'uppercase',
+        }}>
           {trigger.type}
         </div>
       )}
-      <div style={{ fontWeight: 500, fontSize: 13 }}>{trigger?.trigger}</div>
+
+      <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)',
+                    lineHeight: 1.5, marginBottom: trigger?.evidence ? 8 : 0,
+                    paddingRight: 80 }}>
+        {trigger?.trigger}
+      </div>
+
       {trigger?.evidence && (
-        <div style={{ color: 'var(--text-secondary)', fontSize: 13, marginTop: 4 }}>{trigger.evidence}</div>
+        <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5,
+                      marginBottom: trigger?.source_url ? 6 : 0 }}>
+          {trigger.evidence}
+        </div>
       )}
+
+      {trigger?.source_url && (
+        <a href={trigger.source_url} target="_blank" rel="noopener noreferrer"
+           style={{ fontSize: 11, color: 'var(--accent)', display: 'inline-block' }}>
+          Source \u2197
+        </a>
+      )}
+    </div>
+  );
+}
+
+function CopyableProductCard({ product }: { product: any }) {
+  const [copied, setCopied] = useState(false);
+
+  const copyText = () => {
+    const text = `${product?.product || ''}: ${product?.relevance || ''}`;
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+
+  return (
+    <div style={{
+      position: 'relative',
+      background: 'var(--bg-surface)', border: '1px solid var(--border)',
+      borderRadius: 8, padding: '12px 16px', marginBottom: 8,
+    }}
+    onMouseEnter={e => {
+      const btn = e.currentTarget.querySelector('.copy-btn') as HTMLElement;
+      if (btn) btn.style.opacity = '1';
+    }}
+    onMouseLeave={e => {
+      const btn = e.currentTarget.querySelector('.copy-btn') as HTMLElement;
+      if (btn && !copied) btn.style.opacity = '0';
+    }}
+    >
+      <button
+        className="copy-btn"
+        onClick={copyText}
+        style={{
+          position: 'absolute', top: 10, right: 10,
+          background: 'none', border: 'none', cursor: 'pointer',
+          color: copied ? 'var(--status-complete-text)' : 'var(--text-tertiary)',
+          opacity: 0, transition: '80ms', padding: 4, fontSize: 14,
+        }}
+        title="Copy to clipboard"
+      >
+        {copied ? '\u2713' : '\u2398'}
+      </button>
+      <div style={{ fontWeight: 500, fontSize: 13, paddingRight: 32 }}>{product?.product}</div>
+      <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>{product?.relevance}</div>
     </div>
   );
 }
@@ -413,6 +540,361 @@ const SUGGESTED_PROMPTS = [
   "What objections should I prepare for?",
 ];
 
+/* ------------------------------------------------------------------ */
+/*  Source filtering                                                    */
+/* ------------------------------------------------------------------ */
+
+const NOISE_PATTERNS = [
+  /weather/i, /storm/i, /thunder/i, /hail/i, /tornado/i,
+  /hurricane/i, /lightning/i, /forecast/i, /meteorolog/i,
+];
+
+const isNoisySource = (url: string, title?: string) => {
+  const combined = `${url} ${title || ''}`;
+  return NOISE_PATTERNS.some(p => p.test(combined));
+};
+
+/* ------------------------------------------------------------------ */
+/*  Brief content (reordered sections)                                 */
+/* ------------------------------------------------------------------ */
+
+function BriefContent({ pov, personas }: { pov: any; personas: any }) {
+  const [showAllSources, setShowAllSources] = useState(false);
+
+  const strongestAngle = pov?.why_figma?.strongest_angle;
+  const topTrigger = pov?.why_now?.triggers?.[0]?.trigger;
+  const rfm = personas?.recommended_first_move;
+  const topContact = rfm ? { name: rfm.contact_name, title: rfm.title } : null;
+
+  const allSources = pov?.sources_used || [];
+  const cleanSources = allSources.filter((s: any) =>
+    typeof s === 'string'
+      ? !isNoisySource(s)
+      : !isNoisySource(s?.url || s?.source || '', s?.title || s?.what_it_provided || '')
+  );
+  const MAX_VISIBLE = 15;
+  const visibleSources = showAllSources ? cleanSources : cleanSources.slice(0, MAX_VISIBLE);
+  const hiddenCount = cleanSources.length - MAX_VISIBLE;
+
+  return (
+    <>
+      {/* 1. Quick Summary card */}
+      {(strongestAngle || topTrigger || topContact) && (
+        <div style={{
+          background: 'var(--bg-surface)',
+          border: '1px solid var(--border)',
+          borderRadius: 8,
+          padding: '16px 20px',
+          marginBottom: 24,
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr',
+          gap: '12px 24px',
+        }}>
+          <div style={{ gridColumn: '1 / -1', fontSize: 11, fontWeight: 600,
+                        color: 'var(--text-tertiary)', letterSpacing: '0.06em',
+                        marginBottom: 4 }}>
+            QUICK SUMMARY
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {strongestAngle && (
+              <div>
+                <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 2 }}>
+                  STRONGEST ANGLE
+                </div>
+                <div style={{ fontSize: 13, color: 'var(--text-primary)' }}>
+                  {strongestAngle}
+                </div>
+              </div>
+            )}
+            {topTrigger && (
+              <div>
+                <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 2 }}>
+                  TOP TRIGGER
+                </div>
+                <div style={{ fontSize: 13, color: 'var(--text-primary)' }}>
+                  {topTrigger}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {topContact && (
+              <div>
+                <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 2 }}>
+                  LEAD CONTACT
+                </div>
+                <div style={{ fontSize: 13, color: 'var(--text-primary)', fontWeight: 500 }}>
+                  {topContact.name}
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                  {topContact.title}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 2. Research Gaps — amber warning banner */}
+      {pov?.research_gaps && (
+        <details style={{
+          background: 'rgba(217,119,6,0.08)',
+          border: '1px solid rgba(217,119,6,0.2)',
+          borderRadius: 6,
+          marginBottom: 24,
+          cursor: 'pointer',
+        }}>
+          <summary style={{
+            padding: '10px 14px',
+            fontSize: 13,
+            color: 'var(--status-running-text)',
+            fontWeight: 500,
+            listStyle: 'none',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            userSelect: 'none',
+          }}>
+            <span>{'\u26A0'}</span>
+            <span>Research gaps — review before your call</span>
+            <span style={{ marginLeft: 'auto', fontSize: 11,
+                           color: 'var(--text-tertiary)' }}>click to expand</span>
+          </summary>
+          <div style={{ padding: '0 14px 12px 14px', fontSize: 13,
+                        color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+            {Array.isArray(pov.research_gaps) ? (
+              <ul style={{ paddingLeft: 20, margin: 0 }}>
+                {pov.research_gaps.map((gap: string, i: number) => (
+                  <li key={i} style={{ marginBottom: 4 }}>{gap}</li>
+                ))}
+              </ul>
+            ) : (
+              <p style={{ margin: 0 }}>{pov.research_gaps}</p>
+            )}
+          </div>
+        </details>
+      )}
+
+      {/* 3. About */}
+      {pov?.about && (
+        <Section title="About">
+          {pov.about.who_they_are && (
+            <p style={{ fontSize: 13, lineHeight: 1.7, marginBottom: 12 }}>{pov.about.who_they_are}</p>
+          )}
+          <AboutMarkdown text={pov.about.what_they_do} />
+          {pov.about.how_they_make_money && (
+            <div style={{ marginTop: 12 }}>
+              <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 4 }}>REVENUE MODEL</div>
+              <p style={{ fontSize: 13, lineHeight: 1.7 }}>{pov.about.how_they_make_money}</p>
+            </div>
+          )}
+
+          {/* Digital products */}
+          {pov?.digital_products?.length > 0 && (
+            <DataTable
+              headers={['Product', 'Description']}
+              rows={pov.digital_products.map((p: any) => [p?.product, p?.description])}
+            />
+          )}
+
+          {/* Technology partnerships */}
+          {pov?.technology_partnerships?.length > 0 && (
+            <DataTable
+              headers={['Partner', 'Details']}
+              rows={pov.technology_partnerships.map((p: any) => [p?.partner, p?.details])}
+            />
+          )}
+
+          {/* Executives — stacked card layout */}
+          {pov?.executives?.length > 0 && (
+            <div style={{ marginTop: 16 }}>
+              <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 8 }}>KEY EXECUTIVES</div>
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                {pov.executives.map((exec: any, i: number) => (
+                  <div key={i} style={{
+                    padding: '12px 0',
+                    borderBottom: i < pov.executives.length - 1 ? '1px solid var(--border)' : 'none',
+                    display: 'grid',
+                    gridTemplateColumns: '180px 1fr',
+                    gap: '0 16px',
+                    alignItems: 'start',
+                  }}>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>
+                        {exec?.name}
+                      </div>
+                      <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
+                        {exec?.title}
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                      {exec?.significance || exec?.relevance || exec?.description || '\u2014'}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </Section>
+      )}
+
+      {/* Org Structure */}
+      {pov?.org_structure && pov.org_structure.structure_type !== 'simple' && (
+        <Section title="Organisation Structure">
+          {pov.org_structure.structure_summary && (
+            <p style={{ fontSize: 13, lineHeight: 1.7, marginBottom: 12 }}>{pov.org_structure.structure_summary}</p>
+          )}
+          {pov.org_structure.divisions?.length > 0 && (
+            <DataTable
+              headers={['Division', 'Description', 'Headcount']}
+              rows={pov.org_structure.divisions.map((d: any) => [
+                d?.name,
+                d?.description,
+                d?.estimated_headcount || (d?.headcount_est ? `~${d.headcount_est.toLocaleString()}` : null),
+              ])}
+            />
+          )}
+        </Section>
+      )}
+
+      {/* 4. ICP Fit */}
+      <Section title="ICP Fit">
+        <p style={{ fontSize: 13, lineHeight: 1.7 }}>{pov?.icp_fit?.rationale}</p>
+      </Section>
+
+      {/* 5. Why Anything */}
+      {pov?.why_anything && (
+        <Section title="Why Anything">
+          {pov.why_anything.corporate_strategy && (
+            <div style={{
+              background: 'rgba(94,106,210,0.06)', border: '1px solid rgba(94,106,210,0.15)',
+              borderRadius: 8, padding: '12px 16px', marginBottom: 16,
+            }}>
+              <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--accent)', marginBottom: 4 }}>
+                CORPORATE STRATEGY
+              </div>
+              <div style={{ fontSize: 13 }}>{pov.why_anything.corporate_strategy}</div>
+            </div>
+          )}
+          {pov.why_anything.strategic_objectives?.length > 0 && (
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 8 }}>STRATEGIC OBJECTIVES</div>
+              <ul style={{ paddingLeft: 20, margin: 0 }}>
+                {pov.why_anything.strategic_objectives.map((obj: string, i: number) => (
+                  <li key={i} style={{ fontSize: 13, marginBottom: 4, lineHeight: 1.6 }}>{obj}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {pov.why_anything.macro_forces && (
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 4 }}>MACRO FORCES</div>
+              <CitedProse text={pov.why_anything.macro_forces} />
+            </div>
+          )}
+          {pov.why_anything.narrative && (
+            <CollapsibleProse text={pov.why_anything.narrative} />
+          )}
+        </Section>
+      )}
+
+      {/* 6. Why Now */}
+      {pov?.why_now && (
+        <Section title="Why Now">
+          {pov.why_now.urgency_rationale && (
+            <CollapsibleProse text={pov.why_now.urgency_rationale} />
+          )}
+          {pov.why_now.triggers?.map((t: any, i: number) => (
+            <TriggerCard key={i} trigger={t} />
+          ))}
+        </Section>
+      )}
+
+      {/* 7. Why Figma */}
+      {pov?.why_figma && (
+        <Section title="Why Figma">
+          {pov.why_figma.strongest_angle && (
+            <div style={{
+              background: 'var(--accent-subtle)', border: '1px solid rgba(94,106,210,0.2)',
+              borderRadius: 8, padding: '12px 16px', marginBottom: 16,
+            }}>
+              <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--accent)', marginBottom: 4 }}>
+                STRONGEST ANGLE
+              </div>
+              <div style={{ fontSize: 13 }}>{pov.why_figma.strongest_angle}</div>
+            </div>
+          )}
+          {pov.why_figma.rationale && (
+            <CollapsibleProse text={pov.why_figma.rationale} />
+          )}
+          {pov.why_figma.primary_products?.length > 0 && (
+            <div style={{ marginTop: 16 }}>
+              {pov.why_figma.primary_products.map((p: any, i: number) => (
+                <CopyableProductCard key={i} product={p} />
+              ))}
+            </div>
+          )}
+        </Section>
+      )}
+
+      {/* 8. Job Signals */}
+      <JobSignalsSection signals={pov?.job_signals} />
+
+      {/* 9. Proof Points */}
+      {pov?.proof_points?.length > 0 && (
+        <Section title="Proof Points">
+          {pov.proof_points.map((pp: any, i: number) => (
+            <div key={i} style={{
+              background: 'var(--bg-surface)', border: '1px solid var(--border)',
+              borderRadius: 8, padding: '12px 16px', marginBottom: 8,
+            }}>
+              <div style={{ fontWeight: 500, fontSize: 13 }}>{pp?.reference}</div>
+              {pp?.quote_or_stat && (
+                <div style={{ fontSize: 13, color: 'var(--text-secondary)', fontStyle: 'italic', marginTop: 4 }}>
+                  "{pp.quote_or_stat}"
+                </div>
+              )}
+              {pp?.why_relevant && (
+                <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>{pp.why_relevant}</div>
+              )}
+            </div>
+          ))}
+        </Section>
+      )}
+
+      {/* Contact Matrix */}
+      {personas && <ContactMatrix personas={personas} />}
+
+      {/* 10. Sources */}
+      {cleanSources.length > 0 && (
+        <Section title="Sources">
+          <ol style={{ paddingLeft: 20, margin: 0 }}>
+            {visibleSources.map((s: any, i: number) => (
+              <li key={i} id={`cite-${i + 1}`} style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6 }}>
+                <span style={{ fontWeight: 500 }}>{typeof s === 'string' ? s : s?.source}</span>
+                {s?.what_it_provided && (
+                  <span style={{ color: 'var(--text-tertiary)' }}> — {s.what_it_provided}</span>
+                )}
+              </li>
+            ))}
+          </ol>
+          {!showAllSources && hiddenCount > 0 && (
+            <button
+              onClick={() => setShowAllSources(true)}
+              style={{ fontSize: 12, color: 'var(--accent)', background: 'none',
+                       border: 'none', cursor: 'pointer', padding: '8px 0' }}
+            >
+              + {hiddenCount} more sources
+            </button>
+          )}
+        </Section>
+      )}
+    </>
+  );
+}
+
 export default function BriefView() {
   const { run_id } = useParams<{ run_id: string }>();
   const navigate = useNavigate();
@@ -691,201 +1173,7 @@ export default function BriefView() {
 
         {/* ============ Brief content sections ============ */}
         {pov && (
-          <>
-            {/* Section 1: ICP Fit */}
-            <Section title="ICP Fit">
-              <p style={{ fontSize: 13, lineHeight: 1.7 }}>{pov?.icp_fit?.rationale}</p>
-            </Section>
-
-            {/* Section 2: Why Anything */}
-            {pov?.why_anything && (
-              <Section title="Why Anything">
-                {pov.why_anything.corporate_strategy && (
-                  <div style={{
-                    background: 'rgba(94,106,210,0.06)', border: '1px solid rgba(94,106,210,0.15)',
-                    borderRadius: 8, padding: '12px 16px', marginBottom: 16,
-                  }}>
-                    <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--accent)', marginBottom: 4 }}>
-                      CORPORATE STRATEGY
-                    </div>
-                    <div style={{ fontSize: 13 }}>{pov.why_anything.corporate_strategy}</div>
-                  </div>
-                )}
-                {pov.why_anything.strategic_objectives?.length > 0 && (
-                  <div style={{ marginBottom: 12 }}>
-                    <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 8 }}>STRATEGIC OBJECTIVES</div>
-                    <ul style={{ paddingLeft: 20, margin: 0 }}>
-                      {pov.why_anything.strategic_objectives.map((obj: string, i: number) => (
-                        <li key={i} style={{ fontSize: 13, marginBottom: 4, lineHeight: 1.6 }}>{obj}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                {pov.why_anything.macro_forces && (
-                  <div style={{ marginBottom: 12 }}>
-                    <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 4 }}>MACRO FORCES</div>
-                    <CitedProse text={pov.why_anything.macro_forces} />
-                  </div>
-                )}
-                <CitedProse text={pov.why_anything.narrative} />
-              </Section>
-            )}
-
-            {/* Section 3: Why Now */}
-            {pov?.why_now && (
-              <Section title="Why Now">
-                {pov.why_now.urgency_rationale && (
-                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16, lineHeight: 1.7 }}>
-                    {pov.why_now.urgency_rationale}
-                  </p>
-                )}
-                {pov.why_now.triggers?.map((t: any, i: number) => (
-                  <TriggerCard key={i} trigger={t} />
-                ))}
-              </Section>
-            )}
-
-            {/* Section 4: Why Figma */}
-            {pov?.why_figma && (
-              <Section title="Why Figma">
-                {pov.why_figma.strongest_angle && (
-                  <div style={{
-                    background: 'var(--accent-subtle)', border: '1px solid rgba(94,106,210,0.2)',
-                    borderRadius: 8, padding: '12px 16px', marginBottom: 16,
-                  }}>
-                    <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--accent)', marginBottom: 4 }}>
-                      STRONGEST ANGLE
-                    </div>
-                    <div style={{ fontSize: 13 }}>{pov.why_figma.strongest_angle}</div>
-                  </div>
-                )}
-                <CitedProse text={pov.why_figma.rationale} />
-                {pov.why_figma.primary_products?.length > 0 && (
-                  <div style={{ marginTop: 16 }}>
-                    {pov.why_figma.primary_products.map((p: any, i: number) => (
-                      <div key={i} style={{
-                        background: 'var(--bg-surface)', border: '1px solid var(--border)',
-                        borderRadius: 8, padding: '12px 16px', marginBottom: 8,
-                      }}>
-                        <div style={{ fontWeight: 500, fontSize: 13 }}>{p?.product}</div>
-                        <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>{p?.relevance}</div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </Section>
-            )}
-
-            {/* Section 5: About */}
-            {pov?.about && (
-              <Section title="About">
-                {pov.about.who_they_are && (
-                  <p style={{ fontSize: 13, lineHeight: 1.7, marginBottom: 12 }}>{pov.about.who_they_are}</p>
-                )}
-                <AboutMarkdown text={pov.about.what_they_do} />
-                {pov.about.how_they_make_money && (
-                  <div style={{ marginTop: 12 }}>
-                    <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 4 }}>REVENUE MODEL</div>
-                    <p style={{ fontSize: 13, lineHeight: 1.7 }}>{pov.about.how_they_make_money}</p>
-                  </div>
-                )}
-
-                {/* Digital products */}
-                {pov?.digital_products?.length > 0 && (
-                  <DataTable
-                    headers={['Product', 'Description']}
-                    rows={pov.digital_products.map((p: any) => [p?.product, p?.description])}
-                  />
-                )}
-
-                {/* Technology partnerships */}
-                {pov?.technology_partnerships?.length > 0 && (
-                  <DataTable
-                    headers={['Partner', 'Details']}
-                    rows={pov.technology_partnerships.map((p: any) => [p?.partner, p?.details])}
-                  />
-                )}
-
-                {/* Executives */}
-                {pov?.executives?.length > 0 && (
-                  <DataTable
-                    headers={['Name', 'Title', 'Significance']}
-                    rows={pov.executives.map((e: any) => [e?.name, e?.title, e?.significance])}
-                  />
-                )}
-              </Section>
-            )}
-
-            {/* Section 5b: Org Structure */}
-            {pov?.org_structure && pov.org_structure.structure_type !== 'simple' && (
-              <Section title="Organisation Structure">
-                {pov.org_structure.structure_summary && (
-                  <p style={{ fontSize: 13, lineHeight: 1.7, marginBottom: 12 }}>{pov.org_structure.structure_summary}</p>
-                )}
-                {pov.org_structure.divisions?.length > 0 && (
-                  <DataTable
-                    headers={['Division', 'Description', 'Headcount']}
-                    rows={pov.org_structure.divisions.map((d: any) => [
-                      d?.name,
-                      d?.description,
-                      d?.estimated_headcount || (d?.headcount_est ? `~${d.headcount_est.toLocaleString()}` : null),
-                    ])}
-                  />
-                )}
-              </Section>
-            )}
-
-            {/* Job Signals */}
-            <JobSignalsSection signals={pov?.job_signals} />
-
-            {/* Proof Points */}
-            {pov?.proof_points?.length > 0 && (
-              <Section title="Proof Points">
-                {pov.proof_points.map((pp: any, i: number) => (
-                  <div key={i} style={{
-                    background: 'var(--bg-surface)', border: '1px solid var(--border)',
-                    borderRadius: 8, padding: '12px 16px', marginBottom: 8,
-                  }}>
-                    <div style={{ fontWeight: 500, fontSize: 13 }}>{pp?.reference}</div>
-                    {pp?.quote_or_stat && (
-                      <div style={{ fontSize: 13, color: 'var(--text-secondary)', fontStyle: 'italic', marginTop: 4 }}>
-                        "{pp.quote_or_stat}"
-                      </div>
-                    )}
-                    {pp?.why_relevant && (
-                      <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>{pp.why_relevant}</div>
-                    )}
-                  </div>
-                ))}
-              </Section>
-            )}
-
-            {/* Contact Matrix */}
-            {personas && <ContactMatrix personas={personas} />}
-
-            {/* Research Gaps */}
-            {pov?.research_gaps && (
-              <Section title="Research Gaps">
-                <p style={{ fontSize: 13, lineHeight: 1.7, color: 'var(--text-secondary)' }}>{pov.research_gaps}</p>
-              </Section>
-            )}
-
-            {/* Sources */}
-            {pov?.sources_used?.length > 0 && (
-              <Section title="Sources">
-                <ol style={{ paddingLeft: 20, margin: 0 }}>
-                  {pov.sources_used.map((s: any, i: number) => (
-                    <li key={i} id={`cite-${i + 1}`} style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6 }}>
-                      <span style={{ fontWeight: 500 }}>{typeof s === 'string' ? s : s?.source}</span>
-                      {s?.what_it_provided && (
-                        <span style={{ color: 'var(--text-tertiary)' }}> — {s.what_it_provided}</span>
-                      )}
-                    </li>
-                  ))}
-                </ol>
-              </Section>
-            )}
-          </>
+          <BriefContent pov={pov} personas={personas} />
         )}
       </div>
 
