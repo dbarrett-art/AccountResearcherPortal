@@ -1,11 +1,18 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <meta charset="utf-8" />
+  <title>M4S Research</title>
   <script>
-    var base = '/AccountResearcherPortal';
-    var path = window.location.pathname;
-    if (path.startsWith(base)) path = path.slice(base.length);
-    window.location.replace(base + '/?path=' + encodeURIComponent(path));
+    // GitHub Pages SPA redirect fix
+    // Captures the full path after /AccountResearcherPortal and redirects to
+    // index.html with the path encoded as a ?path= query param
+    var path = window.location.pathname.replace('/AccountResearcherPortal', '') || '/';
+    var search = window.location.search;
+    var hash = window.location.hash;
+    window.location.replace(
+      '/AccountResearcherPortal/?path=' + encodeURIComponent(path + search) + hash
+    );
   </script>
 </head>
 <body></body>
