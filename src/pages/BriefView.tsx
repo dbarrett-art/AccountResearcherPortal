@@ -99,10 +99,7 @@ function CollapsibleProse({ text, maxLength = 320 }: { text: string; maxLength?:
 
   return (
     <div>
-      <p style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.7,
-                  margin: '0 0 8px 0' }}>
-        {display}
-      </p>
+      <CitedProse text={display} />
       {isLong && (
         <button
           onClick={() => setExpanded(e => !e)}
@@ -737,13 +734,13 @@ function BriefContent({ pov, personas }: { pov: any; personas: any }) {
       {pov?.about && (
         <Section title="About">
           {pov.about.who_they_are && (
-            <p style={{ fontSize: 13, lineHeight: 1.7, marginBottom: 12 }}>{pov.about.who_they_are}</p>
+            <CitedProse text={pov.about.who_they_are} />
           )}
           <AboutMarkdown text={pov.about.what_they_do} />
           {pov.about.how_they_make_money && (
             <div style={{ marginTop: 12 }}>
               <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 4 }}>REVENUE MODEL</div>
-              <p style={{ fontSize: 13, lineHeight: 1.7 }}>{pov.about.how_they_make_money}</p>
+              <CitedProse text={pov.about.how_they_make_money} />
             </div>
           )}
 
@@ -817,7 +814,7 @@ function BriefContent({ pov, personas }: { pov: any; personas: any }) {
 
       {/* 4. ICP Fit */}
       <Section title="ICP Fit">
-        <p style={{ fontSize: 13, lineHeight: 1.7 }}>{pov?.icp_fit?.rationale}</p>
+        <CitedProse text={pov?.icp_fit?.rationale} />
       </Section>
 
       {/* 5. Why Anything */}
@@ -926,16 +923,27 @@ function BriefContent({ pov, personas }: { pov: any; personas: any }) {
       {/* 10. Sources */}
       {cleanSources.length > 0 && (
         <Section title="Sources">
-          <ol style={{ paddingLeft: 20, margin: 0 }}>
-            {visibleSources.map((s: any, i: number) => (
-              <li key={i} id={`cite-${i + 1}`} style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6 }}>
-                <span style={{ fontWeight: 500 }}>{typeof s === 'string' ? s : s?.source}</span>
-                {s?.what_it_provided && (
-                  <span style={{ color: 'var(--text-tertiary)' }}> — {s.what_it_provided}</span>
-                )}
-              </li>
-            ))}
-          </ol>
+          <div style={{ margin: 0 }}>
+            {visibleSources.map((s: any, i: number) => {
+              const url = typeof s === 'string' ? s : (s?.url || s?.source || '');
+              const title = typeof s === 'string' ? '' : (s?.title || s?.what_it_provided || '');
+              return (
+                <div key={i} id={`cite-${i + 1}`} style={{ fontSize: 12, marginBottom: 6 }}>
+                  <span style={{ color: 'var(--text-tertiary)', marginRight: 6 }}>[{i + 1}]</span>
+                  {url.startsWith('http') ? (
+                    <a href={url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>
+                      {title || url}
+                    </a>
+                  ) : (
+                    <span style={{ fontWeight: 500, color: 'var(--text-secondary)' }}>{url}</span>
+                  )}
+                  {title && url.startsWith('http') ? null : (title && (
+                    <span style={{ color: 'var(--text-tertiary)' }}> — {title}</span>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
           {!showAllSources && hiddenCount > 0 && (
             <button
               onClick={() => setShowAllSources(true)}
