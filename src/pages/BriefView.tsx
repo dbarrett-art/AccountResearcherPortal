@@ -716,10 +716,99 @@ function ValuePyramid({ pyramid }: { pyramid: any }) {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Feedback Panel                                                     */
+/* ------------------------------------------------------------------ */
+
+function FeedbackPanel({ runId, session }: { runId: string; session: any }) {
+  const [open, setOpen] = useState(false);
+  const [rating, setRating] = useState<number | null>(null);
+  const [accuracy, setAccuracy] = useState<number | null>(null);
+  const [usefulness, setUsefulness] = useState<number | null>(null);
+  const [comment, setComment] = useState('');
+  const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = async () => {
+    if (!rating) return;
+    setSubmitting(true);
+    try {
+      await fetch(`https://go.accountresearch.workers.dev/feedback/${runId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({ rating, accuracy_rating: accuracy, usefulness_rating: usefulness, comment: comment || null }),
+      });
+      setSubmitted(true);
+    } catch { /* silent */ }
+    setSubmitting(false);
+  };
+
+  if (submitted) {
+    return (
+      <div style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: 8, padding: '14px 18px', marginBottom: 32 }}>
+        <div style={{ fontSize: 13, color: '#22c55e', fontWeight: 500 }}>Thanks for your feedback!</div>
+      </div>
+    );
+  }
+
+  const StarRow = ({ label, value, onChange }: { label: string; value: number | null; onChange: (v: number) => void }) => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+      <div style={{ fontSize: 12, color: 'var(--text-secondary)', width: 90 }}>{label}</div>
+      <div style={{ display: 'flex', gap: 4 }}>
+        {[1, 2, 3, 4, 5].map(n => (
+          <button key={n} onClick={() => onChange(n)} style={{
+            background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, padding: 2,
+            color: value && n <= value ? '#f59e0b' : 'var(--text-tertiary)',
+          }}>{value && n <= value ? '\u2605' : '\u2606'}</button>
+        ))}
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{ marginBottom: 32 }}>
+      <button onClick={() => setOpen(o => !o)} style={{
+        background: 'none', border: '1px solid var(--border)', borderRadius: 6,
+        padding: '8px 14px', fontSize: 12, color: 'var(--text-secondary)',
+        cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+      }}>
+        {open ? '\u25B2' : '\u25BC'} Rate this brief
+      </button>
+      {open && (
+        <div style={{ marginTop: 12, background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
+          <StarRow label="Overall" value={rating} onChange={setRating} />
+          <StarRow label="Accuracy" value={accuracy} onChange={setAccuracy} />
+          <StarRow label="Usefulness" value={usefulness} onChange={setUsefulness} />
+          <textarea
+            value={comment} onChange={e => setComment(e.target.value)}
+            placeholder="Optional comment..."
+            style={{
+              width: '100%', minHeight: 60, marginTop: 8, padding: 10, fontSize: 13,
+              background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+              borderRadius: 6, color: 'var(--text-primary)', resize: 'vertical',
+            }}
+          />
+          <button onClick={handleSubmit} disabled={!rating || submitting} style={{
+            marginTop: 8, background: rating ? 'var(--accent)' : 'var(--bg-elevated)',
+            color: rating ? '#fff' : 'var(--text-tertiary)',
+            border: 'none', borderRadius: 6, padding: '6px 14px', fontSize: 13,
+            fontWeight: 500, cursor: rating ? 'pointer' : 'default',
+          }}>
+            {submitting ? 'Sending...' : 'Submit feedback'}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /*  Brief content (reordered sections)                                 */
 /* ------------------------------------------------------------------ */
 
-function BriefContent({ pov, personas }: { pov: any; personas: any }) {
+function BriefContent({ pov, personas, runId, session }: { pov: any; personas: any; runId?: string; session?: any }) {
   const [showAllSources, setShowAllSources] = useState(false);
 
   const strongestAngle = pov?.why_figma?.strongest_angle;
@@ -1031,6 +1120,9 @@ function BriefContent({ pov, personas }: { pov: any; personas: any }) {
 
       {/* Contact Matrix */}
       {personas && <ContactMatrix personas={personas} />}
+
+      {/* Feedback */}
+      {runId && session && <FeedbackPanel runId={runId} session={session} />}
 
       {/* 10. Sources */}
       {cleanSources.length > 0 && (
@@ -1448,7 +1540,7 @@ export default function BriefView() {
 
         {/* ============ Brief content sections ============ */}
         {pov && (
-          <BriefContent pov={pov} personas={personas} />
+          <BriefContent pov={pov} personas={personas} runId={run_id} session={session} />
         )}
       </div>
 
