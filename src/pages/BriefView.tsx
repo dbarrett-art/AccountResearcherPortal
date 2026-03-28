@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import Layout from '../components/Layout';
 import TableSkeleton from '../components/TableSkeleton';
 import usePageTitle from '../hooks/usePageTitle';
-import { ArrowLeft, MessageSquare, FileText, Table, X, ChevronDown, ExternalLink, Send, Trash2 } from 'lucide-react';
+import { ArrowLeft, MessageSquare, FileText, Table, X, ChevronDown, ExternalLink, Send, Trash2, Target, Zap, TrendingUp, Wrench, Building2, Users, Briefcase, BookOpen, Link2 } from 'lucide-react';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -32,35 +32,45 @@ interface Brief {
 /*  Utility components                                                 */
 /* ------------------------------------------------------------------ */
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+const SECTION_ICONS: Record<string, React.ReactNode> = {
+  'ICP FIT':            <Target size={14} />,
+  'WHY NOW':            <Zap size={14} />,
+  'WHY ANYTHING':       <TrendingUp size={14} />,
+  'WHY FIGMA':          <Wrench size={14} />,
+  'ABOUT':              <Building2 size={14} />,
+  'KEY EXECUTIVES':     <Users size={14} />,
+  'JOB SIGNALS':        <Briefcase size={14} />,
+  'PROOF POINTS':       <BookOpen size={14} />,
+  'SOURCES':            <Link2 size={14} />,
+  'CONTACT MATRIX':     <Users size={14} />,
+  'ORGANISATION STRUCTURE': <Building2 size={14} />,
+};
+
+function Section({ title, children, collapsible = false }: {
+  title: string; children: React.ReactNode; collapsible?: boolean
+}) {
+  const [open, setOpen] = useState(!collapsible);
+  const icon = SECTION_ICONS[title.toUpperCase()];
   return (
-    <div style={{ marginBottom: 40 }}>
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 10,
-        marginBottom: 20,
-        paddingBottom: 12,
+    <div style={{ marginBottom: 48 }}>
+      <div onClick={collapsible ? () => setOpen(o => !o) : undefined} style={{
+        display: 'flex', alignItems: 'center', gap: 8,
+        marginBottom: open ? 20 : 0, paddingBottom: 12,
         borderBottom: '1px solid var(--border)',
+        cursor: collapsible ? 'pointer' : 'default', userSelect: 'none',
       }}>
-        <div style={{
-          width: 3, height: 16,
-          background: 'var(--accent)',
-          borderRadius: 2,
-          flexShrink: 0,
-        }} />
-        <h2 style={{
-          fontSize: 11,
-          fontWeight: 700,
-          color: 'var(--text-secondary)',
-          textTransform: 'uppercase',
-          letterSpacing: '0.08em',
-          margin: 0,
-        }}>
+        <div style={{ width: 3, height: 16, background: 'var(--accent)', borderRadius: 2, flexShrink: 0 }} />
+        {icon && <span style={{ color: 'var(--accent)', display: 'flex' }}>{icon}</span>}
+        <h2 style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)',
+                     textTransform: 'uppercase', letterSpacing: '0.08em', margin: 0, flex: 1 }}>
           {title}
         </h2>
+        {collapsible && (
+          <ChevronDown size={14} style={{ color: 'var(--text-tertiary)',
+            transform: open ? 'rotate(180deg)' : 'none', transition: '150ms' }} />
+        )}
       </div>
-      {children}
+      {open && children}
     </div>
   );
 }
@@ -78,7 +88,7 @@ function CitedProse({ text }: { text: string | undefined | null }) {
   const html = text.replace(/\[(\d+)\]/g, (_, n: string) =>
     `<sup><a href="#cite-${n}" style="color:var(--accent);text-decoration:none">[${n}]</a></sup>`
   );
-  return <p style={{ fontSize: 13, lineHeight: 1.7, color: 'var(--text-primary)' }} dangerouslySetInnerHTML={{ __html: html }} />;
+  return <p style={{ fontSize: 14, lineHeight: 1.9, color: 'var(--text-primary)' }} dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
 function CollapsibleProse({ text, maxLength = 320 }: { text: string; maxLength?: number }) {
@@ -118,20 +128,23 @@ function CollapsibleProse({ text, maxLength = 320 }: { text: string; maxLength?:
 
 function IcpBadge({ score }: { score: string | undefined }) {
   if (!score) return null;
-  const colors: Record<string, { bg: string; text: string }> = {
-    Strong: { bg: 'rgba(22,163,74,0.12)', text: 'var(--status-complete-text)' },
-    Moderate: { bg: 'rgba(217,119,6,0.15)', text: 'var(--status-running-text)' },
-    Weak: { bg: 'rgba(220,38,38,0.12)', text: 'var(--status-failed-text)' },
+  const colors: Record<string, { bg: string; border: string; icon: string }> = {
+    Strong:   { bg: 'rgba(34,197,94,0.1)',  border: 'rgba(34,197,94,0.3)',  icon: '#22c55e' },
+    Moderate: { bg: 'rgba(245,158,11,0.1)', border: 'rgba(245,158,11,0.3)', icon: '#f59e0b' },
+    Weak:     { bg: 'rgba(239,68,68,0.1)',  border: 'rgba(239,68,68,0.3)',  icon: '#ef4444' },
   };
   const c = colors[score] || colors.Moderate;
   return (
-    <span style={{
-      display: 'inline-flex', alignItems: 'center', gap: 5,
-      padding: '2px 8px', borderRadius: 4, fontSize: 12, fontWeight: 500,
-      background: c.bg, color: c.text,
+    <div style={{
+      display: 'inline-flex', alignItems: 'center', gap: 10,
+      background: c.bg, border: `1px solid ${c.border}`,
+      borderRadius: 8, padding: '8px 16px',
     }}>
-      {score} ICP
-    </span>
+      <Target size={18} style={{ color: c.icon }} />
+      <span style={{ fontSize: 15, fontWeight: 700, color: c.icon }}>
+        {score} ICP
+      </span>
+    </div>
   );
 }
 
@@ -175,8 +188,14 @@ function TierBadge({ tier }: { tier: string }) {
   );
 }
 
+const TRIGGER_COLOURS: Record<string, string> = {
+  LEADERSHIP: '#8b5cf6', BUSINESS: '#3b82f6', MARKET: '#f59e0b',
+  PRODUCT: '#10b981', COMPETITIVE: '#ef4444', REGULATORY: '#6366f1',
+};
+
 function TriggerCard({ trigger }: { trigger: any }) {
   const [copied, setCopied] = useState(false);
+  const borderColor = TRIGGER_COLOURS[trigger?.type?.toUpperCase()] || 'var(--accent)';
 
   const copyText = () => {
     const text = `${trigger?.trigger || ''}${trigger?.evidence ? '\n\n' + trigger.evidence : ''}`;
@@ -189,6 +208,7 @@ function TriggerCard({ trigger }: { trigger: any }) {
     <div style={{
       position: 'relative',
       background: 'var(--bg-surface)', border: '1px solid var(--border)',
+      borderLeft: `3px solid ${borderColor}`,
       borderRadius: 8, padding: '14px 16px', marginBottom: 8,
     }}
     onMouseEnter={e => {
@@ -261,6 +281,18 @@ function TriggerCard({ trigger }: { trigger: any }) {
   );
 }
 
+const PRODUCT_COLOURS: Record<string, { bg: string; text: string }> = {
+  'figma design':  { bg: 'rgba(94,106,210,0.15)',  text: '#818cf8' },
+  'figjam':        { bg: 'rgba(245,158,11,0.15)',   text: '#f59e0b' },
+  'dev mode':      { bg: 'rgba(16,185,129,0.15)',   text: '#10b981' },
+  'code connect':  { bg: 'rgba(16,185,129,0.15)',   text: '#10b981' },
+  'figma make':    { bg: 'rgba(168,85,247,0.15)',   text: '#a855f7' },
+  'mcp server':    { bg: 'rgba(20,184,166,0.15)',   text: '#14b8a6' },
+  'figma ai':      { bg: 'rgba(251,146,60,0.15)',   text: '#fb923c' },
+  'enterprise':    { bg: 'rgba(99,102,241,0.15)',   text: '#6366f1' },
+  'slides':        { bg: 'rgba(236,72,153,0.15)',   text: '#ec4899' },
+};
+
 function CopyableProductCard({ product }: { product: any }) {
   const [copied, setCopied] = useState(false);
 
@@ -299,8 +331,19 @@ function CopyableProductCard({ product }: { product: any }) {
       >
         {copied ? '\u2713' : '\u2398'}
       </button>
-      <div style={{ fontWeight: 600, fontSize: 13, paddingRight: 32, color: 'var(--accent)', marginBottom: 6 }}>{product?.product}</div>
-      <div style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.6 }}>{product?.relevance}</div>
+      {(() => {
+        const name = product?.product || '';
+        const key = Object.keys(PRODUCT_COLOURS).find(k => name.toLowerCase().includes(k));
+        const colour = key ? PRODUCT_COLOURS[key] : { bg: 'rgba(94,106,210,0.15)', text: '#818cf8' };
+        return (
+          <div style={{ display: 'inline-block', background: colour.bg, color: colour.text,
+                        fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 4,
+                        marginBottom: 8, letterSpacing: '0.02em' }}>
+            {name}
+          </div>
+        );
+      })()}
+      <div style={{ fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.9 }}>{product?.relevance}</div>
     </div>
   );
 }
@@ -732,7 +775,7 @@ function BriefContent({ pov, personas }: { pov: any; personas: any }) {
 
       {/* 3. About */}
       {pov?.about && (
-        <Section title="About">
+        <Section title="About" collapsible>
           {pov.about.who_they_are && (
             <CitedProse text={pov.about.who_they_are} />
           )}
@@ -795,7 +838,7 @@ function BriefContent({ pov, personas }: { pov: any; personas: any }) {
 
       {/* Org Structure */}
       {pov?.org_structure && pov.org_structure.structure_type !== 'simple' && (
-        <Section title="Organisation Structure">
+        <Section title="Organisation Structure" collapsible>
           {pov.org_structure.structure_summary && (
             <p style={{ fontSize: 13, lineHeight: 1.7, marginBottom: 12 }}>{pov.org_structure.structure_summary}</p>
           )}
@@ -819,7 +862,7 @@ function BriefContent({ pov, personas }: { pov: any; personas: any }) {
 
       {/* 5. Why Anything */}
       {pov?.why_anything && (
-        <Section title="Why Anything">
+        <Section title="Why Anything" collapsible>
           {pov.why_anything.corporate_strategy && (
             <div style={{
               background: 'rgba(94,106,210,0.06)', border: '1px solid rgba(94,106,210,0.15)',
