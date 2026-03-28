@@ -20,7 +20,15 @@ interface Run {
   excel_url: string | null;
   error_message: string | null;
   brief_id: string | null;
+  market: string | null;
 }
+
+const LANGUAGE_FLAGS: Record<string, string> = {
+  de: '\u{1F1E9}\u{1F1EA}', fr: '\u{1F1EB}\u{1F1F7}', es: '\u{1F1EA}\u{1F1F8}',
+  it: '\u{1F1EE}\u{1F1F9}', nl: '\u{1F1F3}\u{1F1F1}', pt: '\u{1F1F5}\u{1F1F9}',
+  ja: '\u{1F1EF}\u{1F1F5}', ko: '\u{1F1F0}\u{1F1F7}', sv: '\u{1F1F8}\u{1F1EA}',
+  no: '\u{1F1F3}\u{1F1F4}', da: '\u{1F1E9}\u{1F1F0}', fi: '\u{1F1EB}\u{1F1EE}',
+};
 
 function relativeTime(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -68,7 +76,7 @@ export default function MyBriefs() {
     if (!userProfile) return;
     const { data } = await supabase
       .from('runs')
-      .select('id, company, created_at, status, summary, pdf_url, excel_url, error_message, brief_id')
+      .select('id, company, created_at, status, summary, pdf_url, excel_url, error_message, brief_id, market')
       .eq('user_id', userProfile.id)
       .order('created_at', { ascending: false });
     if (data) setRuns(data as Run[]);
@@ -205,7 +213,14 @@ export default function MyBriefs() {
                   onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-elevated)')}
                   onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                 >
-                  <td style={{ padding: '11px 16px', fontSize: 13, fontWeight: 500 }}>{run.company}</td>
+                  <td style={{ padding: '11px 16px', fontSize: 13, fontWeight: 500 }}>
+                    {run.company}
+                    {run.market && run.market !== 'en' && run.market !== 'auto' && LANGUAGE_FLAGS[run.market] && (
+                      <span title={run.market.toUpperCase()} style={{ marginLeft: 6, fontSize: 14 }}>
+                        {LANGUAGE_FLAGS[run.market]}
+                      </span>
+                    )}
+                  </td>
                   <td style={{ padding: '11px 16px', fontSize: 13, color: 'var(--text-secondary)' }} title={new Date(run.created_at).toLocaleString()}>
                     {relativeTime(run.created_at)}
                     <FreshnessBadge createdAt={run.created_at} status={run.status} />

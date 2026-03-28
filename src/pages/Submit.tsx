@@ -36,8 +36,24 @@ function isValidUrl(input: string): boolean {
 export default function Submit() {
   usePageTitle('Submit');
   const { session, userProfile, refreshProfile } = useAuth();
+  const LANGUAGES = [
+    { code: 'auto', label: 'Auto-detect', flag: '\u{1F310}' },
+    { code: 'en',   label: 'English',     flag: '\u{1F1EC}\u{1F1E7}' },
+    { code: 'de',   label: 'German',      flag: '\u{1F1E9}\u{1F1EA}' },
+    { code: 'fr',   label: 'French',      flag: '\u{1F1EB}\u{1F1F7}' },
+    { code: 'es',   label: 'Spanish',     flag: '\u{1F1EA}\u{1F1F8}' },
+    { code: 'it',   label: 'Italian',     flag: '\u{1F1EE}\u{1F1F9}' },
+    { code: 'nl',   label: 'Dutch',       flag: '\u{1F1F3}\u{1F1F1}' },
+    { code: 'pt',   label: 'Portuguese',  flag: '\u{1F1F5}\u{1F1F9}' },
+    { code: 'ja',   label: 'Japanese',    flag: '\u{1F1EF}\u{1F1F5}' },
+    { code: 'ko',   label: 'Korean',      flag: '\u{1F1F0}\u{1F1F7}' },
+    { code: 'sv',   label: 'Swedish',     flag: '\u{1F1F8}\u{1F1EA}' },
+    { code: 'no',   label: 'Norwegian',   flag: '\u{1F1F3}\u{1F1F4}' },
+  ];
+
   const [company, setCompany] = useState('');
   const [url, setUrl] = useState('');
+  const [market, setMarket] = useState('auto');
   const [includeContacts, setIncludeContacts] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [banner, setBanner] = useState<BannerState | null>(null);
@@ -117,7 +133,7 @@ export default function Submit() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ company, url: normalisedUrl, include_contacts: includeContacts }),
+        body: JSON.stringify({ company, url: normalisedUrl, include_contacts: includeContacts, market }),
         signal: controller.signal,
       });
       clearTimeout(timeout);
@@ -212,6 +228,26 @@ export default function Submit() {
             <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>
               e.g. company.com or www.company.com — https:// added automatically
             </div>
+          </div>
+
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ display: 'block', fontSize: 14, fontWeight: 500, marginBottom: 6 }}>Language</label>
+            <select value={market} onChange={e => setMarket(e.target.value)} style={{
+              background: 'var(--bg-input)', border: '1px solid var(--border-strong)',
+              borderRadius: 6, padding: '8px 12px', color: 'var(--text-primary)',
+              fontSize: 13, width: '100%', cursor: 'pointer', outline: 'none',
+            }}>
+              {LANGUAGES.map(lang => (
+                <option key={lang.code} value={lang.code}>
+                  {lang.flag}  {lang.label}
+                </option>
+              ))}
+            </select>
+            {market === 'auto' && (
+              <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>
+                Language detected automatically from the company domain
+              </div>
+            )}
           </div>
 
           {userProfile?.role === 'admin' && (

@@ -20,8 +20,15 @@ interface RunRow {
   id: string; company: string; created_at: string; completed_at: string | null;
   status: 'queued' | 'running' | 'complete' | 'failed';
   error_message: string | null; pdf_url: string | null; gha_run_id: string | null;
-  user_id: string; users?: { name: string; email: string };
+  user_id: string; users?: { name: string; email: string }; market: string | null;
 }
+
+const LANGUAGE_FLAGS: Record<string, string> = {
+  de: '\u{1F1E9}\u{1F1EA}', fr: '\u{1F1EB}\u{1F1F7}', es: '\u{1F1EA}\u{1F1F8}',
+  it: '\u{1F1EE}\u{1F1F9}', nl: '\u{1F1F3}\u{1F1F1}', pt: '\u{1F1F5}\u{1F1F9}',
+  ja: '\u{1F1EF}\u{1F1F5}', ko: '\u{1F1F0}\u{1F1F7}', sv: '\u{1F1F8}\u{1F1EA}',
+  no: '\u{1F1F3}\u{1F1F4}', da: '\u{1F1E9}\u{1F1F0}', fi: '\u{1F1EB}\u{1F1EE}',
+};
 
 function formatDuration(created: string, completed: string | null): string {
   if (!completed) return '—';
@@ -265,7 +272,7 @@ function RunMonitorTab() {
     (async () => {
       const { data } = await supabase
         .from('runs')
-        .select('id, company, created_at, completed_at, status, error_message, pdf_url, gha_run_id, user_id, users(name, email)')
+        .select('id, company, created_at, completed_at, status, error_message, pdf_url, gha_run_id, user_id, market, users(name, email)')
         .order('created_at', { ascending: false })
         .limit(200);
       if (data) setRuns(data as unknown as RunRow[]);
@@ -368,7 +375,14 @@ function RunMonitorTab() {
                 onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
               >
                 <td style={{ padding: '11px 16px', fontSize: 13, color: 'var(--text-secondary)' }}>{r.users?.name || '—'}</td>
-                <td style={{ padding: '11px 16px', fontSize: 13, fontWeight: 500 }}>{r.company}</td>
+                <td style={{ padding: '11px 16px', fontSize: 13, fontWeight: 500 }}>
+                  {r.company}
+                  {r.market && r.market !== 'en' && r.market !== 'auto' && LANGUAGE_FLAGS[r.market] && (
+                    <span title={r.market.toUpperCase()} style={{ marginLeft: 6, fontSize: 14 }}>
+                      {LANGUAGE_FLAGS[r.market]}
+                    </span>
+                  )}
+                </td>
                 <td style={{ padding: '11px 16px' }} title={r.error_message || ''}>
                   <StatusBadge status={r.status} />
                   {r.status === 'running' && progressMap[r.id] && (

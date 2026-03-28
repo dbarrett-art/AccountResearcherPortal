@@ -20,7 +20,20 @@ interface Run {
   pdf_url: string | null;
   excel_url: string | null;
   brief_id: string | null;
+  market: string | null;
 }
+
+const LANGUAGE_FLAGS: Record<string, string> = {
+  de: '\u{1F1E9}\u{1F1EA}', fr: '\u{1F1EB}\u{1F1F7}', es: '\u{1F1EA}\u{1F1F8}',
+  it: '\u{1F1EE}\u{1F1F9}', nl: '\u{1F1F3}\u{1F1F1}', pt: '\u{1F1F5}\u{1F1F9}',
+  ja: '\u{1F1EF}\u{1F1F5}', ko: '\u{1F1F0}\u{1F1F7}', sv: '\u{1F1F8}\u{1F1EA}',
+  no: '\u{1F1F3}\u{1F1F4}', da: '\u{1F1E9}\u{1F1F0}', fi: '\u{1F1EB}\u{1F1EE}',
+};
+const LANGUAGE_NAMES: Record<string, string> = {
+  de: 'German', fr: 'French', es: 'Spanish', it: 'Italian', nl: 'Dutch',
+  pt: 'Portuguese', ja: 'Japanese', ko: 'Korean', sv: 'Swedish', no: 'Norwegian',
+  da: 'Danish', fi: 'Finnish',
+};
 
 interface Brief {
   pov_json: Record<string, any> | null;
@@ -1338,6 +1351,29 @@ export default function BriefView() {
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [shareStatus, setShareStatus] = useState<'idle' | 'loading' | 'copied'>('idle');
+  const [runningEnglish, setRunningEnglish] = useState(false);
+  const [englishSubmitted, setEnglishSubmitted] = useState(false);
+
+  const handleRunInEnglish = async () => {
+    if (!session || !run) return;
+    setRunningEnglish(true);
+    try {
+      await fetch('https://go.accountresearch.workers.dev/submit', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          company: run.company,
+          url: run.url,
+          market: 'en',
+        }),
+      });
+      setEnglishSubmitted(true);
+    } catch { /* ignore */ }
+    finally { setRunningEnglish(false); }
+  };
 
   const handleShare = async () => {
     if (!session || shareStatus === 'loading') return;
@@ -1392,7 +1428,7 @@ export default function BriefView() {
       // Fetch run
       const { data: runData, error: runErr } = await supabase
         .from('runs')
-        .select('id, company, url, created_at, status, pdf_url, excel_url, brief_id')
+        .select('id, company, url, created_at, status, pdf_url, excel_url, brief_id, market')
         .eq('id', run_id)
         .single();
 
@@ -1562,6 +1598,12 @@ export default function BriefView() {
                 {run.url} <ExternalLink size={12} />
               </a>
             )}
+            {run.market && run.market !== 'en' && run.market !== 'auto' && LANGUAGE_FLAGS[run.market] && (
+              <span style={{ fontSize: 12, color: 'var(--text-tertiary)',
+                             display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                {LANGUAGE_FLAGS[run.market]} {LANGUAGE_NAMES[run.market] || run.market} brief
+              </span>
+            )}
           </div>
           <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
             <button onClick={handleShare} disabled={shareStatus === 'loading'} style={{
@@ -1591,7 +1633,8 @@ export default function BriefView() {
                 border: '1px solid var(--border-strong)', color: 'var(--text-secondary)',
                 textDecoration: 'none', transition: 'all 120ms',
               }}>
-                <FileText size={14} /> PDF
+                <FileText size={14} /> {run.market && run.market !== 'en' && run.market !== 'auto' && LANGUAGE_FLAGS[run.market]
+                  ? `${LANGUAGE_FLAGS[run.market]} PDF` : 'PDF'}
               </a>
             )}
             {run.excel_url && (
@@ -1603,6 +1646,21 @@ export default function BriefView() {
               }}>
                 <Table size={14} /> Excel
               </a>
+            )}
+            {run.market && run.market !== 'en' && run.market !== 'auto' && !englishSubmitted && (
+              <button onClick={handleRunInEnglish} disabled={runningEnglish} style={{
+                background: 'transparent', border: '1px solid var(--border-strong)',
+                color: 'var(--text-tertiary)', padding: '6px 12px',
+                fontSize: 12, borderRadius: 6, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: 6,
+              }}>
+                {'\u{1F1EC}\u{1F1E7}'} {runningEnglish ? 'Submitting\u2026' : 'Also run in English'}
+              </button>
+            )}
+            {englishSubmitted && (
+              <span style={{ fontSize: 12, color: 'var(--status-complete-text)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                {'\u{1F1EC}\u{1F1E7}'} English run submitted
+              </span>
             )}
             {userProfile?.role === 'admin' && (
               <>
