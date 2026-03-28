@@ -560,17 +560,111 @@ function AboutMarkdown({ text }: { text: string | undefined | null }) {
 /*  Job Signals section                                                */
 /* ------------------------------------------------------------------ */
 
-function JobSignalsSection({ signals }: { signals: any }) {
-  if (!signals) return null;
+const SIGNAL_CATEGORY_COLOURS: Record<string, string> = {
+  figma:            '#22c55e',
+  design_maturity:  '#6366f1',
+  handoff:          '#10b981',
+  product_investment: '#3b82f6',
+  ai_investment:    '#f59e0b',
+  velocity:         '#f59e0b',
+  org:              '#8b5cf6',
+  tooling:          '#64748b',
+};
+
+function JobSignalsSection({ signals, extracted }: { signals: any; extracted?: any }) {
+  // Use extracted signals (new three-tier format) when available
+  const hasExtracted = extracted && (extracted.signals?.length > 0 || extracted.roles?.length > 0 || extracted.strategic_articles?.length > 0);
+
+  // Fall back to legacy format
   const design = signals?.design_tool_signals || [];
   const other = signals?.other_signals || [];
   const gaps = signals?.gaps_noted;
-  if (design.length === 0 && other.length === 0 && !gaps) return null;
+  const synthesis = signals?.strategic_synthesis;
+
+  if (!hasExtracted && design.length === 0 && other.length === 0 && !gaps) return null;
+
   return (
     <Section title="Job Signals">
+      {/* Strategic synthesis */}
+      {synthesis && (
+        <div style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.6, marginBottom: 16, padding: '12px 16px', background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 8, borderLeft: '3px solid var(--accent)' }}>
+          {synthesis}
+        </div>
+      )}
+
+      {/* Extracted signals — role summary pills */}
+      {hasExtracted && extracted.roles?.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+          {extracted.roles.map((r: any) => (
+            <div key={r.role} style={{
+              fontSize: 12, padding: '4px 10px', borderRadius: 20,
+              background: 'var(--bg-elevated)', color: 'var(--text-secondary)',
+              border: '1px solid var(--border)',
+            }}>
+              {r.role} <span style={{ color: 'var(--text-tertiary)' }}>×{r.count}</span>
+            </div>
+          ))}
+          <div style={{ fontSize: 11, color: 'var(--text-tertiary)', alignSelf: 'center' }}>
+            {extracted.total_jobs} postings analysed
+          </div>
+        </div>
+      )}
+
+      {/* Extracted signals — signal cards with category colours */}
+      {hasExtracted && extracted.signals?.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+          {extracted.signals.map((s: any, i: number) => (
+            <div key={i} style={{
+              display: 'flex', alignItems: 'flex-start', gap: 10,
+              padding: '10px 12px', borderRadius: 6,
+              background: 'var(--bg-surface)', border: '1px solid var(--border)',
+              borderLeft: `3px solid ${SIGNAL_CATEGORY_COLOURS[s.category] || 'var(--accent)'}`,
+            }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.5 }}>
+                  {s.signal}
+                </div>
+                {s.jobs?.length > 0 && (
+                  <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 3 }}>
+                    Jobs: {s.jobs.slice(0, 3).join(', ')}{s.jobs.length > 3 ? ` +${s.jobs.length - 3} more` : ''}
+                  </div>
+                )}
+                {s.articles?.length > 0 && (
+                  <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>
+                    Articles: {s.articles.slice(0, 2).join(', ')}{s.articles.length > 2 ? ` +${s.articles.length - 2} more` : ''}
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Strategic articles */}
+      {hasExtracted && extracted.strategic_articles?.length > 0 && (
+        <>
+          <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 8 }}>STRATEGIC ARTICLES</div>
+          {extracted.strategic_articles.map((a: any, i: number) => (
+            <div key={i} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px', marginBottom: 6 }}>
+              <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>
+                {a.title}
+                {a.url && (
+                  <a href={a.url} target="_blank" rel="noopener noreferrer" style={{ marginLeft: 8, color: 'var(--accent)', fontSize: 11 }}>
+                    View <ExternalLink size={10} style={{ display: 'inline' }} />
+                  </a>
+                )}
+              </div>
+              {a.snippet && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4, lineHeight: 1.5 }}>{a.snippet}</div>}
+              {a.source && <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>{a.source}</div>}
+            </div>
+          ))}
+        </>
+      )}
+
+      {/* Legacy design tool signals (still rendered when present) */}
       {design.length > 0 && (
         <>
-          <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 8 }}>DESIGN TOOL SIGNALS</div>
+          <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 8, marginTop: hasExtracted ? 16 : 0 }}>DESIGN TOOL SIGNALS</div>
           {design.map((s: any, i: number) => (
             <div key={i} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '12px 16px', marginBottom: 8 }}>
               <div style={{ fontWeight: 500, fontSize: 13 }}>
@@ -595,7 +689,7 @@ function JobSignalsSection({ signals }: { signals: any }) {
       )}
       {other.length > 0 && (
         <>
-          <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 8, marginTop: design.length > 0 ? 16 : 0 }}>OTHER SIGNALS</div>
+          <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 8, marginTop: design.length > 0 || hasExtracted ? 16 : 0 }}>OTHER SIGNALS</div>
           {other.map((s: any, i: number) => (
             <div key={i} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '12px 16px', marginBottom: 8 }}>
               <div style={{ fontWeight: 500, fontSize: 13 }}>{s?.role_title}</div>
@@ -605,6 +699,20 @@ function JobSignalsSection({ signals }: { signals: any }) {
         </>
       )}
       {gaps && <div style={{ fontSize: 13, color: 'var(--text-tertiary)', marginTop: 12 }}>{gaps}</div>}
+
+      {/* Empty state with manual search link */}
+      {!hasExtracted && design.length === 0 && other.length === 0 && (
+        <div style={{ fontSize: 13, color: 'var(--text-tertiary)', fontStyle: 'italic' }}>
+          No design or product job postings found in search results.
+          <div style={{ marginTop: 6, fontSize: 12 }}>
+            Search manually: <a
+              href={`https://www.linkedin.com/jobs/search/?keywords=designer`}
+              target="_blank" rel="noopener noreferrer"
+              style={{ color: 'var(--accent)' }}
+            >LinkedIn Jobs</a>
+          </div>
+        </div>
+      )}
     </Section>
   );
 }
@@ -1144,7 +1252,7 @@ function BriefContent({ pov, personas, runId, session }: { pov: any; personas: a
       <ValuePyramid pyramid={pov?.value_pyramid} />
 
       {/* 8. Job Signals */}
-      <JobSignalsSection signals={pov?.job_signals} />
+      <JobSignalsSection signals={pov?.job_signals} extracted={pov?.job_signals_extracted} />
 
       {/* 9. Proof Points */}
       {pov?.proof_points?.length > 0 && (
