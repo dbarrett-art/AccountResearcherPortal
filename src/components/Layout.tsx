@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Sidebar from './Sidebar';
+import MobileNav from './MobileNav';
 import Banner from './Banner';
 
 export default function Layout({ children }: { children: React.ReactNode }) {
@@ -10,6 +11,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div style={{ display: 'flex', minHeight: '100vh' }}>
       <Sidebar />
+      <MobileNav />
       <main
         style={{
           marginLeft: 220,
