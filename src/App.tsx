@@ -6,6 +6,7 @@ import Submit from './pages/Submit'
 import MyBriefs from './pages/MyBriefs'
 import TeamView from './pages/TeamView'
 import Admin from './pages/Admin'
+import BriefView from './pages/BriefView'
 
 /**
  * Landing route for `/` — waits for auth to resolve before redirecting.
@@ -42,6 +43,7 @@ export default function App() {
       <Route path="/my-briefs" element={<ProtectedRoute><MyBriefs /></ProtectedRoute>} />
       <Route path="/team-view" element={<ProtectedRoute requireRole="manager"><TeamView /></ProtectedRoute>} />
       <Route path="/admin" element={<ProtectedRoute requireRole="admin"><Admin /></ProtectedRoute>} />
+      <Route path="/briefs/:run_id" element={<ProtectedRoute><BriefView /></ProtectedRoute>} />
       <Route path="*" element={<AuthCallback />} />
     </Routes>
   )

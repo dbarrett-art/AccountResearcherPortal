@@ -7,7 +7,7 @@ import Banner from '../components/Banner';
 import StatusBadge from '../components/StatusBadge';
 import TableSkeleton from '../components/TableSkeleton';
 import usePageTitle from '../hooks/usePageTitle';
-import { FileText, Table, RefreshCw } from 'lucide-react';
+import { FileText, Table, RefreshCw, Eye } from 'lucide-react';
 
 interface Run {
   id: string;
@@ -18,6 +18,7 @@ interface Run {
   pdf_url: string | null;
   excel_url: string | null;
   error_message: string | null;
+  brief_id: string | null;
 }
 
 function relativeTime(dateStr: string): string {
@@ -44,7 +45,7 @@ export default function MyBriefs() {
     if (!userProfile) return;
     const { data } = await supabase
       .from('runs')
-      .select('id, company, created_at, status, summary, pdf_url, excel_url, error_message')
+      .select('id, company, created_at, status, summary, pdf_url, excel_url, error_message, brief_id')
       .eq('user_id', userProfile.id)
       .order('created_at', { ascending: false });
     if (data) setRuns(data as Run[]);
@@ -184,6 +185,24 @@ export default function MyBriefs() {
                   </td>
                   <td style={{ padding: '11px 16px', textAlign: 'center' }}>
                     <div style={{ display: 'flex', justifyContent: 'center', gap: 8 }}>
+                      {run.status === 'complete' && run.brief_id && (
+                        <button
+                          onClick={() => navigate(`/briefs/${run.id}`)}
+                          title="View brief"
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: 'var(--text-secondary)',
+                            cursor: 'pointer',
+                            padding: '4px',
+                            borderRadius: '4px',
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.color = 'var(--text-primary)'}
+                          onMouseLeave={e => e.currentTarget.style.color = 'var(--text-secondary)'}
+                        >
+                          <Eye size={15} />
+                        </button>
+                      )}
                       {run.pdf_url ? (
                         <a href={run.pdf_url} target="_blank" rel="noopener noreferrer" title="Download PDF">
                           <FileText size={16} style={{ color: 'var(--text-secondary)' }} />
