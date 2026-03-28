@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../context/AuthContext';
 import Layout from '../components/Layout';
 import TableSkeleton from '../components/TableSkeleton';
 import usePageTitle from '../hooks/usePageTitle';
-import { ArrowLeft, MessageSquare, FileText, Table, X, ChevronDown, ExternalLink } from 'lucide-react';
+import { ArrowLeft, MessageSquare, FileText, Table, X, ChevronDown, ExternalLink, Send } from 'lucide-react';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -398,9 +399,24 @@ function JobSignalsSection({ signals }: { signals: any }) {
 /*  Main BriefView page                                                */
 /* ------------------------------------------------------------------ */
 
+interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+const SUGGESTED_PROMPTS = [
+  "What's the strongest angle for this account?",
+  "Who should I contact first and why?",
+  "Draft a cold email to the Head of Design",
+  "What are the key triggers to reference on the call?",
+  "Summarise the ICP fit in 2 sentences",
+  "What objections should I prepare for?",
+];
+
 export default function BriefView() {
   const { run_id } = useParams<{ run_id: string }>();
   const navigate = useNavigate();
+  const { session } = useAuth();
   usePageTitle('Brief');
 
   const [run, setRun] = useState<Run | null>(null);
@@ -408,6 +424,10 @@ export default function BriefView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [streaming, setStreaming] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!run_id) return;
@@ -450,6 +470,80 @@ export default function BriefView() {
 
   const pov = brief?.pov_json;
   const personas = brief?.personas_json;
+
+  const sendMessage = async (content: string) => {
+    if (!content.trim() || streaming) return;
+
+    const userMessage: ChatMessage = { role: 'user', content };
+    const newMessages = [...chatMessages, userMessage];
+    setChatMessages(newMessages);
+    setChatInput('');
+    setStreaming(true);
+
+    const assistantMessage: ChatMessage = { role: 'assistant', content: '' };
+    setChatMessages([...newMessages, assistantMessage]);
+
+    try {
+      const res = await fetch('https://go.accountresearch.workers.dev/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({
+          run_id,
+          messages: newMessages.map(m => ({ role: m.role, content: m.content })),
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let assistantContent = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6).trim();
+            if (data === '[DONE]') break;
+            try {
+              const parsed = JSON.parse(data);
+              if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
+                assistantContent += parsed.delta.text;
+                setChatMessages(prev => {
+                  const updated = [...prev];
+                  updated[updated.length - 1] = { role: 'assistant', content: assistantContent };
+                  return updated;
+                });
+              }
+            } catch { /* skip malformed chunks */ }
+          }
+        }
+      }
+    } catch (err: any) {
+      setChatMessages(prev => {
+        const updated = [...prev];
+        updated[updated.length - 1] = {
+          role: 'assistant',
+          content: `Sorry, something went wrong: ${err.message}. Please try again.`
+        };
+        return updated;
+      });
+    } finally {
+      setStreaming(false);
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
 
   // Adjust main content when chat panel is open
   const mainStyle: React.CSSProperties = {
@@ -795,32 +889,150 @@ export default function BriefView() {
         )}
       </div>
 
-      {/* Chat panel placeholder */}
+      {/* Chat panel */}
       {chatOpen && (
         <div style={{
-          position: 'fixed', right: 0, top: 0, bottom: 0, width: 360,
+          position: 'fixed', right: 0, top: 0, bottom: 0, width: 380,
           background: 'var(--bg-sidebar)',
           borderLeft: '1px solid var(--border)',
           display: 'flex', flexDirection: 'column',
           zIndex: 100,
-          transition: 'transform 200ms ease',
+          animation: 'slideIn 150ms ease-out',
         }}>
+          {/* Header */}
           <div style={{
-            padding: '16px 20px', borderBottom: '1px solid var(--border)',
+            padding: '14px 18px', borderBottom: '1px solid var(--border)',
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            flexShrink: 0,
           }}>
-            <span style={{ fontWeight: 500, fontSize: 13 }}>
-              Chat — {pov?.company_name || run.company}
-            </span>
+            <div>
+              <div style={{ fontWeight: 500, fontSize: 13 }}>Chat</div>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 1 }}>
+                {pov?.company_name || run.company}
+              </div>
+            </div>
             <button onClick={() => setChatOpen(false)} style={{
               background: 'none', border: 'none', color: 'var(--text-secondary)',
-              cursor: 'pointer', padding: 4,
+              cursor: 'pointer', padding: 4, borderRadius: 4,
             }}>
               <X size={16} />
             </button>
           </div>
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <p style={{ color: 'var(--text-tertiary)', fontSize: 13 }}>Chat coming soon</p>
+
+          {/* Messages */}
+          <div style={{ flex: 1, overflowY: 'auto', padding: '16px 18px' }}>
+            {chatMessages.length === 0 ? (
+              <div>
+                <p style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 12 }}>
+                  Ask anything about this brief
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {SUGGESTED_PROMPTS.map((prompt, i) => (
+                    <button
+                      key={i}
+                      onClick={() => sendMessage(prompt)}
+                      style={{
+                        textAlign: 'left', background: 'var(--bg-surface)',
+                        border: '1px solid var(--border)', borderRadius: 6,
+                        padding: '8px 12px', fontSize: 13, color: 'var(--text-secondary)',
+                        cursor: 'pointer', transition: 'all 80ms',
+                      }}
+                      onMouseEnter={e => {
+                        e.currentTarget.style.background = 'var(--bg-elevated)';
+                        e.currentTarget.style.color = 'var(--text-primary)';
+                      }}
+                      onMouseLeave={e => {
+                        e.currentTarget.style.background = 'var(--bg-surface)';
+                        e.currentTarget.style.color = 'var(--text-secondary)';
+                      }}
+                    >
+                      {prompt}
+                    </button>
+                  ))}
+                </div>
+                <p style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 16, lineHeight: 1.5 }}>
+                  Answers are based on this brief only — verify critical facts before your meeting.
+                </p>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {chatMessages.map((msg, i) => (
+                  <div key={i} style={{
+                    display: 'flex',
+                    flexDirection: msg.role === 'user' ? 'row-reverse' : 'row',
+                    gap: 8,
+                  }}>
+                    <div style={{
+                      maxWidth: '85%',
+                      padding: '8px 12px',
+                      borderRadius: msg.role === 'user' ? '12px 12px 4px 12px' : '12px 12px 12px 4px',
+                      background: msg.role === 'user' ? 'var(--accent)' : 'var(--bg-surface)',
+                      border: msg.role === 'assistant' ? '1px solid var(--border)' : 'none',
+                      fontSize: 13,
+                      lineHeight: 1.5,
+                      color: msg.role === 'user' ? '#fff' : 'var(--text-primary)',
+                      whiteSpace: 'pre-wrap',
+                    }}>
+                      {msg.content}
+                      {streaming && i === chatMessages.length - 1 && msg.role === 'assistant' && (
+                        <span style={{
+                          display: 'inline-block', width: 2, height: 14,
+                          background: 'var(--text-secondary)', marginLeft: 2,
+                          animation: 'pulse-dot 1s ease-in-out infinite',
+                          verticalAlign: 'text-bottom',
+                        }} />
+                      )}
+                    </div>
+                  </div>
+                ))}
+                <div ref={messagesEndRef} />
+              </div>
+            )}
+          </div>
+
+          {/* Input */}
+          <div style={{ padding: '12px 18px', borderTop: '1px solid var(--border)', flexShrink: 0 }}>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <textarea
+                value={chatInput}
+                onChange={e => setChatInput(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage(chatInput);
+                  }
+                }}
+                placeholder="Ask about this brief..."
+                disabled={streaming}
+                rows={2}
+                style={{
+                  flex: 1, background: 'var(--bg-input)',
+                  border: '1px solid var(--border-strong)',
+                  borderRadius: 6, padding: '8px 12px',
+                  fontSize: 13, color: 'var(--text-primary)',
+                  resize: 'none', outline: 'none', fontFamily: 'inherit',
+                }}
+                onFocus={e => e.target.style.borderColor = 'var(--accent)'}
+                onBlur={e => e.target.style.borderColor = 'var(--border-strong)'}
+              />
+              <button
+                onClick={() => sendMessage(chatInput)}
+                disabled={!chatInput.trim() || streaming}
+                style={{
+                  background: 'var(--accent)', color: '#fff',
+                  border: 'none', borderRadius: 6, padding: '0 14px',
+                  fontSize: 13, fontWeight: 500, cursor: 'pointer',
+                  opacity: (!chatInput.trim() || streaming) ? 0.4 : 1,
+                  alignSelf: 'flex-end', height: 36,
+                  display: 'flex', alignItems: 'center', gap: 4,
+                }}
+              >
+                {streaming ? '...' : <Send size={14} />}
+              </button>
+            </div>
+            <p style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 6 }}>
+              Enter to send &middot; Shift+Enter for new line
+            </p>
           </div>
         </div>
       )}

@@ -48,6 +48,11 @@ body {
 
 .pulse { animation: pulse-dot 1.5s ease-in-out infinite; }
 
+@keyframes slideIn {
+  from { transform: translateX(100%); opacity: 0; }
+  to   { transform: translateX(0);   opacity: 1; }
+}
+
 input, textarea, select {
   font-family: var(--font);
   font-size: 13px;
