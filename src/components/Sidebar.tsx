@@ -1,10 +1,11 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Send, FileText, Users, Shield, LogOut } from 'lucide-react';
+import { Send, FileText, Users, Shield, LogOut, Map } from 'lucide-react';
 
 const navItems = [
   { path: '/submit', label: 'Submit', icon: Send },
   { path: '/my-briefs', label: 'My Briefs', icon: FileText },
+  { path: '/territory', label: 'Territory', icon: Map },
   { path: '/team-view', label: 'Team View', icon: Users, role: 'manager' as const },
   { path: '/admin', label: 'Admin', icon: Shield, role: 'admin' as const },
 ];
