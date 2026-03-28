@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase';
 import Layout from '../components/Layout';
 import Banner from '../components/Banner';
 import StatusBadge from '../components/StatusBadge';
+import ProgressBar from '../components/ProgressBar';
 import TableSkeleton from '../components/TableSkeleton';
 import usePageTitle from '../hooks/usePageTitle';
 import { FileText, Table, RefreshCw, Eye } from 'lucide-react';
@@ -40,6 +41,7 @@ export default function MyBriefs() {
   const [loading, setLoading] = useState(true);
   const [healthOk, setHealthOk] = useState(true);
   const [retrying, setRetrying] = useState<string | null>(null);
+  const [progressMap, setProgressMap] = useState<Record<string, { step: number; total: number; module: string | null; pct: number }>>({});
 
   const fetchRuns = useCallback(async () => {
     if (!userProfile) return;
@@ -82,6 +84,34 @@ export default function MyBriefs() {
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [userProfile]);
+
+  // Poll progress for running runs
+  const runningIds = runs.filter(r => r.status === 'running').map(r => r.id).join(',');
+  useEffect(() => {
+    if (!runningIds || !session) return;
+    const ids = runningIds.split(',');
+    const poll = async () => {
+      const updates: Record<string, any> = {};
+      await Promise.all(ids.map(async (id) => {
+        try {
+          const res = await fetch(
+            `https://go.accountresearch.workers.dev/progress/${id}`,
+            { headers: { 'Authorization': `Bearer ${session.access_token}` } }
+          );
+          if (res.ok) {
+            const data = await res.json();
+            if (data.progress) updates[id] = data.progress;
+          }
+        } catch { /* ignore */ }
+      }));
+      if (Object.keys(updates).length > 0) {
+        setProgressMap(prev => ({ ...prev, ...updates }));
+      }
+    };
+    poll();
+    const interval = setInterval(poll, 15000);
+    return () => clearInterval(interval);
+  }, [runningIds, session]);
 
   const handleRetry = async (runId: string) => {
     if (!session) return;
@@ -179,6 +209,11 @@ export default function MyBriefs() {
                         </button>
                       )}
                     </div>
+                    {run.status === 'running' && progressMap[run.id] && (
+                      <div style={{ marginTop: 6, minWidth: 140 }}>
+                        <ProgressBar {...progressMap[run.id]} />
+                      </div>
+                    )}
                   </td>
                   <td style={{ padding: '11px 16px', fontSize: 13, color: 'var(--text-secondary)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={run.summary || ''}>
                     {run.summary ? (run.summary.length > 72 ? run.summary.slice(0, 72) + '...' : run.summary) : '—'}

@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import Layout from '../components/Layout';
 import StatusBadge from '../components/StatusBadge';
+import ProgressBar from '../components/ProgressBar';
 import TableSkeleton from '../components/TableSkeleton';
 import usePageTitle from '../hooks/usePageTitle';
 import { Users, Activity, Heart, BarChart3, ExternalLink, Cpu, FileText, X, RefreshCw, Trash2 } from 'lucide-react';
@@ -219,6 +220,7 @@ function RunMonitorTab() {
   const [logData, setLogData] = useState<LogData | null>(null);
   const [logsLoading, setLogsLoading] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [progressMap, setProgressMap] = useState<Record<string, { step: number; total: number; module: string | null; pct: number }>>({});
 
   const handleDelete = async (runId: string) => {
     try {
@@ -291,6 +293,34 @@ function RunMonitorTab() {
     return () => { supabase.removeChannel(channel); };
   }, []);
 
+  // Poll progress for running runs
+  const runningIds = runs.filter(r => r.status === 'running').map(r => r.id).join(',');
+  useEffect(() => {
+    if (!runningIds || !session) return;
+    const ids = runningIds.split(',');
+    const poll = async () => {
+      const updates: Record<string, any> = {};
+      await Promise.all(ids.map(async (id) => {
+        try {
+          const res = await fetch(
+            `https://go.accountresearch.workers.dev/progress/${id}`,
+            { headers: { 'Authorization': `Bearer ${session.access_token}` } }
+          );
+          if (res.ok) {
+            const data = await res.json();
+            if (data.progress) updates[id] = data.progress;
+          }
+        } catch { /* ignore */ }
+      }));
+      if (Object.keys(updates).length > 0) {
+        setProgressMap(prev => ({ ...prev, ...updates }));
+      }
+    };
+    poll();
+    const interval = setInterval(poll, 15000);
+    return () => clearInterval(interval);
+  }, [runningIds, session]);
+
   const filtered = runs.filter((r) => {
     if (statusFilter !== 'all' && r.status !== statusFilter) return false;
     if (dateFrom && new Date(r.created_at) < new Date(dateFrom)) return false;
@@ -339,7 +369,14 @@ function RunMonitorTab() {
               >
                 <td style={{ padding: '11px 16px', fontSize: 13, color: 'var(--text-secondary)' }}>{r.users?.name || '—'}</td>
                 <td style={{ padding: '11px 16px', fontSize: 13, fontWeight: 500 }}>{r.company}</td>
-                <td style={{ padding: '11px 16px' }} title={r.error_message || ''}><StatusBadge status={r.status} /></td>
+                <td style={{ padding: '11px 16px' }} title={r.error_message || ''}>
+                  <StatusBadge status={r.status} />
+                  {r.status === 'running' && progressMap[r.id] && (
+                    <div style={{ marginTop: 6, minWidth: 140 }}>
+                      <ProgressBar {...progressMap[r.id]} />
+                    </div>
+                  )}
+                </td>
                 <td style={{ padding: '11px 16px', fontSize: 13, color: 'var(--text-secondary)' }} title={new Date(r.created_at).toLocaleString()}>
                   {relativeTime(r.created_at)}
                 </td>
