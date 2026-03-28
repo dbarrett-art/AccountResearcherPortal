@@ -8,7 +8,7 @@ import StatusBadge from '../components/StatusBadge';
 import ProgressBar from '../components/ProgressBar';
 import TableSkeleton from '../components/TableSkeleton';
 import usePageTitle from '../hooks/usePageTitle';
-import { FileText, Table, RefreshCw, Eye } from 'lucide-react';
+import { FileText, Table, RefreshCw, Eye, Clock } from 'lucide-react';
 
 interface Run {
   id: string;
@@ -31,6 +31,27 @@ function relativeTime(dateStr: string): string {
   if (hrs < 24) return `${hrs}h ago`;
   const days = Math.floor(hrs / 24);
   return `${days}d ago`;
+}
+
+function FreshnessBadge({ createdAt, status }: { createdAt: string; status: string }) {
+  if (status !== 'complete') return null;
+  const days = Math.floor((Date.now() - new Date(createdAt).getTime()) / 86400000);
+  let color = 'var(--status-complete-text)';
+  let bg = 'rgba(22,163,74,0.1)';
+  let label = 'Fresh';
+  if (days > 90) { color = 'var(--status-failed-text)'; bg = 'rgba(220,38,38,0.1)'; label = 'Stale'; }
+  else if (days > 30) { color = 'var(--status-running-text)'; bg = 'rgba(217,119,6,0.1)'; label = 'Aging'; }
+  else if (days > 14) { color = 'var(--text-secondary)'; bg = 'rgba(74,74,74,0.2)'; label = `${days}d`; }
+  else return null; // Don't show badge for fresh briefs
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 3,
+      fontSize: 11, fontWeight: 500, color, background: bg,
+      padding: '1px 6px', borderRadius: 3, marginLeft: 6,
+    }}>
+      <Clock size={10} /> {label}
+    </span>
+  );
 }
 
 export default function MyBriefs() {
@@ -187,6 +208,7 @@ export default function MyBriefs() {
                   <td style={{ padding: '11px 16px', fontSize: 13, fontWeight: 500 }}>{run.company}</td>
                   <td style={{ padding: '11px 16px', fontSize: 13, color: 'var(--text-secondary)' }} title={new Date(run.created_at).toLocaleString()}>
                     {relativeTime(run.created_at)}
+                    <FreshnessBadge createdAt={run.created_at} status={run.status} />
                   </td>
                   <td style={{ padding: '11px 16px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
