@@ -34,18 +34,43 @@ interface Brief {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div style={{ marginBottom: 32 }}>
-      <h2 style={{
-        fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)',
-        textTransform: 'uppercase', letterSpacing: '0.06em',
-        marginBottom: 16, paddingBottom: 8,
+    <div style={{ marginBottom: 40 }}>
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        marginBottom: 20,
+        paddingBottom: 12,
         borderBottom: '1px solid var(--border)',
       }}>
-        {title}
-      </h2>
+        <div style={{
+          width: 3, height: 16,
+          background: 'var(--accent)',
+          borderRadius: 2,
+          flexShrink: 0,
+        }} />
+        <h2 style={{
+          fontSize: 11,
+          fontWeight: 700,
+          color: 'var(--text-secondary)',
+          textTransform: 'uppercase',
+          letterSpacing: '0.08em',
+          margin: 0,
+        }}>
+          {title}
+        </h2>
+      </div>
       {children}
     </div>
   );
+}
+
+/* Truncate to N chars at a word boundary */
+function truncateToLine(text: string, maxChars = 120): string {
+  if (!text || text.length <= maxChars) return text;
+  const cut = text.slice(0, maxChars);
+  const lastSpace = cut.lastIndexOf(' ');
+  return (lastSpace > 80 ? cut.slice(0, lastSpace) : cut) + '\u2026';
 }
 
 function CitedProse({ text }: { text: string | undefined | null }) {
@@ -60,7 +85,17 @@ function CollapsibleProse({ text, maxLength = 320 }: { text: string; maxLength?:
   const [expanded, setExpanded] = useState(false);
   if (!text) return null;
   const isLong = text.length > maxLength;
-  const display = isLong && !expanded ? text.slice(0, maxLength).trim() + '...' : text;
+
+  let display = text;
+  if (isLong && !expanded) {
+    const chunk = text.slice(0, maxLength + 50);
+    const lastPeriod = chunk.lastIndexOf('. ');
+    const lastNewline = chunk.lastIndexOf('\n');
+    const cutPoint = Math.max(lastPeriod, lastNewline);
+    display = cutPoint > 150
+      ? text.slice(0, cutPoint + 1) + '\u2026'
+      : text.slice(0, maxLength).trim() + '\u2026';
+  }
 
   return (
     <div>
@@ -182,36 +217,48 @@ function TriggerCard({ trigger }: { trigger: any }) {
         {copied ? '\u2713' : '\u2398'}
       </button>
 
-      {trigger?.type && (
-        <div style={{
-          position: 'absolute', top: 10, right: 34,
-          fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)',
-          background: 'var(--bg-elevated)', borderRadius: 3,
-          padding: '2px 6px', letterSpacing: '0.04em',
-          textTransform: 'uppercase',
-        }}>
-          {trigger.type}
-        </div>
-      )}
-
       <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)',
                     lineHeight: 1.5, marginBottom: trigger?.evidence ? 8 : 0,
-                    paddingRight: 80 }}>
+                    paddingRight: 32 }}>
         {trigger?.trigger}
       </div>
 
       {trigger?.evidence && (
-        <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5,
-                      marginBottom: trigger?.source_url ? 6 : 0 }}>
-          {trigger.evidence}
+        <div>
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5,
+                        marginBottom: 4 }}>
+            {trigger.evidence.split('\n')[0]}
+          </div>
+          {trigger.evidence.split('\n')[1] && (
+            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', lineHeight: 1.4,
+                          fontStyle: 'italic' }}>
+              {trigger.evidence.split('\n').slice(1).join(' ')}
+            </div>
+          )}
         </div>
       )}
 
       {trigger?.source_url && (
         <a href={trigger.source_url} target="_blank" rel="noopener noreferrer"
-           style={{ fontSize: 11, color: 'var(--accent)', display: 'inline-block' }}>
+           style={{ fontSize: 11, color: 'var(--accent)', display: 'inline-block', marginTop: 4 }}>
           Source \u2197
         </a>
+      )}
+
+      {trigger?.type && (
+        <div style={{
+          display: 'inline-block',
+          marginTop: 8,
+          fontSize: 10, fontWeight: 600,
+          color: 'var(--text-tertiary)',
+          background: 'var(--bg-elevated)',
+          borderRadius: 3,
+          padding: '2px 6px',
+          letterSpacing: '0.04em',
+          textTransform: 'uppercase',
+        }}>
+          {trigger.type}
+        </div>
       )}
     </div>
   );
@@ -255,8 +302,8 @@ function CopyableProductCard({ product }: { product: any }) {
       >
         {copied ? '\u2713' : '\u2398'}
       </button>
-      <div style={{ fontWeight: 500, fontSize: 13, paddingRight: 32 }}>{product?.product}</div>
-      <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>{product?.relevance}</div>
+      <div style={{ fontWeight: 600, fontSize: 13, paddingRight: 32, color: 'var(--accent)', marginBottom: 6 }}>{product?.product}</div>
+      <div style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.6 }}>{product?.relevance}</div>
     </div>
   );
 }
@@ -545,8 +592,16 @@ const SUGGESTED_PROMPTS = [
 /* ------------------------------------------------------------------ */
 
 const NOISE_PATTERNS = [
+  // Weather
   /weather/i, /storm/i, /thunder/i, /hail/i, /tornado/i,
   /hurricane/i, /lightning/i, /forecast/i, /meteorolog/i,
+  // Product recalls
+  /recall/i, /safety.issue/i, /burn.hazard/i, /cpsc\.gov/i,
+  // Stock price / market noise
+  /shares.gap/i, /gap.down/i, /gap.up/i, /instant.alert/i,
+  /marketbeat\.com/i,
+  // AGM / governance boilerplate
+  /annual.general.meeting/i, /notice.convening/i, /agm/i,
 ];
 
 const isNoisySource = (url: string, title?: string) => {
@@ -567,11 +622,12 @@ function BriefContent({ pov, personas }: { pov: any; personas: any }) {
   const topContact = rfm ? { name: rfm.contact_name, title: rfm.title } : null;
 
   const allSources = pov?.sources_used || [];
-  const cleanSources = allSources.filter((s: any) =>
-    typeof s === 'string'
-      ? !isNoisySource(s)
-      : !isNoisySource(s?.url || s?.source || '', s?.title || s?.what_it_provided || '')
-  );
+  const cleanSources = allSources.filter((s: any) => {
+    const url = typeof s === 'string' ? s : (s?.url || s?.source || '');
+    const title = typeof s === 'string' ? '' : (s?.title || s?.what_it_provided || '');
+    if (url.length > 200) return false;
+    return !isNoisySource(url, title);
+  });
   const MAX_VISIBLE = 15;
   const visibleSources = showAllSources ? cleanSources : cleanSources.slice(0, MAX_VISIBLE);
   const hiddenCount = cleanSources.length - MAX_VISIBLE;
@@ -587,7 +643,7 @@ function BriefContent({ pov, personas }: { pov: any; personas: any }) {
           padding: '16px 20px',
           marginBottom: 24,
           display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
+          gridTemplateColumns: topContact ? '1fr 1fr' : '1fr',
           gap: '12px 24px',
         }}>
           <div style={{ gridColumn: '1 / -1', fontSize: 11, fontWeight: 600,
@@ -603,7 +659,7 @@ function BriefContent({ pov, personas }: { pov: any; personas: any }) {
                   STRONGEST ANGLE
                 </div>
                 <div style={{ fontSize: 13, color: 'var(--text-primary)' }}>
-                  {strongestAngle}
+                  {truncateToLine(strongestAngle, 120)}
                 </div>
               </div>
             )}
@@ -613,14 +669,14 @@ function BriefContent({ pov, personas }: { pov: any; personas: any }) {
                   TOP TRIGGER
                 </div>
                 <div style={{ fontSize: 13, color: 'var(--text-primary)' }}>
-                  {topTrigger}
+                  {truncateToLine(topTrigger, 120)}
                 </div>
               </div>
             )}
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {topContact && (
+          {topContact && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <div>
                 <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 2 }}>
                   LEAD CONTACT
@@ -632,8 +688,8 @@ function BriefContent({ pov, personas }: { pov: any; personas: any }) {
                   {topContact.title}
                 </div>
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -823,7 +879,7 @@ function BriefContent({ pov, personas }: { pov: any; personas: any }) {
               <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--accent)', marginBottom: 4 }}>
                 STRONGEST ANGLE
               </div>
-              <div style={{ fontSize: 13 }}>{pov.why_figma.strongest_angle}</div>
+              <CollapsibleProse text={pov.why_figma.strongest_angle} maxLength={200} />
             </div>
           )}
           {pov.why_figma.rationale && (
