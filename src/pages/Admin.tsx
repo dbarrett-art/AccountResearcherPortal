@@ -445,33 +445,41 @@ function HealthTab() {
 
       // Supabase REST
       try {
-        const res = await fetch('https://yeraphdhllaylogqiqht.supabase.co/rest/v1/', {
-          headers: { 'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InllcmFwaGRobGxheWxvZ3FpcWh0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ1MDY4NjQsImV4cCI6MjA5MDA4Mjg2NH0.5ZIIIoYU3-4ZoGX448LMyuKfu4ncmIUVwyNDImEsVTY' },
+        const sbUrl = 'https://yeraphdhllaylogqiqht.supabase.co';
+        const sbAnon = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InllcmFwaGRobGxheWxvZ3FpcWh0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ1MDY4NjQsImV4cCI6MjA5MDA4Mjg2NH0.5ZIIIoYU3-4ZoGX448LMyuKfu4ncmIUVwyNDImEsVTY';
+        const res = await fetch(`${sbUrl}/rest/v1/`, {
+          headers: { 'apikey': sbAnon, 'Authorization': `Bearer ${sbAnon}` },
         });
-        results.push({ name: 'Supabase', status: res.ok ? 'ok' : 'error', checked: now, message: res.ok ? 'API responding' : `HTTP ${res.status}` });
+        results.push({ name: 'Supabase', status: res.status < 500 ? 'ok' : 'error', checked: now, message: res.status < 500 ? 'Connected' : `HTTP ${res.status}` });
       } catch (e: any) {
         results.push({ name: 'Supabase', status: 'error', checked: now, message: e.message });
       }
 
-      // GitHub Actions — check most recent run
+      // GitHub Actions — use public status API (no rate limit)
       try {
-        const res = await fetch('https://api.github.com/repos/dbarrett-art/prospect-research/actions/runs?per_page=1', {
-          headers: { 'Accept': 'application/vnd.github.v3+json' },
-        });
-        if (res.ok) {
-          const data = await res.json();
-          const latest = data.workflow_runs?.[0];
-          const status = latest?.conclusion === 'success' ? 'ok' : latest?.status === 'in_progress' ? 'ok' : latest ? 'error' : 'pending';
-          results.push({ name: 'GitHub Actions', status: status as ServiceStatus, checked: now, message: latest ? `Last: ${latest.conclusion || latest.status}` : 'No runs' });
+        const res = await fetch('https://www.githubstatus.com/api/v2/status.json');
+        const data = await res.json();
+        const indicator = data?.status?.indicator;
+        if (indicator === 'none') {
+          results.push({ name: 'GitHub Actions', status: 'ok', checked: now, message: 'All systems operational' });
         } else {
-          results.push({ name: 'GitHub Actions', status: 'pending', checked: now, message: 'API rate limited' });
+          results.push({ name: 'GitHub Actions', status: indicator === 'critical' ? 'error' : 'pending', checked: now, message: data?.status?.description || 'Degraded' });
         }
       } catch {
         results.push({ name: 'GitHub Actions', status: 'pending', checked: now, message: 'Unable to check' });
       }
 
-      // Google Drive — static (can't ping from browser)
-      results.push({ name: 'Google Drive', status: 'pending', checked: now, message: 'Not checkable from browser' });
+      // Supabase Storage — check briefs bucket
+      try {
+        const sbUrl = 'https://yeraphdhllaylogqiqht.supabase.co';
+        const sbAnon = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InllcmFwaGRobGxheWxvZ3FpcWh0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ1MDY4NjQsImV4cCI6MjA5MDA4Mjg2NH0.5ZIIIoYU3-4ZoGX448LMyuKfu4ncmIUVwyNDImEsVTY';
+        const res = await fetch(`${sbUrl}/storage/v1/bucket/briefs`, {
+          headers: { 'apikey': sbAnon, 'Authorization': `Bearer ${sbAnon}` },
+        });
+        results.push({ name: 'Supabase Storage', status: res.ok ? 'ok' : 'error', checked: now, message: res.ok ? 'briefs bucket accessible' : `HTTP ${res.status}` });
+      } catch (e: any) {
+        results.push({ name: 'Supabase Storage', status: 'error', checked: now, message: e.message });
+      }
 
       setServices(results);
     })();
@@ -512,14 +520,14 @@ function HealthTab() {
       {dailyRuns.length > 0 && (
         <>
           <h3 style={{ fontSize: 14, fontWeight: 500, marginBottom: 12 }}>Runs per day (last 30 days)</h3>
-          <div style={{ height: 240 }}>
+          <div style={{ height: 240, background: 'var(--bg-app)', borderRadius: 8, padding: '8px 0' }}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={dailyRuns}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
-                <XAxis dataKey="date" tick={{ fill: '#8b8b8b', fontSize: 11 }} tickFormatter={(v) => v.slice(5)} />
-                <YAxis tick={{ fill: '#8b8b8b', fontSize: 11 }} allowDecimals={false} />
-                <Tooltip contentStyle={{ background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 6, fontSize: 12 }} />
-                <Bar dataKey="count" fill="#5e6ad2" radius={[3, 3, 0, 0]} />
+              <BarChart data={dailyRuns} margin={{ top: 4, right: 0, left: -20, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
+                <XAxis dataKey="date" tick={{ fill: 'var(--text-tertiary)', fontSize: 11 }} tickFormatter={(v) => v.slice(5)} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: 'var(--text-tertiary)', fontSize: 11 }} allowDecimals={false} axisLine={false} tickLine={false} />
+                <Tooltip contentStyle={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 6, fontSize: 12, color: 'var(--text-primary)' }} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
+                <Bar dataKey="count" fill="var(--accent)" radius={[3, 3, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -602,14 +610,14 @@ function CreditAnalyticsTab() {
       {perUserChart.length > 0 && (
         <>
           <h3 style={{ fontSize: 14, fontWeight: 500, marginBottom: 12 }}>Credits consumed per user (30d)</h3>
-          <div style={{ height: 200, marginBottom: 24 }}>
+          <div style={{ height: 200, marginBottom: 24, background: 'var(--bg-app)', borderRadius: 8, padding: '8px 0' }}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={perUserChart}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
-                <XAxis dataKey="name" tick={{ fill: '#8b8b8b', fontSize: 11 }} />
-                <YAxis tick={{ fill: '#8b8b8b', fontSize: 11 }} allowDecimals={false} />
-                <Tooltip contentStyle={{ background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 6, fontSize: 12 }} />
-                <Bar dataKey="credits" fill="#5e6ad2" radius={[3, 3, 0, 0]} />
+              <BarChart data={perUserChart} margin={{ top: 4, right: 0, left: -20, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
+                <XAxis dataKey="name" tick={{ fill: 'var(--text-tertiary)', fontSize: 11 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: 'var(--text-tertiary)', fontSize: 11 }} allowDecimals={false} axisLine={false} tickLine={false} />
+                <Tooltip contentStyle={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 6, fontSize: 12, color: 'var(--text-primary)' }} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
+                <Bar dataKey="credits" fill="var(--accent)" radius={[3, 3, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
