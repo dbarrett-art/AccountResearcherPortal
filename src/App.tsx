@@ -7,6 +7,7 @@ import MyBriefs from './pages/MyBriefs'
 import TeamView from './pages/TeamView'
 import Admin from './pages/Admin'
 import BriefView from './pages/BriefView'
+import SharedBriefView from './pages/SharedBriefView'
 
 /**
  * Landing route for `/` — waits for auth to resolve before redirecting.
@@ -44,6 +45,7 @@ export default function App() {
       <Route path="/team-view" element={<ProtectedRoute requireRole="manager"><TeamView /></ProtectedRoute>} />
       <Route path="/admin" element={<ProtectedRoute requireRole="admin"><Admin /></ProtectedRoute>} />
       <Route path="/briefs/:run_id" element={<ProtectedRoute><BriefView /></ProtectedRoute>} />
+      <Route path="/shared/:token" element={<SharedBriefView />} />
       <Route path="*" element={<AuthCallback />} />
     </Routes>
   )

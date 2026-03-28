@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import Layout from '../components/Layout';
 import TableSkeleton from '../components/TableSkeleton';
 import usePageTitle from '../hooks/usePageTitle';
-import { ArrowLeft, MessageSquare, FileText, Table, X, ChevronDown, ExternalLink, Send, Trash2, Target, Zap, TrendingUp, Wrench, Building2, Users, Briefcase, BookOpen, Link2 } from 'lucide-react';
+import { ArrowLeft, MessageSquare, FileText, Table, X, ChevronDown, ExternalLink, Send, Trash2, Target, Zap, TrendingUp, Wrench, Building2, Users, Briefcase, BookOpen, Link2, Share2 } from 'lucide-react';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -1087,6 +1087,28 @@ export default function BriefView() {
   const [streaming, setStreaming] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [shareStatus, setShareStatus] = useState<'idle' | 'loading' | 'copied'>('idle');
+
+  const handleShare = async () => {
+    if (!session || shareStatus === 'loading') return;
+    setShareStatus('loading');
+    try {
+      const res = await fetch(
+        `https://go.accountresearch.workers.dev/share/${run_id}`,
+        {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${session.access_token}` },
+        }
+      );
+      const data = await res.json();
+      const shareUrl = `${window.location.origin}/shared/${data.token}`;
+      await navigator.clipboard.writeText(shareUrl);
+      setShareStatus('copied');
+      setTimeout(() => setShareStatus('idle'), 2000);
+    } catch {
+      setShareStatus('idle');
+    }
+  };
 
   const handleDelete = async () => {
     setDeleting(true);
@@ -1292,6 +1314,15 @@ export default function BriefView() {
             )}
           </div>
           <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+            <button onClick={handleShare} disabled={shareStatus === 'loading'} style={{
+              background: 'transparent', color: shareStatus === 'copied' ? 'var(--status-complete-text)' : 'var(--text-secondary)',
+              padding: '6px 14px', fontSize: 13, fontWeight: 500, borderRadius: 6,
+              border: '1px solid var(--border-strong)',
+              display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer',
+              transition: 'all 120ms',
+            }}>
+              <Share2 size={14} /> {shareStatus === 'copied' ? 'Link copied!' : 'Share'}
+            </button>
             <button onClick={() => setChatOpen(true)} style={{
               background: 'var(--accent)', color: '#fff', padding: '6px 14px',
               fontSize: 13, fontWeight: 500, borderRadius: 6, border: 'none',
