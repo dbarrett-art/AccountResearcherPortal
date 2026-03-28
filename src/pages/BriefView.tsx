@@ -650,6 +650,72 @@ const isNoisySource = (url: string, title?: string) => {
 };
 
 /* ------------------------------------------------------------------ */
+/*  Value Pyramid                                                      */
+/* ------------------------------------------------------------------ */
+
+function ValuePyramid({ pyramid }: { pyramid: any }) {
+  if (!pyramid) return null;
+  const { strategic, operational, tactical } = pyramid;
+  if (!strategic && !operational?.length && !tactical?.length) return null;
+
+  return (
+    <Section title="Value Pyramid">
+      {/* Strategic — top of pyramid */}
+      {strategic && (
+        <div style={{
+          background: 'linear-gradient(135deg, rgba(94,106,210,0.12), rgba(168,85,247,0.08))',
+          border: '1px solid rgba(94,106,210,0.25)', borderRadius: 10,
+          padding: '18px 20px', marginBottom: 16, textAlign: 'center',
+        }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--accent)',
+                        letterSpacing: '0.1em', marginBottom: 8 }}>STRATEGIC</div>
+          <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)',
+                        lineHeight: 1.5, marginBottom: 6 }}>{strategic.headline}</div>
+          {strategic.detail && (
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>{strategic.detail}</div>
+          )}
+        </div>
+      )}
+
+      {/* Operational — middle */}
+      {operational?.length > 0 && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+                      gap: 10, marginBottom: 16 }}>
+          {operational.map((op: any, i: number) => (
+            <div key={i} style={{
+              background: 'var(--bg-surface)', border: '1px solid var(--border)',
+              borderRadius: 8, padding: '14px 16px',
+            }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#f59e0b',
+                            letterSpacing: '0.1em', marginBottom: 6 }}>OPERATIONAL</div>
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>{op.area}</div>
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>{op.value}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Tactical — base */}
+      {tactical?.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          {tactical.map((t: any, i: number) => (
+            <div key={i} style={{
+              background: 'var(--bg-surface)', border: '1px solid var(--border)',
+              borderRadius: 6, padding: '10px 14px', flex: '1 1 200px', minWidth: 200,
+            }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#10b981',
+                            letterSpacing: '0.1em', marginBottom: 4 }}>TACTICAL</div>
+              <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 2 }}>{t.feature}</div>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.4 }}>{t.use_case}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Section>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /*  Brief content (reordered sections)                                 */
 /* ------------------------------------------------------------------ */
 
@@ -934,6 +1000,9 @@ function BriefContent({ pov, personas }: { pov: any; personas: any }) {
           )}
         </Section>
       )}
+
+      {/* Value Pyramid */}
+      <ValuePyramid pyramid={pov?.value_pyramid} />
 
       {/* 8. Job Signals */}
       <JobSignalsSection signals={pov?.job_signals} />
