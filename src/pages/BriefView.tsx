@@ -716,6 +716,56 @@ function ValuePyramid({ pyramid }: { pyramid: any }) {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Run History                                                        */
+/* ------------------------------------------------------------------ */
+
+function RunHistory({ currentRunId, company }: { currentRunId: string; company: string }) {
+  const [runs, setRuns] = useState<any[]>([]);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!company) return;
+    supabase
+      .from('runs')
+      .select('id, created_at, status, brief_id')
+      .ilike('company', company)
+      .eq('status', 'complete')
+      .order('created_at', { ascending: false })
+      .limit(10)
+      .then(({ data }) => {
+        if (data && data.length > 1) setRuns(data);
+      });
+  }, [company]);
+
+  if (runs.length < 2) return null;
+
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 6 }}>
+        RUN HISTORY ({runs.length} runs)
+      </div>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        {runs.map((r) => {
+          const active = r.id === currentRunId;
+          const date = new Date(r.created_at);
+          return (
+            <button key={r.id} onClick={() => navigate(`/briefs/${r.id}`)} style={{
+              fontSize: 11, padding: '3px 8px', borderRadius: 4,
+              background: active ? 'var(--accent)' : 'var(--bg-surface)',
+              color: active ? '#fff' : 'var(--text-secondary)',
+              border: active ? 'none' : '1px solid var(--border)',
+              cursor: active ? 'default' : 'pointer',
+            }}>
+              {date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /*  Feedback Panel                                                     */
 /* ------------------------------------------------------------------ */
 
@@ -1497,6 +1547,9 @@ export default function BriefView() {
           <IcpBadge score={pov?.icp_fit?.score} />
           <AgeBadge createdAt={run.created_at} />
         </div>
+
+        {/* Run history */}
+        <RunHistory currentRunId={run_id || ''} company={run.company} />
 
         {/* Old schema warning */}
         {brief && !brief.schema_version && (
