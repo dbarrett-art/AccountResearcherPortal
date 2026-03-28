@@ -199,6 +199,7 @@ interface LogData {
   company?: string;
   gha_run_id?: string;
   job_name?: string;
+  job_status?: string;
   conclusion?: string;
   started_at?: string;
   completed_at?: string;
@@ -332,9 +333,11 @@ function RunMonitorTab() {
                       <a href={`https://github.com/dbarrett-art/prospect-research/actions/runs/${r.gha_run_id}`} target="_blank" rel="noopener noreferrer">
                         <ExternalLink size={14} style={{ color: 'var(--text-secondary)' }} />
                       </a>
-                      {r.status === 'failed' && (
+                      {(r.status === 'failed' || r.status === 'running') && (
                         <button onClick={() => fetchLogs(r.id)} style={{
-                          background: 'transparent', color: 'var(--status-failed)', border: '1px solid var(--status-failed)',
+                          background: 'transparent',
+                          color: r.status === 'failed' ? 'var(--status-failed)' : 'var(--status-running-text)',
+                          border: `1px solid ${r.status === 'failed' ? 'var(--status-failed)' : 'var(--status-running-text)'}`,
                           padding: '2px 8px', fontSize: 11, borderRadius: 4, cursor: 'pointer',
                         }}>
                           <FileText size={11} style={{ marginRight: 3, verticalAlign: 'middle' }} />
@@ -369,11 +372,28 @@ function RunMonitorTab() {
                 <div style={{ fontWeight: 500 }}>GHA Logs — {logData?.company || 'Loading...'}</div>
                 {logData?.gha_run_id && (
                   <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
-                    Run {logData.gha_run_id} · {logData.conclusion || 'unknown'}
+                    Run {logData.gha_run_id} ·{' '}
+                    {logData.job_status === 'in_progress'
+                      ? '\u{1F7E1} Running'
+                      : logData.conclusion === 'failure'
+                      ? '\u{1F534} Failed'
+                      : logData.conclusion === 'success'
+                      ? '\u{1F7E2} Succeeded'
+                      : logData.conclusion || logData.job_status || 'unknown'}
                   </div>
                 )}
               </div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <button
+                  onClick={() => fetchLogs(logModal!)}
+                  style={{
+                    background: 'transparent', border: '1px solid var(--border-strong)',
+                    color: 'var(--text-secondary)', padding: '3px 10px',
+                    fontSize: 11, borderRadius: 4, cursor: 'pointer',
+                  }}
+                >
+                  ↻ Refresh
+                </button>
                 {logData?.gha_url && (
                   <a href={logData.gha_url} target="_blank" rel="noopener noreferrer"
                     style={{ fontSize: 12, color: 'var(--accent)' }}>
