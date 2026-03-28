@@ -14,11 +14,31 @@ interface BannerState {
   excelUrl?: string;
 }
 
+function normaliseUrl(input: string): string {
+  let u = input.trim().replace(/\s+/g, '');
+  if (u.startsWith('http://')) {
+    u = u.replace('http://', 'https://');
+  } else if (!u.startsWith('https://')) {
+    u = 'https://' + u;
+  }
+  return u.replace(/\/+$/, '');
+}
+
+function isValidUrl(input: string): boolean {
+  try {
+    new URL(normaliseUrl(input));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export default function Submit() {
   usePageTitle('Submit');
   const { session, userProfile, refreshProfile } = useAuth();
   const [company, setCompany] = useState('');
   const [url, setUrl] = useState('');
+  const [includeContacts, setIncludeContacts] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [banner, setBanner] = useState<BannerState | null>(null);
   const [duplicate, setDuplicate] = useState<{ name: string; days: number; user: string } | null>(null);
@@ -79,6 +99,13 @@ export default function Submit() {
     setBanner(null);
     if (!session) return;
 
+    const normalisedUrl = normaliseUrl(url);
+    if (!isValidUrl(url)) {
+      setBanner({ type: 'error', msg: 'Please enter a valid website URL' });
+      return;
+    }
+    setUrl(normalisedUrl);
+
     setSubmitting(true);
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000);
@@ -90,7 +117,7 @@ export default function Submit() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ company, url }),
+        body: JSON.stringify({ company, url: normalisedUrl, include_contacts: includeContacts }),
         signal: controller.signal,
       });
       clearTimeout(timeout);
@@ -175,14 +202,38 @@ export default function Submit() {
           <div style={{ marginBottom: 16 }}>
             <label style={{ display: 'block', fontSize: 14, fontWeight: 500, marginBottom: 6 }}>Website</label>
             <input
-              type="url" required value={url}
+              type="text" required value={url}
               onChange={(e) => setUrl(e.target.value)}
-              placeholder="https://sc.com"
+              placeholder="e.g. sc.com or www.sc.com"
               style={inputStyle}
               onFocus={(e) => (e.currentTarget.style.borderColor = 'var(--accent)')}
               onBlur={(e) => (e.currentTarget.style.borderColor = 'var(--border-strong)')}
             />
+            <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>
+              e.g. company.com or www.company.com — https:// added automatically
+            </div>
           </div>
+
+          {userProfile?.role === 'admin' && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 10,
+              padding: '10px 14px',
+              background: 'rgba(94,106,210,0.06)',
+              border: '1px solid rgba(94,106,210,0.2)',
+              borderRadius: 6, marginBottom: 16,
+            }}>
+              <input
+                type="checkbox" id="include-contacts"
+                checked={includeContacts}
+                onChange={(e) => setIncludeContacts(e.target.checked)}
+                style={{ cursor: 'pointer' }}
+              />
+              <label htmlFor="include-contacts" style={{ fontSize: 13, cursor: 'pointer' }}>
+                Include contacts (full run — ~$7.50, ~15 mins)
+              </label>
+            </div>
+          )}
+
           <button
             type="submit" disabled={submitting}
             style={{

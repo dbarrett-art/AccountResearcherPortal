@@ -5,10 +5,10 @@ import Layout from '../components/Layout';
 import StatusBadge from '../components/StatusBadge';
 import TableSkeleton from '../components/TableSkeleton';
 import usePageTitle from '../hooks/usePageTitle';
-import { Users, Activity, Heart, BarChart3, ExternalLink } from 'lucide-react';
+import { Users, Activity, Heart, BarChart3, ExternalLink, Cpu, FileText, X, RefreshCw } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
-type Tab = 'users' | 'runs' | 'health' | 'credits';
+type Tab = 'users' | 'runs' | 'health' | 'credits' | 'api-credits';
 
 interface UserRow {
   id: string; name: string; email: string; role: string;
@@ -195,12 +195,46 @@ function UsersTab({ adminId }: { adminId: string }) {
 }
 
 // --- Tab: Run Monitor ---
+interface LogData {
+  company?: string;
+  gha_run_id?: string;
+  job_name?: string;
+  conclusion?: string;
+  started_at?: string;
+  completed_at?: string;
+  gha_url?: string;
+  logs?: string;
+  error?: string;
+}
+
 function RunMonitorTab() {
+  const { session } = useAuth();
   const [runs, setRuns] = useState<RunRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('all');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [logModal, setLogModal] = useState<string | null>(null);
+  const [logData, setLogData] = useState<LogData | null>(null);
+  const [logsLoading, setLogsLoading] = useState(false);
+
+  const fetchLogs = async (runId: string) => {
+    setLogModal(runId);
+    setLogsLoading(true);
+    setLogData(null);
+    try {
+      const res = await fetch(
+        `https://go.accountresearch.workers.dev/gha-logs?run_id=${runId}`,
+        { headers: { 'Authorization': `Bearer ${session?.access_token}` } }
+      );
+      const data = await res.json();
+      setLogData(data);
+    } catch (err: any) {
+      setLogData({ logs: `Error loading logs: ${err.message}` });
+    } finally {
+      setLogsLoading(false);
+    }
+  };
 
   useEffect(() => {
     (async () => {
@@ -292,11 +326,22 @@ function RunMonitorTab() {
                 <td style={{ padding: '11px 16px' }}>
                   {r.pdf_url ? <a href={r.pdf_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>PDF</a> : '—'}
                 </td>
-                <td style={{ padding: '11px 16px' }}>
+                <td style={{ padding: '11px 16px', whiteSpace: 'nowrap' }}>
                   {r.gha_run_id ? (
-                    <a href={`https://github.com/dbarrett-art/prospect-research/actions/runs/${r.gha_run_id}`} target="_blank" rel="noopener noreferrer">
-                      <ExternalLink size={14} style={{ color: 'var(--text-secondary)' }} />
-                    </a>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <a href={`https://github.com/dbarrett-art/prospect-research/actions/runs/${r.gha_run_id}`} target="_blank" rel="noopener noreferrer">
+                        <ExternalLink size={14} style={{ color: 'var(--text-secondary)' }} />
+                      </a>
+                      {r.status === 'failed' && (
+                        <button onClick={() => fetchLogs(r.id)} style={{
+                          background: 'transparent', color: 'var(--status-failed)', border: '1px solid var(--status-failed)',
+                          padding: '2px 8px', fontSize: 11, borderRadius: 4, cursor: 'pointer',
+                        }}>
+                          <FileText size={11} style={{ marginRight: 3, verticalAlign: 'middle' }} />
+                          Logs
+                        </button>
+                      )}
+                    </div>
                   ) : '—'}
                 </td>
               </tr>
@@ -304,6 +349,56 @@ function RunMonitorTab() {
           </tbody>
         </table>
       </div>
+
+      {/* GHA Log Modal */}
+      {logModal && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200,
+        }} onClick={() => setLogModal(null)}>
+          <div onClick={(e) => e.stopPropagation()} style={{
+            background: 'var(--bg-surface)', border: '1px solid var(--border)',
+            borderRadius: 8, width: '80vw', maxWidth: 900, height: '70vh',
+            display: 'flex', flexDirection: 'column',
+          }}>
+            <div style={{
+              padding: '14px 18px', borderBottom: '1px solid var(--border)',
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            }}>
+              <div>
+                <div style={{ fontWeight: 500 }}>GHA Logs — {logData?.company || 'Loading...'}</div>
+                {logData?.gha_run_id && (
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
+                    Run {logData.gha_run_id} · {logData.conclusion || 'unknown'}
+                  </div>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                {logData?.gha_url && (
+                  <a href={logData.gha_url} target="_blank" rel="noopener noreferrer"
+                    style={{ fontSize: 12, color: 'var(--accent)' }}>
+                    Open in GitHub
+                  </a>
+                )}
+                <button onClick={() => setLogModal(null)} style={{
+                  background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer',
+                }}>
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+            <pre style={{
+              flex: 1, overflowY: 'auto', padding: '16px 18px',
+              fontSize: 12, fontFamily: 'var(--font-mono, monospace)',
+              color: 'var(--text-secondary)', lineHeight: 1.6,
+              whiteSpace: 'pre-wrap', wordBreak: 'break-all',
+              background: 'var(--bg-app)', margin: 0,
+            }}>
+              {logsLoading ? 'Loading logs...' : (logData?.error || logData?.logs || 'No logs available')}
+            </pre>
+          </div>
+        </div>
+      )}
     </>
   );
 }
@@ -560,12 +655,141 @@ function CreditAnalyticsTab() {
   );
 }
 
+// --- Tab: API Credits ---
+interface CreditInfo {
+  service: string;
+  remaining?: number | string;
+  used?: number;
+  plan?: string;
+  resets?: string;
+  status?: string;
+  note?: string;
+  error?: string;
+}
+
+function ApiCreditsTab() {
+  const { session } = useAuth();
+  const [credits, setCredits] = useState<CreditInfo[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [fetchedAt, setFetchedAt] = useState('');
+
+  const fetchCredits = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('https://go.accountresearch.workers.dev/api-credits', {
+        headers: { 'Authorization': `Bearer ${session?.access_token}` },
+      });
+      const data = await res.json();
+      setCredits(data.credits || []);
+      setFetchedAt(data.fetched_at || new Date().toISOString());
+    } catch (err: any) {
+      setCredits([{ service: 'Error', error: err.message }]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchCredits(); }, []);
+
+  const cardColor = (remaining: number | string | undefined): string => {
+    if (typeof remaining !== 'number') return 'var(--border)';
+    if (remaining < 100) return 'var(--status-failed)';
+    if (remaining < 500) return 'var(--status-running-text)';
+    return 'var(--status-complete)';
+  };
+
+  const serviceIcon = (name: string) => {
+    const icons: Record<string, string> = { SerpAPI: 'S', EnrichLayer: 'E', Apollo: 'A', Anthropic: 'C' };
+    return icons[name] || '?';
+  };
+
+  if (loading) return <TableSkeleton rows={2} cols={2} />;
+
+  return (
+    <>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
+          Last fetched: {fetchedAt ? relativeTime(fetchedAt) : '—'}
+        </div>
+        <button onClick={fetchCredits} style={{
+          background: 'transparent', color: 'var(--text-secondary)', border: '1px solid var(--border-strong)',
+          padding: '5px 12px', fontSize: 12, borderRadius: 6, cursor: 'pointer',
+          display: 'flex', alignItems: 'center', gap: 4,
+        }}>
+          <RefreshCw size={12} /> Refresh
+        </button>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        {credits.map((c) => (
+          <div key={c.service} style={{
+            background: 'var(--bg-surface)',
+            border: `1px solid ${c.error ? 'var(--status-failed)' : 'var(--border)'}`,
+            borderLeft: `3px solid ${cardColor(c.remaining)}`,
+            borderRadius: 8, padding: 18,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+              <div style={{
+                width: 28, height: 28, borderRadius: 6, background: 'var(--bg-elevated)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 13, fontWeight: 600, color: 'var(--accent)',
+              }}>
+                {serviceIcon(c.service)}
+              </div>
+              <span style={{ fontSize: 14, fontWeight: 500 }}>{c.service}</span>
+            </div>
+
+            {c.error ? (
+              <div style={{ fontSize: 12, color: 'var(--status-failed)' }}>{c.error}</div>
+            ) : (
+              <>
+                {c.remaining !== undefined && (
+                  <div style={{ marginBottom: 6 }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 2 }}>Remaining</div>
+                    <div style={{
+                      fontSize: 22, fontWeight: 600,
+                      color: typeof c.remaining === 'number' && c.remaining < 100 ? 'var(--status-failed)' :
+                             typeof c.remaining === 'number' && c.remaining < 500 ? 'var(--status-running-text)' :
+                             'var(--text-primary)',
+                    }}>
+                      {typeof c.remaining === 'number' ? c.remaining.toLocaleString() : c.remaining}
+                    </div>
+                  </div>
+                )}
+                {c.used !== undefined && (
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>
+                    Used: {typeof c.used === 'number' ? c.used.toLocaleString() : c.used}
+                  </div>
+                )}
+                {c.status && (
+                  <div style={{ fontSize: 12, color: c.status === 'Key valid' ? 'var(--status-complete-text)' : 'var(--status-failed)', marginBottom: 4 }}>
+                    {c.status}
+                  </div>
+                )}
+                {c.plan && (
+                  <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>Plan: {c.plan}</div>
+                )}
+                {c.resets && (
+                  <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>Resets: {new Date(c.resets).toLocaleDateString()}</div>
+                )}
+                {c.note && (
+                  <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 4 }}>{c.note}</div>
+                )}
+              </>
+            )}
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
 // --- Main Admin Page ---
 const tabs: { id: Tab; label: string; icon: any }[] = [
   { id: 'users', label: 'Users', icon: Users },
   { id: 'runs', label: 'Run Monitor', icon: Activity },
   { id: 'health', label: 'Service Health', icon: Heart },
   { id: 'credits', label: 'Credit Analytics', icon: BarChart3 },
+  { id: 'api-credits', label: 'API Credits', icon: Cpu },
 ];
 
 export default function Admin() {
@@ -604,6 +828,7 @@ export default function Admin() {
       {activeTab === 'runs' && <RunMonitorTab />}
       {activeTab === 'health' && <HealthTab />}
       {activeTab === 'credits' && <CreditAnalyticsTab />}
+      {activeTab === 'api-credits' && <ApiCreditsTab />}
     </Layout>
   );
 }
