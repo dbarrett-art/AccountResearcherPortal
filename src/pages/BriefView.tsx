@@ -1022,23 +1022,7 @@ function BriefContent({ pov, personas, runId, session }: { pov: any; personas: a
         </details>
       )}
 
-      {/* 2. Why Now hero — ALWAYS VISIBLE, never collapsible */}
-      {pov?.why_now && (
-        <div style={{ background: 'var(--bg-surface)', borderRadius: 11, padding: '18px 20px', marginBottom: 2 }}>
-          <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-tertiary)', marginBottom: 7 }}>Why Now</div>
-          {pov.why_now.urgency_rationale && (
-            <CollapsibleProse text={pov.why_now.urgency_rationale} maxLength={400} />
-          )}
-          {triggers.length > 0 && (
-            <>
-              <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-tertiary)', margin: '14px 0 10px' }}>Top triggers</div>
-              {triggers.slice(0, 3).map((t: any, i: number) => <TriggerCard key={i} trigger={t} />)}
-            </>
-          )}
-        </div>
-      )}
-
-      {/* 3. ICP Fit */}
+      {/* 2. ICP Fit */}
       <SectionRow icon={<Target size={11} />} title="ICP Fit" count={pov?.icp_fit?.score || undefined}>
         <CitedProse text={pov?.icp_fit?.rationale} />
       </SectionRow>
@@ -1114,9 +1098,12 @@ function BriefContent({ pov, personas, runId, session }: { pov: any; personas: a
         </SectionRow>
       )}
 
-      {/* 7. Why Now — all triggers */}
+      {/* 6. Why Now */}
       {triggers.length > 0 && (
-        <SectionRow icon={<Zap size={11} />} title="Why Now — all triggers" count={`${triggers.length} triggers`}>
+        <SectionRow icon={<Zap size={11} />} title="Why Now" count={`${triggers.length} triggers`}>
+          {pov?.why_now?.urgency_rationale && (
+            <CollapsibleProse text={pov.why_now.urgency_rationale} />
+          )}
           {triggers.map((t: any, i: number) => (
             <TriggerCard key={i} trigger={t} />
           ))}
@@ -1479,7 +1466,7 @@ export default function BriefView() {
 
   // Adjust main content when chat panel is open
   const mainStyle: React.CSSProperties = {
-    maxWidth: 720,
+    maxWidth: 960,
     margin: '0 auto',
     paddingBottom: 64,
     transition: 'margin-right 200ms ease',
