@@ -47,26 +47,48 @@ interface Brief {
 /* ------------------------------------------------------------------ */
 
 function SectionRow({
-  icon, title, count, defaultOpen = false, children
+  icon, title, count, defaultOpen = false, iconColor, children
 }: {
   icon: React.ReactNode; title: string;
-  count?: string; defaultOpen?: boolean; children: React.ReactNode;
+  count?: string; defaultOpen?: boolean;
+  iconColor?: string;
+  children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div style={{ borderTop: '0.5px solid var(--border)' }}>
+    <div style={{ marginBottom: 4 }}>
       <div
         onClick={() => setOpen(o => !o)}
-        style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '13px 0', cursor: 'pointer', userSelect: 'none' }}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 10,
+          padding: '14px 18px', cursor: 'pointer', userSelect: 'none',
+          background: 'var(--bg-surface)',
+          borderRadius: 10,
+          border: '0.5px solid var(--border)',
+        }}
       >
-        <div style={{ width: 20, height: 20, borderRadius: 5, background: 'var(--bg-elevated)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <div style={{
+          width: 28, height: 28, borderRadius: 8,
+          background: iconColor || 'rgba(255,255,255,0.06)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
+        }}>
           {icon}
         </div>
-        <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-secondary)', flex: 1 }}>{title}</span>
-        {count && <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{count}</span>}
-        <ChevronDown size={14} style={{ color: 'var(--text-tertiary)', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.18s', flexShrink: 0 }} />
+        <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', flex: 1, letterSpacing: '-0.01em' }}>{title}</span>
+        {count && (
+          <span style={{
+            fontSize: 12, color: 'var(--text-tertiary)',
+            padding: '3px 10px', background: 'rgba(255,255,255,0.06)',
+            borderRadius: 20
+          }}>{count}</span>
+        )}
+        <ChevronDown size={14} style={{
+          color: 'var(--text-tertiary)',
+          transform: open ? 'rotate(180deg)' : 'none',
+          transition: 'transform 0.18s', flexShrink: 0
+        }} />
       </div>
-      {open && <div style={{ paddingBottom: 14 }}>{children}</div>}
+      {open && <div style={{ padding: '12px 0 8px' }}>{children}</div>}
     </div>
   );
 }
@@ -117,20 +139,20 @@ function CollapsibleProse({ text, maxLength = 320 }: { text: string; maxLength?:
 
 function IcpBadge({ score }: { score: string | undefined }) {
   if (!score) return null;
-  const colors: Record<string, { bg: string; border: string; icon: string }> = {
-    Strong:   { bg: 'rgba(34,197,94,0.1)',  border: 'rgba(34,197,94,0.3)',  icon: '#22c55e' },
-    Moderate: { bg: 'rgba(245,158,11,0.1)', border: 'rgba(245,158,11,0.3)', icon: '#f59e0b' },
-    Weak:     { bg: 'rgba(239,68,68,0.1)',  border: 'rgba(239,68,68,0.3)',  icon: '#ef4444' },
+  const colors: Record<string, { bg: string; border: string; dot: string; text: string }> = {
+    Strong:   { bg: 'linear-gradient(135deg, rgba(26,58,26,0.9), rgba(13,43,13,0.9))', border: '#4a9e4a', dot: '#4a9e4a', text: '#6fcf6f' },
+    Moderate: { bg: 'linear-gradient(135deg, rgba(58,40,10,0.9), rgba(43,30,8,0.9))', border: '#9e6e2a', dot: '#9e6e2a', text: '#ef9f27' },
+    Weak:     { bg: 'linear-gradient(135deg, rgba(58,20,20,0.9), rgba(43,15,15,0.9))', border: '#9e3a3a', dot: '#9e3a3a', text: '#f09595' },
   };
   const c = colors[score] || colors.Moderate;
   return (
     <div style={{
-      display: 'inline-flex', alignItems: 'center', gap: 10,
+      display: 'inline-flex', alignItems: 'center', gap: 8,
+      padding: '8px 18px', borderRadius: 20,
       background: c.bg, border: `1px solid ${c.border}`,
-      borderRadius: 8, padding: '8px 16px',
     }}>
-      <Target size={18} style={{ color: c.icon }} />
-      <span style={{ fontSize: 15, fontWeight: 700, color: c.icon }}>
+      <span style={{ fontSize: 10, color: c.dot }}>{'\u25CF'}</span>
+      <span style={{ fontSize: 14, fontWeight: 600, color: c.text }}>
         {score} ICP
       </span>
     </div>
@@ -177,14 +199,19 @@ function TierBadge({ tier }: { tier: string }) {
   );
 }
 
-const TRIGGER_COLOURS: Record<string, string> = {
-  LEADERSHIP: '#8b5cf6', BUSINESS: '#3b82f6', MARKET: '#f59e0b',
-  PRODUCT: '#10b981', COMPETITIVE: '#ef4444', REGULATORY: '#6366f1',
+const TRIGGER_STYLES: Record<string, { bg: string; border: string; typeColor: string }> = {
+  BUSINESS:    { bg: 'rgba(55,138,221,0.08)',   border: 'rgba(55,138,221,0.22)',   typeColor: '#85b7eb' },
+  LEADERSHIP:  { bg: 'rgba(127,119,221,0.08)',  border: 'rgba(127,119,221,0.25)',  typeColor: '#afa9ec' },
+  MARKET:      { bg: 'rgba(186,117,23,0.08)',   border: 'rgba(186,117,23,0.25)',   typeColor: '#ef9f27' },
+  COMPETITIVE: { bg: 'rgba(228,75,74,0.08)',    border: 'rgba(228,75,74,0.22)',    typeColor: '#f09595' },
+  PRODUCT:     { bg: 'rgba(29,158,117,0.08)',   border: 'rgba(29,158,117,0.22)',   typeColor: '#5dcaa5' },
+  REGULATORY:  { bg: 'rgba(99,102,241,0.08)',   border: 'rgba(99,102,241,0.22)',   typeColor: '#a5b4fc' },
 };
 
 function TriggerCard({ trigger }: { trigger: any }) {
   const [copied, setCopied] = useState(false);
-  const borderColor = TRIGGER_COLOURS[trigger?.type?.toUpperCase()] || 'var(--accent)';
+  const cat = (trigger?.category || trigger?.type || 'BUSINESS').toUpperCase();
+  const style = TRIGGER_STYLES[cat] || TRIGGER_STYLES.BUSINESS;
 
   const copyText = () => {
     const text = `${trigger?.trigger || ''}${trigger?.evidence ? '\n\n' + trigger.evidence : ''}`;
@@ -196,9 +223,10 @@ function TriggerCard({ trigger }: { trigger: any }) {
   return (
     <div style={{
       position: 'relative',
-      background: 'var(--bg-surface)', border: '1px solid var(--border)',
-      borderLeft: `3px solid ${borderColor}`,
-      borderRadius: 8, padding: '14px 16px', marginBottom: 8,
+      background: style.bg,
+      border: `1px solid ${style.border}`,
+      borderRadius: 12,
+      padding: '16px 18px', marginBottom: 10,
     }}
     onMouseEnter={e => {
       const btn = e.currentTarget.querySelector('.copy-btn') as HTMLElement;
@@ -223,63 +251,41 @@ function TriggerCard({ trigger }: { trigger: any }) {
         {copied ? '\u2713' : '\u2398'}
       </button>
 
-      <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)',
-                    lineHeight: 1.5, marginBottom: trigger?.evidence ? 8 : 0,
-                    paddingRight: 32 }}>
+      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: style.typeColor, marginBottom: 6 }}>
+        {cat}
+      </div>
+
+      <div style={{ fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.65, fontWeight: 500, marginBottom: trigger?.evidence ? 6 : 0, paddingRight: 32 }}>
         {trigger?.trigger}
       </div>
 
       {trigger?.evidence && (
-        <div>
-          <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5,
-                        marginBottom: 4 }}>
-            {trigger.evidence.split('\n')[0]}
-          </div>
-          {trigger.evidence.split('\n')[1] && (
-            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', lineHeight: 1.4,
-                          fontStyle: 'italic' }}>
-              {trigger.evidence.split('\n').slice(1).join(' ')}
-            </div>
-          )}
+        <div style={{ fontSize: 12, color: 'var(--text-tertiary)', lineHeight: 1.5 }}>
+          {trigger.evidence}
         </div>
       )}
 
       {trigger?.source_url && (
         <a href={trigger.source_url} target="_blank" rel="noopener noreferrer"
            style={{ fontSize: 11, color: 'var(--accent)', display: 'inline-block', marginTop: 4 }}>
-          Source \u2197
+          Source {'\u2197'}
         </a>
-      )}
-
-      {trigger?.type && (
-        <div style={{
-          display: 'inline-block',
-          marginTop: 8,
-          fontSize: 10, fontWeight: 600,
-          color: 'var(--text-tertiary)',
-          background: 'var(--bg-elevated)',
-          borderRadius: 3,
-          padding: '2px 6px',
-          letterSpacing: '0.04em',
-          textTransform: 'uppercase',
-        }}>
-          {trigger.type}
-        </div>
       )}
     </div>
   );
 }
 
-const PRODUCT_COLOURS: Record<string, { bg: string; text: string }> = {
-  'figma design':  { bg: 'rgba(94,106,210,0.15)',  text: '#818cf8' },
-  'figjam':        { bg: 'rgba(245,158,11,0.15)',   text: '#f59e0b' },
-  'dev mode':      { bg: 'rgba(16,185,129,0.15)',   text: '#10b981' },
-  'code connect':  { bg: 'rgba(16,185,129,0.15)',   text: '#10b981' },
-  'figma make':    { bg: 'rgba(168,85,247,0.15)',   text: '#a855f7' },
-  'mcp server':    { bg: 'rgba(20,184,166,0.15)',   text: '#14b8a6' },
-  'figma ai':      { bg: 'rgba(251,146,60,0.15)',   text: '#fb923c' },
-  'enterprise':    { bg: 'rgba(99,102,241,0.15)',   text: '#6366f1' },
-  'slides':        { bg: 'rgba(236,72,153,0.15)',   text: '#ec4899' },
+const PRODUCT_CHIP_COLOURS: Record<string, { bg: string; color: string }> = {
+  'figma design':  { bg: 'rgba(55,138,221,0.2)',  color: '#85b7eb' },
+  'dev mode':      { bg: 'rgba(55,138,221,0.2)',  color: '#85b7eb' },
+  'code connect':  { bg: 'rgba(55,138,221,0.2)',  color: '#85b7eb' },
+  'mcp server':    { bg: 'rgba(29,158,117,0.2)',  color: '#5dcaa5' },
+  'governance':    { bg: 'rgba(127,119,221,0.2)', color: '#afa9ec' },
+  'figjam':        { bg: 'rgba(186,117,23,0.2)',  color: '#ef9f27' },
+  'figma make':    { bg: 'rgba(168,85,247,0.2)',  color: '#ddd6fe' },
+  'slides':        { bg: 'rgba(228,75,74,0.15)',  color: '#f09595' },
+  'figma ai':      { bg: 'rgba(251,146,60,0.15)', color: '#fb923c' },
+  'enterprise':    { bg: 'rgba(99,102,241,0.15)', color: '#a5b4fc' },
 };
 
 function CopyableProductCard({ product }: { product: any }) {
@@ -292,11 +298,17 @@ function CopyableProductCard({ product }: { product: any }) {
     setTimeout(() => setCopied(false), 1500);
   };
 
+  const name = product?.product || '';
+  const chipKey = Object.keys(PRODUCT_CHIP_COLOURS).find(k => name.toLowerCase().includes(k));
+  const chipStyle = chipKey ? PRODUCT_CHIP_COLOURS[chipKey] : { bg: 'rgba(255,255,255,0.1)', color: '#a8a69e' };
+
   return (
     <div style={{
       position: 'relative',
-      background: 'var(--bg-surface)', border: '1px solid var(--border)',
-      borderRadius: 8, padding: '12px 16px', marginBottom: 8,
+      background: 'rgba(255,255,255,0.03)',
+      border: '0.5px solid rgba(255,255,255,0.08)',
+      borderRadius: 12,
+      padding: '16px 18px', marginBottom: 8,
     }}
     onMouseEnter={e => {
       const btn = e.currentTarget.querySelector('.copy-btn') as HTMLElement;
@@ -320,19 +332,10 @@ function CopyableProductCard({ product }: { product: any }) {
       >
         {copied ? '\u2713' : '\u2398'}
       </button>
-      {(() => {
-        const name = product?.product || '';
-        const key = Object.keys(PRODUCT_COLOURS).find(k => name.toLowerCase().includes(k));
-        const colour = key ? PRODUCT_COLOURS[key] : { bg: 'rgba(94,106,210,0.15)', text: '#818cf8' };
-        return (
-          <div style={{ display: 'inline-block', background: colour.bg, color: colour.text,
-                        fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 4,
-                        marginBottom: 8, letterSpacing: '0.02em' }}>
-            {name}
-          </div>
-        );
-      })()}
-      <div style={{ fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.9 }}>{product?.relevance}</div>
+      <div style={{ display: 'inline-block', padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700, marginBottom: 10, background: chipStyle.bg, color: chipStyle.color }}>
+        {name}
+      </div>
+      <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.65 }}>{product?.relevance}</div>
     </div>
   );
 }
@@ -340,28 +343,33 @@ function CopyableProductCard({ product }: { product: any }) {
 function DataTable({ headers, rows }: { headers: string[]; rows: (string | null | undefined)[][] }) {
   if (!rows?.length) return null;
   return (
-    <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', marginTop: 12 }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+    <div style={{ overflowX: 'auto', marginTop: 12 }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
         <thead>
-          <tr style={{ background: 'var(--bg-surface)', borderBottom: '1px solid var(--border)' }}>
+          <tr>
             {headers.map((h, i) => (
-              <th key={i} style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', padding: '10px 16px', textAlign: 'left' }}>
-                {h}
-              </th>
+              <th key={i} style={{
+                textAlign: 'left',
+                fontSize: 11, fontWeight: 600, letterSpacing: '0.06em',
+                textTransform: 'uppercase', color: 'var(--text-tertiary)',
+                padding: '0 0 10px', paddingRight: i < headers.length - 1 ? 20 : 0,
+                borderBottom: '1px solid rgba(255,255,255,0.08)',
+              }}>{h}</th>
             ))}
           </tr>
         </thead>
         <tbody>
           {rows.map((row, i) => (
-            <tr key={i}
-              style={{ borderBottom: '1px solid var(--border)', transition: 'background 80ms' }}
-              onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-elevated)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-            >
+            <tr key={i}>
               {row.map((cell, j) => (
-                <td key={j} style={{ padding: '10px 16px', fontSize: 13, color: j === 0 ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
-                  {cell || '\u2014'}
-                </td>
+                <td key={j} style={{
+                  padding: '10px 0',
+                  paddingRight: j < row.length - 1 ? 20 : 0,
+                  borderBottom: i < rows.length - 1 ? '0.5px solid rgba(255,255,255,0.06)' : 'none',
+                  color: j === 0 ? 'var(--text-primary)' : 'var(--text-secondary)',
+                  fontWeight: j === 0 ? 500 : 400,
+                  verticalAlign: 'top', lineHeight: 1.6,
+                }}>{cell || '\u2014'}</td>
               ))}
             </tr>
           ))}
@@ -470,7 +478,7 @@ function ContactMatrix({ personas }: { personas: any }) {
   const totalContacts = FUNCTIONS.reduce((n, f) => n + TIERS.reduce((m, t) => m + (matrix?.[f]?.[t]?.length || 0), 0), 0);
 
   return (
-    <SectionRow icon={<Users size={11} />} title="Contact Matrix" count={totalContacts > 0 ? `${totalContacts} contacts` : undefined}>
+    <SectionRow icon={<Users size={11} style={{ color: '#888780' }} />} title="Contact Matrix" count={totalContacts > 0 ? `${totalContacts} contacts` : undefined} iconColor="rgba(255,255,255,0.07)">
       {rfm && (
         <div style={{
           background: 'var(--accent-subtle)', border: '1px solid rgba(94,106,210,0.2)',
@@ -576,7 +584,7 @@ function JobSignalsSection({ signals, extracted }: { signals: any; extracted?: a
   if (!hasExtracted && design.length === 0 && other.length === 0 && !gaps) return null;
 
   return (
-    <SectionRow icon={<Briefcase size={11} />} title="Job Signals" count={signalCount > 0 ? `${signalCount} signals` : undefined}>
+    <SectionRow icon={<Briefcase size={11} style={{ color: '#888780' }} />} title="Job Signals" count={signalCount > 0 ? `${signalCount} signals` : undefined} iconColor="rgba(55,138,221,0.12)">
       {/* Strategic synthesis */}
       {synthesis && (
         <div style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.6, marginBottom: 16, padding: '12px 16px', background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 8, borderLeft: '3px solid var(--accent)' }}>
@@ -759,7 +767,7 @@ function ValuePyramid({ pyramid }: { pyramid: any }) {
   if (!strategic && !operational?.length && !tactical?.length) return null;
 
   return (
-    <SectionRow icon={<Layers size={11} />} title="Value Pyramid" count={`${(operational?.length || 0) + (tactical?.length || 0)} items`}>
+    <SectionRow icon={<Layers size={11} style={{ color: '#888780' }} />} title="Value Pyramid" count={`${(operational?.length || 0) + (tactical?.length || 0)} items`} iconColor="rgba(127,119,221,0.18)">
       {/* Strategic — top of pyramid */}
       {strategic && (
         <div style={{
@@ -1023,13 +1031,13 @@ function BriefContent({ pov, personas, runId, session }: { pov: any; personas: a
       )}
 
       {/* 2. ICP Fit */}
-      <SectionRow icon={<Target size={11} />} title="ICP Fit" count={pov?.icp_fit?.score || undefined}>
+      <SectionRow icon={<Target size={11} style={{ color: '#6fcf6f' }} />} title="ICP Fit" count={pov?.icp_fit?.score || undefined} iconColor="rgba(99,153,34,0.18)">
         <CitedProse text={pov?.icp_fit?.rationale} />
       </SectionRow>
 
       {/* 4. About */}
       {pov?.about && (
-        <SectionRow icon={<Building2 size={11} />} title="About">
+        <SectionRow icon={<Building2 size={11} style={{ color: '#888780' }} />} title="About" iconColor="rgba(255,255,255,0.07)">
           {pov.about.who_they_are && (
             <CitedProse text={pov.about.who_they_are} />
           )}
@@ -1045,7 +1053,7 @@ function BriefContent({ pov, personas, runId, session }: { pov: any; personas: a
 
       {/* 5. Organisation Structure */}
       {pov?.org_structure && pov.org_structure.structure_type !== 'simple' && (
-        <SectionRow icon={<Building2 size={11} />} title="Organisation Structure" count={divisions.length > 0 ? `${divisions.length} divisions` : undefined}>
+        <SectionRow icon={<Building2 size={11} style={{ color: '#888780' }} />} title="Organisation Structure" count={divisions.length > 0 ? `${divisions.length} divisions` : undefined} iconColor="rgba(255,255,255,0.07)">
           {pov.org_structure.structure_summary && (
             <p style={{ fontSize: 13, lineHeight: 1.7, marginBottom: 12 }}>{pov.org_structure.structure_summary}</p>
           )}
@@ -1064,7 +1072,7 @@ function BriefContent({ pov, personas, runId, session }: { pov: any; personas: a
 
       {/* 6. Why Anything */}
       {pov?.why_anything && (
-        <SectionRow icon={<TrendingUp size={11} />} title="Why Anything" count={pov.why_anything.strategic_objectives?.length ? `${pov.why_anything.strategic_objectives.length} objectives` : undefined}>
+        <SectionRow icon={<TrendingUp size={11} style={{ color: '#ef9f27' }} />} title="Why Anything" count={pov.why_anything.strategic_objectives?.length ? `${pov.why_anything.strategic_objectives.length} objectives` : undefined} iconColor="rgba(186,117,23,0.18)">
           {pov.why_anything.corporate_strategy && (
             <div style={{
               background: 'rgba(94,106,210,0.06)', border: '1px solid rgba(94,106,210,0.15)',
@@ -1100,7 +1108,7 @@ function BriefContent({ pov, personas, runId, session }: { pov: any; personas: a
 
       {/* 6. Why Now */}
       {triggers.length > 0 && (
-        <SectionRow icon={<Zap size={11} />} title="Why Now" count={`${triggers.length} triggers`}>
+        <SectionRow icon={<Zap size={11} style={{ color: '#85b7eb' }} />} title="Why Now" count={`${triggers.length} triggers`} iconColor="rgba(55,138,221,0.18)">
           {pov?.why_now?.urgency_rationale && (
             <CollapsibleProse text={pov.why_now.urgency_rationale} />
           )}
@@ -1112,7 +1120,7 @@ function BriefContent({ pov, personas, runId, session }: { pov: any; personas: a
 
       {/* 8. Why Figma */}
       {pov?.why_figma && (
-        <SectionRow icon={<Wrench size={11} />} title="Why Figma" count={products.length > 0 ? `${products.length} products` : undefined}>
+        <SectionRow icon={<Wrench size={11} style={{ color: '#afa9ec' }} />} title="Why Figma" count={products.length > 0 ? `${products.length} products` : undefined} iconColor="rgba(127,119,221,0.18)">
           {pov.why_figma.strongest_angle && (
             <div style={{
               background: 'var(--accent-subtle)', border: '1px solid rgba(94,106,210,0.2)',
@@ -1145,7 +1153,7 @@ function BriefContent({ pov, personas, runId, session }: { pov: any; personas: a
 
       {/* 11. Digital Products */}
       {digitalProducts.length > 0 && (
-        <SectionRow icon={<Globe size={11} />} title="Digital Products" count={`${digitalProducts.length} products`}>
+        <SectionRow icon={<Globe size={11} style={{ color: '#888780' }} />} title="Digital Products" count={`${digitalProducts.length} products`} iconColor="rgba(29,158,117,0.15)">
           <DataTable
             headers={['Product', 'Description']}
             rows={digitalProducts.map((p: any) => [p?.product, p?.description])}
@@ -1155,7 +1163,7 @@ function BriefContent({ pov, personas, runId, session }: { pov: any; personas: a
 
       {/* 12. Key Executives */}
       {executives.length > 0 && (
-        <SectionRow icon={<Users size={11} />} title="Key Executives" count={`${executives.length} found`}>
+        <SectionRow icon={<Users size={11} style={{ color: '#888780' }} />} title="Key Executives" count={`${executives.length} found`} iconColor="rgba(255,255,255,0.07)">
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             {executives.map((exec: any, i: number) => (
               <div key={i} style={{
@@ -1185,7 +1193,7 @@ function BriefContent({ pov, personas, runId, session }: { pov: any; personas: a
 
       {/* 13. Technology Partnerships */}
       {techPartners.length > 0 && (
-        <SectionRow icon={<Handshake size={11} />} title="Technology Partnerships" count={`${techPartners.length} partners`}>
+        <SectionRow icon={<Handshake size={11} style={{ color: '#888780' }} />} title="Technology Partnerships" count={`${techPartners.length} partners`} iconColor="rgba(255,255,255,0.07)">
           <DataTable
             headers={['Partner', 'Details']}
             rows={techPartners.map((p: any) => [p?.partner, p?.details])}
@@ -1195,7 +1203,7 @@ function BriefContent({ pov, personas, runId, session }: { pov: any; personas: a
 
       {/* 14. Proof Points */}
       {proofPoints.length > 0 && (
-        <SectionRow icon={<BookOpen size={11} />} title="Proof Points" count={`${proofPoints.length} found`}>
+        <SectionRow icon={<BookOpen size={11} style={{ color: '#888780' }} />} title="Proof Points" count={`${proofPoints.length} found`} iconColor="rgba(186,117,23,0.12)">
           {proofPoints.map((pp: any, i: number) => (
             <div key={i} style={{
               background: 'var(--bg-surface)', border: '1px solid var(--border)',
@@ -1217,7 +1225,7 @@ function BriefContent({ pov, personas, runId, session }: { pov: any; personas: a
 
       {/* 15. Sources */}
       {cleanSources.length > 0 && (
-        <SectionRow icon={<Link2 size={11} />} title="Sources" count={`${cleanSources.length} sources`}>
+        <SectionRow icon={<Link2 size={11} style={{ color: '#888780' }} />} title="Sources" count={`${cleanSources.length} sources`} iconColor="rgba(255,255,255,0.07)">
           <div style={{ margin: 0 }}>
             {visibleSources.map((s: any, i: number) => {
               const url = typeof s === 'string' ? s : (s?.url || s?.source || '');
