@@ -107,10 +107,20 @@ function UsersTab({ adminId }: { adminId: string }) {
         },
       });
       if (fnError) {
-        const errMsg = typeof data === 'object' && data?.error ? data.error : fnError.message;
+        // Try to parse error body from the edge function response
+        let errMsg = fnError.message;
+        try {
+          const ctx = (fnError as any).context;
+          if (ctx instanceof Response) {
+            const body = await ctx.json();
+            if (body?.error) errMsg = body.error;
+          }
+        } catch { /* use default message */ }
         setCreateResult({ ok: false, message: errMsg });
+      } else if (!data?.success) {
+        setCreateResult({ ok: false, message: data?.error || 'Unknown error' });
       } else {
-        setCreateResult({ ok: true, message: `Created ${data.user.email}` });
+        setCreateResult({ ok: true, message: `Invite sent to ${data.user.email}` });
         // Add to local list
         setUsers((prev) => [...prev, {
           id: data.user.id,

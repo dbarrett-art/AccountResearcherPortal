@@ -57,19 +57,29 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Create user via admin API
+    // Invite user — sends them an email with a magic link
     // The handle_new_user trigger will auto-create the users row
-    const { data: newUser, error: createError } = await adminClient.auth.admin.createUser({
+    const { data: inviteData, error: createError } = await adminClient.auth.admin.inviteUserByEmail(
       email,
-      email_confirm: true,
-      user_metadata: {
-        name: name || email.split('@')[0],
-      },
-    })
+      {
+        data: {
+          name: name || email.split('@')[0],
+        },
+        redirectTo: 'https://dbarrett-art.github.io/AccountResearcherPortal/',
+      }
+    )
 
     if (createError) {
       return new Response(JSON.stringify({ error: createError.message }), {
         status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    const newUser = inviteData?.user
+    if (!newUser) {
+      return new Response(JSON.stringify({ error: 'User creation returned no data' }), {
+        status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
@@ -85,14 +95,14 @@ Deno.serve(async (req) => {
       await adminClient
         .from('users')
         .update(updates)
-        .eq('id', newUser.user.id)
+        .eq('id', newUser.id)
     }
 
     return new Response(JSON.stringify({
       success: true,
       user: {
-        id: newUser.user.id,
-        email: newUser.user.email,
+        id: newUser.id,
+        email: newUser.email,
         name: name || email.split('@')[0],
         role: role || 'ae',
         credits: credits ?? 5,
