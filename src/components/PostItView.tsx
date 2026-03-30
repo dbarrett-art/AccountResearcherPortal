@@ -96,7 +96,7 @@ function categoriseQuery(query: string): string {
     return 'Design friction';
 
   // Q10: Leadership changes
-  if ((q.includes('ceo') || q.includes('chief executive')) && (q.includes('appointed') || q.includes('started') || q.includes('joined') || q.includes('replaced') || q.includes('new')))
+  if ((q.includes('ceo') || q.includes('chief executive') || q.includes('cto') || q.includes('cpo') || q.includes('cdo')) && (q.includes('appointed') || q.includes('started') || q.includes('joined') || q.includes('replaced') || q.includes('new')))
     return 'Leadership';
 
   // Q11: Financial performance
@@ -131,7 +131,46 @@ function categoriseQuery(query: string): string {
   if (q.includes('subsidiaries') || q.includes('business divisions') || q.includes('operating segments') || q.includes('headcount'))
     return 'Org structure';
 
-  return 'Other';
+  // --- Additional categories to reduce "Other" bucket ---
+
+  // AI / machine learning investment
+  if (q.includes('ai') || q.includes('machine learning') || q.includes('llm') || q.includes('generative') || q.includes('artificial intelligence') || q.includes('copilot'))
+    return 'AI investment';
+
+  // Acquisitions & M&A
+  if (q.includes('acqui') || q.includes('merger') || q.includes('m&a') || q.includes('takeover') || q.includes('buyout'))
+    return 'M&A activity';
+
+  // Hiring / talent
+  if (q.includes('hiring') || q.includes('recruit') || q.includes('talent') || q.includes('workforce') || q.includes('headcount'))
+    return 'Hiring signals';
+
+  // Product launches
+  if (q.includes('launch') || q.includes('new product') || q.includes('new feature') || q.includes('release') || q.includes('beta'))
+    return 'Product launches';
+
+  // Sustainability / ESG
+  if (q.includes('sustainability') || q.includes('esg') || q.includes('carbon') || q.includes('net zero') || q.includes('climate'))
+    return 'Sustainability';
+
+  // Cloud / infrastructure
+  if (q.includes('cloud') || q.includes('aws') || q.includes('azure') || q.includes('gcp') || q.includes('infrastructure') || q.includes('saas'))
+    return 'Cloud & infra';
+
+  // Customer experience / CX
+  if (q.includes('customer experience') || q.includes('cx') || q.includes('nps') || q.includes('customer satisfaction'))
+    return 'Customer experience';
+
+  // Mobile / app
+  if (q.includes('mobile app') || q.includes('ios') || q.includes('android') || q.includes('react native') || q.includes('flutter'))
+    return 'Mobile';
+
+  // Security
+  if (q.includes('security') || q.includes('cyber') || q.includes('zero trust') || q.includes('soc 2') || q.includes('iso 27001'))
+    return 'Security';
+
+  // Instead of "Other", use a truncated query text
+  return '';
 }
 
 /* ------------------------------------------------------------------ */
@@ -144,6 +183,14 @@ function getDomain(url: string): string {
   } catch {
     return url;
   }
+}
+
+function truncateQuery(query: string, max: number): string {
+  if (query.length <= max) return query;
+  // Try to truncate at a word boundary
+  const cut = query.slice(0, max - 1);
+  const lastSpace = cut.lastIndexOf(' ');
+  return (lastSpace > max * 0.5 ? cut.slice(0, lastSpace) : cut) + '\u2026';
 }
 
 function extractQueryGroups(data: DebugData): { groups: QueryGroup[]; totalSources: number; hasWebSearch: boolean } {
@@ -166,7 +213,10 @@ function extractQueryGroups(data: DebugData): { groups: QueryGroup[]; totalSourc
   const allUrls = new Set<string>();
 
   for (const ev of webSearchEvents) {
-    const cat = categoriseQuery(ev.query || '');
+    let cat = categoriseQuery(ev.query || '');
+    // For uncategorised queries, use truncated query text as category name
+    if (!cat) cat = truncateQuery(ev.query || 'Unknown query', 30);
+
     if (!categoryMap.has(cat)) {
       categoryMap.set(cat, { query: ev.query || '', results: new Map() });
     }
@@ -506,7 +556,7 @@ function seededRandom(seed: string): number {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Query Group Card — compact card for each query category            */
+/*  Source status helper                                                */
 /* ------------------------------------------------------------------ */
 
 function sourceStatusColor(url: string, usedUrls: Set<string>, gatheredUrls: Set<string>, hasSourceUsage: boolean): PostItStatus {
@@ -516,112 +566,121 @@ function sourceStatusColor(url: string, usedUrls: Set<string>, gatheredUrls: Set
   return 'discarded';
 }
 
-function QueryGroupCard({ group, usedUrls, gatheredUrls, hasSourceUsage, onClickSource }: {
+/* ------------------------------------------------------------------ */
+/*  Level 1: Compact Query Category Card                               */
+/* ------------------------------------------------------------------ */
+
+function QueryCategoryCard({ group, isExpanded, onToggle, usedUrls, gatheredUrls, hasSourceUsage, onClickSource }: {
   group: QueryGroup;
+  isExpanded: boolean;
+  onToggle: () => void;
   usedUrls: Set<string>;
   gatheredUrls: Set<string>;
   hasSourceUsage: boolean;
   onClickSource: (postIt: PostIt) => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
   const total = group.results.length;
-  const tilt = (seededRandom(group.category) - 0.5) * 3;
+  const barTotal = Math.max(1, total);
+  const citedPct = (group.keptCount / barTotal) * 100;
+  const gatheredPct = (group.unusedCount / barTotal) * 100;
+  const droppedPct = (group.droppedCount / barTotal) * 100;
+
+  // Build stats string
+  const parts: string[] = [];
+  if (group.keptCount > 0) parts.push(`${group.keptCount} cited`);
+  if (group.unusedCount > 0) parts.push(`${group.unusedCount} gathered`);
+  if (group.droppedCount > 0) parts.push(`${group.droppedCount} dropped`);
 
   return (
     <div style={{
-      borderRadius: 8,
-      border: '1px solid var(--border)',
+      borderRadius: 6,
+      border: `1px solid ${isExpanded ? 'var(--accent, #3b82f6)' : 'var(--border)'}`,
       background: 'var(--bg-surface)',
       overflow: 'hidden',
-      transform: `rotate(${tilt}deg)`,
-      transition: 'transform 0.15s',
+      transition: 'border-color 0.15s',
     }}>
-      {/* Header — always visible, clickable */}
+      {/* Level 1: Compact header — always visible */}
       <button
-        onClick={() => setExpanded(!expanded)}
+        onClick={onToggle}
         style={{
           width: '100%',
-          padding: '10px 12px',
+          padding: '8px 10px',
           display: 'flex',
           flexDirection: 'column',
-          gap: 6,
+          gap: 4,
           background: 'none',
           border: 'none',
           cursor: 'pointer',
           textAlign: 'left',
         }}
       >
+        {/* Title row */}
         <div style={{
           display: 'flex',
           alignItems: 'center',
           gap: 6,
           width: '100%',
         }}>
-          <Search size={12} style={{ color: 'var(--text-tertiary)', flexShrink: 0 }} />
+          <Search size={11} style={{ color: 'var(--text-tertiary)', flexShrink: 0 }} />
           <span style={{
-            fontSize: 12,
+            fontSize: 11,
             fontWeight: 600,
             color: 'var(--text-primary)',
             flex: 1,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
           }}>
             {group.category}
           </span>
-          {expanded
-            ? <ChevronDown size={14} style={{ color: 'var(--text-tertiary)', flexShrink: 0 }} />
-            : <ChevronRight size={14} style={{ color: 'var(--text-tertiary)', flexShrink: 0 }} />
-          }
-        </div>
-
-        {/* Stats line */}
-        <div style={{ display: 'flex', gap: 4, fontSize: 10 }}>
           <span style={{
-            padding: '1px 5px', borderRadius: 3,
-            background: 'var(--bg-elevated)', color: 'var(--text-secondary)',
+            fontSize: 10,
+            color: 'var(--text-tertiary)',
+            flexShrink: 0,
+            fontWeight: 500,
           }}>
             {total}
           </span>
-          {group.keptCount > 0 && (
-            <span style={{
-              padding: '1px 5px', borderRadius: 3,
-              background: 'rgba(16,185,129,0.1)', color: '#10b981',
-            }}>
-              {group.keptCount} cited
-            </span>
+          {isExpanded
+            ? <ChevronDown size={12} style={{ color: 'var(--text-tertiary)', flexShrink: 0 }} />
+            : <ChevronRight size={12} style={{ color: 'var(--text-tertiary)', flexShrink: 0 }} />
+          }
+        </div>
+
+        {/* Horizontal ratio bar */}
+        <div style={{
+          width: '100%',
+          height: 4,
+          borderRadius: 2,
+          background: 'var(--bg-elevated)',
+          overflow: 'hidden',
+          display: 'flex',
+        }}>
+          {citedPct > 0 && (
+            <div style={{ width: `${citedPct}%`, height: '100%', background: '#10b981' }} />
           )}
-          {group.unusedCount > 0 && (
-            <span style={{
-              padding: '1px 5px', borderRadius: 3,
-              background: 'rgba(217,119,6,0.1)', color: '#d97706',
-            }}>
-              {group.unusedCount} gathered
-            </span>
+          {gatheredPct > 0 && (
+            <div style={{ width: `${gatheredPct}%`, height: '100%', background: '#d97706' }} />
           )}
-          {group.droppedCount > 0 && (
-            <span style={{
-              padding: '1px 5px', borderRadius: 3,
-              background: 'rgba(220,38,38,0.08)', color: '#dc2626',
-            }}>
-              {group.droppedCount} dropped
-            </span>
+          {droppedPct > 0 && (
+            <div style={{ width: `${droppedPct}%`, height: '100%', background: 'rgba(220,38,38,0.5)' }} />
           )}
         </div>
 
-        {/* Mini colour squares — compact representation */}
-        <div style={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-          {group.results.map((r, i) => {
-            const st = sourceStatusColor(r.url, usedUrls, gatheredUrls, hasSourceUsage);
-            return (
-              <div key={i} style={{
-                width: 8, height: 8, borderRadius: 2,
-                background: st === 'survived' ? '#10b981' : st === 'unused' ? '#d97706' : 'rgba(220,38,38,0.4)',
-              }} />
-            );
-          })}
+        {/* Stats text */}
+        <div style={{
+          fontSize: 9,
+          color: 'var(--text-tertiary)',
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+        }}>
+          {parts.length > 0 ? parts.join(' \u00b7 ') : `${total} results`}
         </div>
       </button>
 
-      {/* Expanded: individual source post-its */}
-      {expanded && (
+      {/* Level 2: Expanded source list (accordion) */}
+      {isExpanded && (
         <div style={{
           padding: '0 10px 10px',
           display: 'flex',
@@ -630,6 +689,7 @@ function QueryGroupCard({ group, usedUrls, gatheredUrls, hasSourceUsage, onClick
           borderTop: '1px solid var(--border)',
           paddingTop: 8,
         }}>
+          {/* Query text */}
           <div style={{
             fontSize: 10,
             color: 'var(--text-tertiary)',
@@ -641,21 +701,26 @@ function QueryGroupCard({ group, usedUrls, gatheredUrls, hasSourceUsage, onClick
           }}>
             {truncate(group.query, 80)}
           </div>
+
+          {/* Individual source post-its */}
           {group.results.map((r, i) => {
             const st = sourceStatusColor(r.url, usedUrls, gatheredUrls, hasSourceUsage);
             const tiltR = (seededRandom(`${group.category}-${i}`) - 0.5) * 3;
             return (
               <div
                 key={r.url}
-                onClick={() => onClickSource({
-                  id: `src-${r.url}`,
-                  title: truncate(r.title, 45),
-                  subtitle: getDomain(r.url),
-                  stage: 'sources',
-                  status: st,
-                  reason: st === 'survived' ? undefined : st === 'unused' ? 'Gathered but not cited in POV' : 'Not in distilled intelligence',
-                  detail: { url: r.url, title: r.title, query: group.query, snippet: r.snippet },
-                })}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onClickSource({
+                    id: `src-${r.url}`,
+                    title: truncate(r.title, 45),
+                    subtitle: getDomain(r.url),
+                    stage: 'sources',
+                    status: st,
+                    reason: st === 'survived' ? undefined : st === 'unused' ? 'Gathered but not cited in POV' : 'Not in distilled intelligence',
+                    detail: { url: r.url, title: r.title, query: group.query, snippet: r.snippet, category: group.category },
+                  });
+                }}
                 style={{
                   padding: '6px 8px',
                   borderRadius: 4,
@@ -701,13 +766,14 @@ function QueryGroupCard({ group, usedUrls, gatheredUrls, hasSourceUsage, onClick
 }
 
 /* ------------------------------------------------------------------ */
-/*  Sources Grid — replaces the single Sources Found column            */
+/*  Sources Grid — compact overview with accordion                     */
 /* ------------------------------------------------------------------ */
 
 function SourcesGrid({ data, onClickSource }: {
   data: DebugData;
   onClickSource: (postIt: PostIt) => void;
 }) {
+  const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
   const events = data.events || [];
   const sourceUsageEvent = events.find(e => e.event === 'm1:source_usage');
 
@@ -734,8 +800,9 @@ function SourcesGrid({ data, onClickSource }: {
       display: 'flex',
       flexDirection: 'column',
       gap: 8,
-      minWidth: 280,
-      maxWidth: 420,
+      minWidth: 320,
+      maxWidth: 480,
+      flex: '1 1 50%',
     }}>
       {/* Section header */}
       <div style={{
@@ -783,13 +850,15 @@ function SourcesGrid({ data, onClickSource }: {
       {/* Query group cards — 2-column grid */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
-        gap: 8,
+        gridTemplateColumns: 'repeat(2, 1fr)',
+        gap: 6,
       }}>
         {groups.map(g => (
-          <QueryGroupCard
+          <QueryCategoryCard
             key={g.category}
             group={g}
+            isExpanded={expandedCategory === g.category}
+            onToggle={() => setExpandedCategory(expandedCategory === g.category ? null : g.category)}
             usedUrls={usedUrls}
             gatheredUrls={gatheredUrls}
             hasSourceUsage={!!sourceUsageEvent}
@@ -802,12 +871,11 @@ function SourcesGrid({ data, onClickSource }: {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Distillation Funnel — replaces the old distillation column         */
+/*  Distillation Funnel — compact bars only                            */
 /* ------------------------------------------------------------------ */
 
-function DistillationFunnel({ data, onClickSource }: {
+function DistillationFunnel({ data }: {
   data: DebugData;
-  onClickSource: (postIt: PostIt) => void;
 }) {
   const events = data.events || [];
   const sourceUsageEvent = events.find(e => e.event === 'm1:source_usage');
@@ -821,7 +889,7 @@ function DistillationFunnel({ data, onClickSource }: {
   const gatheredCount = unused.length;
 
   // Funnel widths (relative to 100%)
-  const maxWidth = 160;
+  const maxWidth = 120;
   const usedWidth = totalFound > 0 ? Math.max(20, (usedCount / totalFound) * maxWidth) : maxWidth;
 
   return (
@@ -829,8 +897,8 @@ function DistillationFunnel({ data, onClickSource }: {
       display: 'flex',
       flexDirection: 'column',
       gap: 8,
-      minWidth: 150,
-      maxWidth: 180,
+      minWidth: 120,
+      maxWidth: 140,
     }}>
       <div style={{
         fontWeight: 600, fontSize: 13, color: 'var(--text-primary)',
@@ -902,62 +970,14 @@ function DistillationFunnel({ data, onClickSource }: {
         </div>
       </div>
 
-      {/* Cited sources as green post-its */}
-      <div style={{
-        fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)',
-        marginTop: 4,
-      }}>
-        Cited in POV
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        {used.map((s: any, i: number) => {
-          const tilt = (seededRandom(`dist-${i}`) - 0.5) * 3;
-          return (
-            <div
-              key={s.url}
-              onClick={() => onClickSource({
-                id: `dist-used-${i}`,
-                title: truncate(s.title || getDomain(s.url), 45),
-                subtitle: getDomain(s.url),
-                stage: 'distillation',
-                status: 'survived',
-                detail: s,
-              })}
-              style={{
-                padding: '5px 8px',
-                borderRadius: 4,
-                fontSize: 10,
-                lineHeight: 1.3,
-                background: 'rgba(16,185,129,0.1)',
-                border: '1px solid rgba(16,185,129,0.2)',
-                cursor: 'pointer',
-                transform: `rotate(${tilt}deg)`,
-                transition: 'transform 0.12s',
-              }}
-            >
-              <div style={{
-                fontWeight: 500, color: 'var(--text-primary)',
-                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-              }}>
-                {truncate(s.title || getDomain(s.url), 40)}
-              </div>
-              <div style={{ fontSize: 9, color: 'var(--text-tertiary)' }}>
-                {getDomain(s.url)}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
       {/* Unused sources (collapsed by default) */}
-      {unused.length > 0 && <UnusedSourcesList unused={unused} onClickSource={onClickSource} />}
+      {unused.length > 0 && <UnusedSourcesList unused={unused} />}
     </div>
   );
 }
 
-function UnusedSourcesList({ unused, onClickSource }: {
+function UnusedSourcesList({ unused }: {
   unused: any[];
-  onClickSource: (postIt: PostIt) => void;
 }) {
   const [showUnused, setShowUnused] = useState(false);
 
@@ -980,48 +1000,33 @@ function UnusedSourcesList({ unused, onClickSource }: {
         }}
       >
         {showUnused ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-        {unused.length} gathered but unused
+        {unused.length} unused
       </button>
       {showUnused && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-          {unused.map((s: any, i: number) => {
-            const tilt = (seededRandom(`dist-un-${i}`) - 0.5) * 3;
-            return (
-              <div
-                key={s.url}
-                onClick={() => onClickSource({
-                  id: `dist-unused-${i}`,
-                  title: truncate(s.title || getDomain(s.url), 45),
-                  subtitle: getDomain(s.url),
-                  stage: 'distillation',
-                  status: 'unused',
-                  reason: 'Gathered but not cited',
-                  detail: s,
-                })}
-                style={{
-                  padding: '4px 8px',
-                  borderRadius: 4,
-                  fontSize: 10,
-                  background: 'rgba(217,119,6,0.06)',
-                  border: '1px solid rgba(217,119,6,0.12)',
-                  cursor: 'pointer',
-                  transform: `rotate(${tilt}deg)`,
-                  opacity: 0.75,
-                  transition: 'transform 0.12s',
-                }}
-              >
-                <div style={{
-                  fontWeight: 500, color: 'var(--text-primary)',
-                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                }}>
-                  {truncate(s.title || getDomain(s.url), 40)}
-                </div>
-                <div style={{ fontSize: 9, color: 'var(--text-tertiary)' }}>
-                  {getDomain(s.url)}
-                </div>
+          {unused.map((s: any, i: number) => (
+            <div
+              key={s.url || i}
+              style={{
+                padding: '4px 8px',
+                borderRadius: 4,
+                fontSize: 10,
+                background: 'rgba(217,119,6,0.06)',
+                border: '1px solid rgba(217,119,6,0.12)',
+                opacity: 0.75,
+              }}
+            >
+              <div style={{
+                fontWeight: 500, color: 'var(--text-primary)',
+                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+              }}>
+                {truncate(s.title || getDomain(s.url), 40)}
               </div>
-            );
-          })}
+              <div style={{ fontSize: 9, color: 'var(--text-tertiary)' }}>
+                {getDomain(s.url)}
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </>
@@ -1102,10 +1107,21 @@ function PostItCard({ postIt, onClick }: { postIt: PostIt; onClick: () => void }
 }
 
 /* ------------------------------------------------------------------ */
-/*  Detail Panel (click-to-expand)                                     */
+/*  Detail Panel (Level 3: click-to-expand)                            */
 /* ------------------------------------------------------------------ */
 
-function DetailPanel({ postIt, onClose }: { postIt: PostIt; onClose: () => void }) {
+function DetailPanel({ postIt, onClose, sourceUsageEvent }: { postIt: PostIt; onClose: () => void; sourceUsageEvent?: any }) {
+  // Find which POV section cited this source
+  const citedInSections: string[] = [];
+  if (postIt.detail?.url && sourceUsageEvent?.usedSources) {
+    const match = sourceUsageEvent.usedSources.find((s: any) => s.url === postIt.detail.url);
+    if (match?.sections) {
+      citedInSections.push(...match.sections);
+    } else if (match?.section) {
+      citedInSections.push(match.section);
+    }
+  }
+
   return (
     <div style={{
       position: 'fixed', top: 0, right: 0, bottom: 0, width: 380,
@@ -1177,6 +1193,20 @@ function DetailPanel({ postIt, onClose }: { postIt: PostIt; onClose: () => void 
         </a>
       )}
 
+      {postIt.detail?.snippet && (
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', marginBottom: 4, textTransform: 'uppercase' }}>
+            Snippet
+          </div>
+          <div style={{
+            fontSize: 12, padding: 8, background: 'var(--bg-input)',
+            borderRadius: 4, color: 'var(--text-secondary)', fontStyle: 'italic',
+          }}>
+            {postIt.detail.snippet}
+          </div>
+        </div>
+      )}
+
       {postIt.detail?.query && (
         <div style={{ marginBottom: 12 }}>
           <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', marginBottom: 4, textTransform: 'uppercase' }}>
@@ -1191,16 +1221,34 @@ function DetailPanel({ postIt, onClose }: { postIt: PostIt; onClose: () => void 
         </div>
       )}
 
-      {postIt.detail?.snippet && (
+      {postIt.detail?.category && (
         <div style={{ marginBottom: 12 }}>
           <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', marginBottom: 4, textTransform: 'uppercase' }}>
-            Snippet
+            Query Category
           </div>
           <div style={{
-            fontSize: 12, padding: 8, background: 'var(--bg-input)',
-            borderRadius: 4, color: 'var(--text-secondary)', fontStyle: 'italic',
+            fontSize: 12, padding: '4px 8px', background: 'var(--bg-input)',
+            borderRadius: 4, color: 'var(--text-secondary)', display: 'inline-block',
           }}>
-            {postIt.detail.snippet}
+            {postIt.detail.category}
+          </div>
+        </div>
+      )}
+
+      {citedInSections.length > 0 && (
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', marginBottom: 4, textTransform: 'uppercase' }}>
+            Cited in POV Section
+          </div>
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+            {citedInSections.map((section, i) => (
+              <span key={i} style={{
+                fontSize: 11, padding: '2px 8px', borderRadius: 4,
+                background: 'rgba(16,185,129,0.1)', color: '#10b981', fontWeight: 500,
+              }}>
+                {section}
+              </span>
+            ))}
           </div>
         </div>
       )}
@@ -1399,6 +1447,11 @@ export default function PostItView({ data }: { data: DebugData }) {
   const columns = useMemo(() => extractColumns(data), [data]);
   const [selectedPostIt, setSelectedPostIt] = useState<PostIt | null>(null);
 
+  // Get source usage event for detail panel
+  const sourceUsageEvent = useMemo(() => {
+    return (data.events || []).find(e => e.event === 'm1:source_usage');
+  }, [data]);
+
   // Check if there's any data at all
   const hasLegacySources = columns.some(c => c.id === 'sources' || c.id === 'distillation');
   if (!hasWebSearch && !hasLegacySources && columns.length === 0) return <EmptyState />;
@@ -1418,7 +1471,7 @@ export default function PostItView({ data }: { data: DebugData }) {
           <>
             <SourcesGrid data={data} onClickSource={setSelectedPostIt} />
             <ColumnArrow />
-            <DistillationFunnel data={data} onClickSource={setSelectedPostIt} />
+            <DistillationFunnel data={data} />
           </>
         )}
 
@@ -1443,7 +1496,7 @@ export default function PostItView({ data }: { data: DebugData }) {
         )}
       </div>
 
-      {/* Detail panel */}
+      {/* Detail panel (Level 3) */}
       {selectedPostIt && (
         <>
           <div
@@ -1453,7 +1506,7 @@ export default function PostItView({ data }: { data: DebugData }) {
               background: 'rgba(0,0,0,0.2)', zIndex: 99,
             }}
           />
-          <DetailPanel postIt={selectedPostIt} onClose={() => setSelectedPostIt(null)} />
+          <DetailPanel postIt={selectedPostIt} onClose={() => setSelectedPostIt(null)} sourceUsageEvent={sourceUsageEvent} />
         </>
       )}
     </div>
