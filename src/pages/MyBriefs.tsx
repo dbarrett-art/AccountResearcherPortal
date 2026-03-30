@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { supabase } from '../lib/supabase';
+import { supabase, workerFetch } from '../lib/supabase';
 import Layout from '../components/Layout';
 import Banner from '../components/Banner';
 import StatusBadge from '../components/StatusBadge';
@@ -127,10 +127,7 @@ export default function MyBriefs() {
       const updates: Record<string, any> = {};
       await Promise.all(ids.map(async (id) => {
         try {
-          const res = await fetch(
-            `https://go.accountresearch.workers.dev/progress/${id}`,
-            { headers: { 'Authorization': `Bearer ${session.access_token}` } }
-          );
+          const res = await workerFetch(`/progress/${id}`);
           if (res.ok) {
             const data = await res.json();
             if (data.progress) updates[id] = data.progress;
@@ -150,9 +147,9 @@ export default function MyBriefs() {
     if (!session) return;
     setRetrying(runId);
     try {
-      await fetch('https://go.accountresearch.workers.dev/retry', {
+      await workerFetch('/retry', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ run_id: runId }),
       });
     } catch { /* handled by realtime */ }
@@ -162,10 +159,7 @@ export default function MyBriefs() {
   const handleDelete = async (runId: string) => {
     if (!session) return;
     try {
-      const res = await fetch(
-        `https://go.accountresearch.workers.dev/run/${runId}`,
-        { method: 'DELETE', headers: { 'Authorization': `Bearer ${session.access_token}` } }
-      );
+      const res = await workerFetch(`/run/${runId}`, { method: 'DELETE' });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: 'Delete failed' }));
         alert(err.error || 'Delete failed');
@@ -182,12 +176,9 @@ export default function MyBriefs() {
     if (!session || !run.url) return;
     setRerunning(run.id);
     try {
-      const res = await fetch('https://go.accountresearch.workers.dev/submit', {
+      const res = await workerFetch('/submit', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           company: run.company,
           url: run.url,

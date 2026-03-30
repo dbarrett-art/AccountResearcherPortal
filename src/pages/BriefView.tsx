@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
+import { supabase, workerFetch } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import Layout from '../components/Layout';
 import TableSkeleton from '../components/TableSkeleton';
@@ -884,7 +884,7 @@ function RunHistory({ currentRunId, company }: { currentRunId: string; company: 
 /*  Feedback Panel                                                     */
 /* ------------------------------------------------------------------ */
 
-function FeedbackPanel({ runId, session }: { runId: string; session: any }) {
+function FeedbackPanel({ runId }: { runId: string }) {
   const [open, setOpen] = useState(false);
   const [rating, setRating] = useState<number | null>(null);
   const [accuracy, setAccuracy] = useState<number | null>(null);
@@ -897,12 +897,9 @@ function FeedbackPanel({ runId, session }: { runId: string; session: any }) {
     if (!rating) return;
     setSubmitting(true);
     try {
-      await fetch(`https://go.accountresearch.workers.dev/feedback/${runId}`, {
+      await workerFetch(`/feedback/${runId}`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token}`,
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ rating, accuracy_rating: accuracy, usefulness_rating: usefulness, comment: comment || null }),
       });
       setSubmitted(true);
@@ -1270,7 +1267,7 @@ function BriefContent({ pov, personas, runId, session }: { pov: any; personas: a
       {personas && <ContactMatrix personas={personas} />}
 
       {/* 17. Feedback */}
-      {runId && session && <FeedbackPanel runId={runId} session={session} />}
+      {runId && session && <FeedbackPanel runId={runId} />}
     </>
   );
 }
@@ -1301,12 +1298,9 @@ export default function BriefView() {
     if (!session || !run) return;
     setRunningEnglish(true);
     try {
-      await fetch('https://go.accountresearch.workers.dev/submit', {
+      await workerFetch('/submit', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           company: run.company,
           url: run.url,
@@ -1322,13 +1316,7 @@ export default function BriefView() {
     if (!session || shareStatus === 'loading') return;
     setShareStatus('loading');
     try {
-      const res = await fetch(
-        `https://go.accountresearch.workers.dev/share/${run_id}`,
-        {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${session.access_token}` },
-        }
-      );
+      const res = await workerFetch(`/share/${run_id}`, { method: 'POST' });
       const data = await res.json();
       const shareUrl = `${window.location.origin}/shared/${data.token}`;
       await navigator.clipboard.writeText(shareUrl);
@@ -1342,13 +1330,7 @@ export default function BriefView() {
   const handleDelete = async () => {
     setDeleting(true);
     try {
-      const res = await fetch(
-        `https://go.accountresearch.workers.dev/run/${run_id}`,
-        {
-          method: 'DELETE',
-          headers: { 'Authorization': `Bearer ${session?.access_token}` },
-        }
-      );
+      const res = await workerFetch(`/run/${run_id}`, { method: 'DELETE' });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: 'Delete failed' }));
         alert(err.error || 'Delete failed');
@@ -1418,12 +1400,9 @@ export default function BriefView() {
     setChatMessages([...newMessages, assistantMessage]);
 
     try {
-      const res = await fetch('https://go.accountresearch.workers.dev/chat', {
+      const res = await workerFetch('/chat', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token}`,
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           run_id,
           messages: newMessages.map(m => ({ role: m.role, content: m.content })),

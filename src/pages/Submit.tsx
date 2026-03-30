@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import Layout from '../components/Layout';
 import Banner from '../components/Banner';
-import { supabase } from '../lib/supabase';
+import { supabase, workerFetch } from '../lib/supabase';
 import usePageTitle from '../hooks/usePageTitle';
 
 type BannerType = 'info' | 'warning' | 'error' | 'success';
@@ -127,12 +127,9 @@ export default function Submit() {
     const timeout = setTimeout(() => controller.abort(), 8000);
 
     try {
-      const res = await fetch('https://go.accountresearch.workers.dev/submit', {
+      const res = await workerFetch('/submit', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ company, url: normalisedUrl, include_contacts: includeContacts, market }),
         signal: controller.signal,
       });

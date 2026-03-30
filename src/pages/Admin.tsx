@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { supabase } from '../lib/supabase';
+import { supabase, workerFetch } from '../lib/supabase';
 import Layout from '../components/Layout';
 import StatusBadge from '../components/StatusBadge';
 import ProgressBar from '../components/ProgressBar';
@@ -403,12 +403,9 @@ function RunMonitorTab() {
     if (!session || !run.url) return;
     setRerunning(run.id);
     try {
-      const res = await fetch('https://go.accountresearch.workers.dev/submit', {
+      const res = await workerFetch('/submit', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           company: run.company,
           url: run.url,
@@ -431,13 +428,7 @@ function RunMonitorTab() {
 
   const handleDelete = async (runId: string) => {
     try {
-      const res = await fetch(
-        `https://go.accountresearch.workers.dev/run/${runId}`,
-        {
-          method: 'DELETE',
-          headers: { 'Authorization': `Bearer ${session?.access_token}` },
-        }
-      );
+      const res = await workerFetch(`/run/${runId}`, { method: 'DELETE' });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: 'Delete failed' }));
         alert(err.error || 'Delete failed');
@@ -455,10 +446,7 @@ function RunMonitorTab() {
     setLogsLoading(true);
     setLogData(null);
     try {
-      const res = await fetch(
-        `https://go.accountresearch.workers.dev/gha-logs?run_id=${runId}`,
-        { headers: { 'Authorization': `Bearer ${session?.access_token}` } }
-      );
+      const res = await workerFetch(`/gha-logs?run_id=${runId}`);
       const data = await res.json();
       setLogData(data);
     } catch (err: any) {
@@ -509,10 +497,7 @@ function RunMonitorTab() {
       const updates: Record<string, any> = {};
       await Promise.all(ids.map(async (id) => {
         try {
-          const res = await fetch(
-            `https://go.accountresearch.workers.dev/progress/${id}`,
-            { headers: { 'Authorization': `Bearer ${session.access_token}` } }
-          );
+          const res = await workerFetch(`/progress/${id}`);
           if (res.ok) {
             const data = await res.json();
             if (data.progress) updates[id] = data.progress;
@@ -1095,7 +1080,6 @@ interface CreditInfo {
 }
 
 function ApiCreditsTab() {
-  const { session } = useAuth();
   const [credits, setCredits] = useState<CreditInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchedAt, setFetchedAt] = useState('');
@@ -1103,9 +1087,7 @@ function ApiCreditsTab() {
   const fetchCredits = async () => {
     setLoading(true);
     try {
-      const res = await fetch('https://go.accountresearch.workers.dev/api-credits', {
-        headers: { 'Authorization': `Bearer ${session?.access_token}` },
-      });
+      const res = await workerFetch('/api-credits');
       const data = await res.json();
       setCredits(data.credits || []);
       setFetchedAt(data.fetched_at || new Date().toISOString());
