@@ -8,11 +8,12 @@ import StatusBadge from '../components/StatusBadge';
 import ProgressBar from '../components/ProgressBar';
 import TableSkeleton from '../components/TableSkeleton';
 import usePageTitle from '../hooks/usePageTitle';
-import { FileText, Table, RefreshCw, Eye, Clock } from 'lucide-react';
+import { FileText, Table, RefreshCw, Eye, Clock, Trash2, RotateCcw } from 'lucide-react';
 
 interface Run {
   id: string;
   company: string;
+  url: string | null;
   created_at: string;
   status: 'queued' | 'running' | 'complete' | 'failed';
   summary: string | null;
@@ -71,12 +72,15 @@ export default function MyBriefs() {
   const [healthOk, setHealthOk] = useState(true);
   const [retrying, setRetrying] = useState<string | null>(null);
   const [progressMap, setProgressMap] = useState<Record<string, { step: number; total: number; module: string | null; pct: number }>>({});
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [rerunConfirm, setRerunConfirm] = useState<string | null>(null);
+  const [rerunning, setRerunning] = useState<string | null>(null);
 
   const fetchRuns = useCallback(async () => {
     if (!userProfile) return;
     const { data } = await supabase
       .from('runs')
-      .select('id, company, created_at, status, summary, pdf_url, excel_url, error_message, brief_id, market')
+      .select('id, company, url, created_at, status, summary, pdf_url, excel_url, error_message, brief_id, market')
       .eq('user_id', userProfile.id)
       .order('created_at', { ascending: false });
     if (data) setRuns(data as Run[]);
@@ -155,6 +159,55 @@ export default function MyBriefs() {
     setRetrying(null);
   };
 
+  const handleDelete = async (runId: string) => {
+    if (!session) return;
+    try {
+      const res = await fetch(
+        `https://go.accountresearch.workers.dev/run/${runId}`,
+        { method: 'DELETE', headers: { 'Authorization': `Bearer ${session.access_token}` } }
+      );
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Delete failed' }));
+        alert(err.error || 'Delete failed');
+        return;
+      }
+      setRuns(prev => prev.filter(r => r.id !== runId));
+      setDeleteConfirm(null);
+    } catch (err: any) {
+      alert('Delete failed: ' + err.message);
+    }
+  };
+
+  const handleRerun = async (run: Run) => {
+    if (!session || !run.url) return;
+    setRerunning(run.id);
+    try {
+      const res = await fetch('https://go.accountresearch.workers.dev/submit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          company: run.company,
+          url: run.url,
+          include_contacts: true,
+          market: run.market || 'auto',
+          fresh: true,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Re-run failed' }));
+        alert(err.error || 'Re-run failed');
+      }
+      setRerunConfirm(null);
+    } catch (err: any) {
+      alert('Re-run failed: ' + err.message);
+    } finally {
+      setRerunning(null);
+    }
+  };
+
   const thStyle: React.CSSProperties = {
     fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', padding: '10px 16px', textAlign: 'left',
   };
@@ -204,6 +257,7 @@ export default function MyBriefs() {
                 <th style={thStyle}>Status</th>
                 <th style={thStyle}>Summary</th>
                 <th style={{ ...thStyle, textAlign: 'center', width: 80 }}>Files</th>
+                {userProfile?.role === 'admin' && <th style={{ ...thStyle, width: 60 }}></th>}
               </tr>
             </thead>
             <tbody>
@@ -291,12 +345,138 @@ export default function MyBriefs() {
                       )}
                     </div>
                   </td>
+                  {userProfile?.role === 'admin' && (
+                    <td style={{ padding: '11px 8px' }}>
+                      <div style={{ display: 'flex', gap: 4 }}>
+                        {run.status === 'complete' && run.url && (
+                          <button
+                            onClick={() => setRerunConfirm(run.id)}
+                            title="Re-run with fresh data"
+                            disabled={rerunning === run.id}
+                            style={{
+                              background: 'transparent', border: 'none',
+                              color: 'var(--text-tertiary)', cursor: 'pointer',
+                              padding: 4, borderRadius: 4, transition: '80ms',
+                              opacity: rerunning === run.id ? 0.4 : 1,
+                            }}
+                            onMouseEnter={e => (e.currentTarget.style.color = 'var(--accent)')}
+                            onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-tertiary)')}
+                          >
+                            <RotateCcw size={13} />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => setDeleteConfirm(run.id)}
+                          title="Delete run"
+                          style={{
+                            background: 'transparent', border: 'none',
+                            color: 'var(--text-tertiary)', cursor: 'pointer',
+                            padding: 4, borderRadius: 4, transition: '80ms',
+                          }}
+                          onMouseEnter={e => (e.currentTarget.style.color = 'var(--status-failed)')}
+                          onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-tertiary)')}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       )}
+
+      {/* Delete confirmation modal */}
+      {deleteConfirm && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 300,
+        }} onClick={() => setDeleteConfirm(null)}>
+          <div onClick={e => e.stopPropagation()} style={{
+            background: 'var(--bg-surface)', border: '1px solid var(--border)',
+            borderRadius: 8, padding: 24, width: 360,
+          }}>
+            <div style={{ fontWeight: 500, marginBottom: 8 }}>Delete this brief?</div>
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 20, lineHeight: 1.5 }}>
+              This will permanently delete the run record, brief data, and any uploaded PDF/Excel files.
+              This cannot be undone.
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setDeleteConfirm(null)}
+                style={{
+                  background: 'transparent', border: '1px solid var(--border-strong)',
+                  color: 'var(--text-secondary)', padding: '6px 14px',
+                  fontSize: 13, borderRadius: 6, cursor: 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleDelete(deleteConfirm)}
+                style={{
+                  background: 'var(--status-failed)', border: 'none',
+                  color: '#fff', padding: '6px 14px',
+                  fontSize: 13, borderRadius: 6, cursor: 'pointer',
+                  fontWeight: 500,
+                }}
+              >
+                Delete permanently
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Re-run confirmation modal */}
+      {rerunConfirm && (() => {
+        const run = runs.find(r => r.id === rerunConfirm);
+        return (
+          <div style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            zIndex: 300,
+          }} onClick={() => setRerunConfirm(null)}>
+            <div onClick={e => e.stopPropagation()} style={{
+              background: 'var(--bg-surface)', border: '1px solid var(--border)',
+              borderRadius: 8, padding: 24, width: 360,
+            }}>
+              <div style={{ fontWeight: 500, marginBottom: 8 }}>Re-run with fresh data?</div>
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 20, lineHeight: 1.5 }}>
+                This will re-run the pipeline for <strong>{run?.company}</strong> without using cached data. This uses 1 credit.
+              </div>
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <button
+                  onClick={() => setRerunConfirm(null)}
+                  style={{
+                    background: 'transparent', border: '1px solid var(--border-strong)',
+                    color: 'var(--text-secondary)', padding: '6px 14px',
+                    fontSize: 13, borderRadius: 6, cursor: 'pointer',
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => run && handleRerun(run)}
+                  disabled={rerunning === rerunConfirm}
+                  style={{
+                    background: 'var(--accent)', border: 'none',
+                    color: '#fff', padding: '6px 14px',
+                    fontSize: 13, borderRadius: 6, cursor: 'pointer',
+                    fontWeight: 500,
+                    opacity: rerunning === rerunConfirm ? 0.4 : 1,
+                  }}
+                >
+                  {rerunning === rerunConfirm ? 'Submitting...' : 'Re-run'}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </Layout>
   );
 }

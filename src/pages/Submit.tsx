@@ -54,7 +54,7 @@ export default function Submit() {
   const [company, setCompany] = useState('');
   const [url, setUrl] = useState('');
   const [market, setMarket] = useState('auto');
-  const [includeContacts, setIncludeContacts] = useState(false);
+  const [includeContacts] = useState(true); // Always include contacts — M2 now ~$0.02 via Apollo
   const [submitting, setSubmitting] = useState(false);
   const [banner, setBanner] = useState<BannerState | null>(null);
   const [duplicate, setDuplicate] = useState<{ name: string; days: number; user: string } | null>(null);
@@ -250,25 +250,7 @@ export default function Submit() {
             )}
           </div>
 
-          {userProfile?.role === 'admin' && (
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 10,
-              padding: '10px 14px',
-              background: 'rgba(94,106,210,0.06)',
-              border: '1px solid rgba(94,106,210,0.2)',
-              borderRadius: 6, marginBottom: 16,
-            }}>
-              <input
-                type="checkbox" id="include-contacts"
-                checked={includeContacts}
-                onChange={(e) => setIncludeContacts(e.target.checked)}
-                style={{ cursor: 'pointer' }}
-              />
-              <label htmlFor="include-contacts" style={{ fontSize: 13, cursor: 'pointer' }}>
-                Include contacts (full run — ~$7.50, ~15 mins)
-              </label>
-            </div>
-          )}
+          {/* Contacts always included — M2 now ~$0.02 via Apollo (was ~$6.37 with EnrichLayer) */}
 
           <button
             type="submit" disabled={submitting}
