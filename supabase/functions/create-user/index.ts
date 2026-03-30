@@ -1,6 +1,12 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders } from '../_shared/cors.ts'
 
+const json = (body: Record<string, unknown>, status = 200) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  })
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -10,13 +16,9 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
-    // Verify caller identity
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'Missing auth header' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+      return json({ success: false, error: 'Missing auth header' })
     }
 
     const adminClient = createClient(supabaseUrl, serviceRoleKey, {
@@ -28,10 +30,7 @@ Deno.serve(async (req) => {
       authHeader.replace('Bearer ', '')
     )
     if (authError || !caller) {
-      return new Response(JSON.stringify({ error: 'Invalid auth token' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+      return json({ success: false, error: `Auth failed: ${authError?.message || 'no user'}` })
     }
 
     const { data: callerProfile } = await adminClient
@@ -41,24 +40,16 @@ Deno.serve(async (req) => {
       .single()
 
     if (callerProfile?.role !== 'admin') {
-      return new Response(JSON.stringify({ error: 'Admin access required' }), {
-        status: 403,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+      return json({ success: false, error: `Admin required. Your role: ${callerProfile?.role || 'unknown'}` })
     }
 
-    // Parse request
     const { email, name, role, credits } = await req.json()
 
     if (!email) {
-      return new Response(JSON.stringify({ error: 'Email is required' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+      return json({ success: false, error: 'Email is required' })
     }
 
     // Invite user — sends them an email with a magic link
-    // The handle_new_user trigger will auto-create the users row
     const { data: inviteData, error: createError } = await adminClient.auth.admin.inviteUserByEmail(
       email,
       {
@@ -70,18 +61,12 @@ Deno.serve(async (req) => {
     )
 
     if (createError) {
-      return new Response(JSON.stringify({ error: createError.message }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+      return json({ success: false, error: `Invite failed: ${createError.message}` })
     }
 
     const newUser = inviteData?.user
     if (!newUser) {
-      return new Response(JSON.stringify({ error: 'User creation returned no data' }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+      return json({ success: false, error: 'Invite returned no user data' })
     }
 
     // The trigger creates with role='ae' and credits=5 by default.
@@ -92,13 +77,17 @@ Deno.serve(async (req) => {
     if (name) updates.name = name
 
     if (Object.keys(updates).length > 0) {
-      await adminClient
+      const { error: updateError } = await adminClient
         .from('users')
         .update(updates)
         .eq('id', newUser.id)
+      if (updateError) {
+        // User was created but profile update failed — not fatal
+        console.error('Profile update failed:', updateError.message)
+      }
     }
 
-    return new Response(JSON.stringify({
+    return json({
       success: true,
       user: {
         id: newUser.id,
@@ -107,14 +96,8 @@ Deno.serve(async (req) => {
         role: role || 'ae',
         credits: credits ?? 5,
       },
-    }), {
-      status: 200,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   } catch (err) {
-    return new Response(JSON.stringify({ error: (err as Error).message }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
+    return json({ success: false, error: `Unexpected: ${(err as Error).message}` })
   }
 })
