@@ -78,7 +78,6 @@ function ConfirmDialog({ message, onConfirm, onCancel }: {
 
 // --- Tab: Users ---
 function UsersTab({ adminId }: { adminId: string }) {
-  const { session } = useAuth();
   const [users, setUsers] = useState<UserRow[]>([]);
   const [managers, setManagers] = useState<UserRow[]>([]);
   const [grantAmounts, setGrantAmounts] = useState<Record<string, number>>({});
@@ -99,25 +98,17 @@ function UsersTab({ adminId }: { adminId: string }) {
     setCreating(true);
     setCreateResult(null);
     try {
-      const res = await fetch(
-        'https://yeraphdhllaylogqiqht.supabase.co/functions/v1/create-user',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session?.access_token}`,
-          },
-          body: JSON.stringify({
-            email: newEmail.trim(),
-            name: newName.trim() || undefined,
-            role: newRole,
-            credits: newCredits,
-          }),
-        }
-      );
-      const data = await res.json();
-      if (!res.ok) {
-        setCreateResult({ ok: false, message: data.error || 'Failed to create user' });
+      const { data, error: fnError } = await supabase.functions.invoke('create-user', {
+        body: {
+          email: newEmail.trim(),
+          name: newName.trim() || undefined,
+          role: newRole,
+          credits: newCredits,
+        },
+      });
+      if (fnError) {
+        const errMsg = typeof data === 'object' && data?.error ? data.error : fnError.message;
+        setCreateResult({ ok: false, message: errMsg });
       } else {
         setCreateResult({ ok: true, message: `Created ${data.user.email}` });
         // Add to local list
