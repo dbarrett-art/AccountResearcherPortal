@@ -6,7 +6,7 @@ import StatusBadge from '../components/StatusBadge';
 import ProgressBar from '../components/ProgressBar';
 import TableSkeleton from '../components/TableSkeleton';
 import usePageTitle from '../hooks/usePageTitle';
-import { Users, Activity, Heart, BarChart3, ExternalLink, Cpu, FileText, X, RefreshCw, Trash2 } from 'lucide-react';
+import { Users, Activity, Heart, BarChart3, ExternalLink, Cpu, FileText, X, RefreshCw, Trash2, UserPlus, Check } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 type Tab = 'users' | 'runs' | 'health' | 'credits' | 'api-credits';
@@ -78,11 +78,70 @@ function ConfirmDialog({ message, onConfirm, onCancel }: {
 
 // --- Tab: Users ---
 function UsersTab({ adminId }: { adminId: string }) {
+  const { session } = useAuth();
   const [users, setUsers] = useState<UserRow[]>([]);
   const [managers, setManagers] = useState<UserRow[]>([]);
   const [grantAmounts, setGrantAmounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [confirm, setConfirm] = useState<{ msg: string; action: () => void } | null>(null);
+
+  // Add user form state
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newEmail, setNewEmail] = useState('');
+  const [newName, setNewName] = useState('');
+  const [newRole, setNewRole] = useState('ae');
+  const [newCredits, setNewCredits] = useState(5);
+  const [creating, setCreating] = useState(false);
+  const [createResult, setCreateResult] = useState<{ ok: boolean; message: string } | null>(null);
+
+  const createUser = async () => {
+    if (!newEmail.trim()) return;
+    setCreating(true);
+    setCreateResult(null);
+    try {
+      const res = await fetch(
+        'https://yeraphdhllaylogqiqht.supabase.co/functions/v1/create-user',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session?.access_token}`,
+          },
+          body: JSON.stringify({
+            email: newEmail.trim(),
+            name: newName.trim() || undefined,
+            role: newRole,
+            credits: newCredits,
+          }),
+        }
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        setCreateResult({ ok: false, message: data.error || 'Failed to create user' });
+      } else {
+        setCreateResult({ ok: true, message: `Created ${data.user.email}` });
+        // Add to local list
+        setUsers((prev) => [...prev, {
+          id: data.user.id,
+          email: data.user.email,
+          name: data.user.name,
+          role: data.user.role,
+          credits_remaining: data.user.credits,
+          manager_id: null,
+        }]);
+        // Reset form
+        setNewEmail('');
+        setNewName('');
+        setNewRole('ae');
+        setNewCredits(5);
+        setTimeout(() => setCreateResult(null), 4000);
+      }
+    } catch (err: any) {
+      setCreateResult({ ok: false, message: err.message });
+    } finally {
+      setCreating(false);
+    }
+  };
 
   useEffect(() => {
     (async () => {
@@ -147,6 +206,123 @@ function UsersTab({ adminId }: { adminId: string }) {
   return (
     <>
       {confirm && <ConfirmDialog message={confirm.msg} onConfirm={confirm.action} onCancel={() => setConfirm(null)} />}
+
+      {/* Add User */}
+      <div style={{ marginBottom: 20 }}>
+        {!showAddForm ? (
+          <button
+            onClick={() => setShowAddForm(true)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              background: 'var(--accent)', color: '#fff', border: 'none',
+              padding: '7px 14px', fontSize: 13, fontWeight: 500, borderRadius: 6,
+              cursor: 'pointer',
+            }}
+          >
+            <UserPlus size={14} /> Add User
+          </button>
+        ) : (
+          <div style={{
+            background: 'var(--bg-surface)', border: '1px solid var(--border)',
+            borderRadius: 8, padding: 20,
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div style={{ fontSize: 14, fontWeight: 500 }}>Add User</div>
+              <button onClick={() => { setShowAddForm(false); setCreateResult(null); }} style={{
+                background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer',
+              }}>
+                <X size={14} />
+              </button>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+              <div>
+                <label style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Email *</label>
+                <input
+                  type="email"
+                  value={newEmail}
+                  onChange={(e) => setNewEmail(e.target.value)}
+                  placeholder="user@company.com"
+                  style={{
+                    width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-strong)',
+                    borderRadius: 6, padding: '8px 10px', fontSize: 13, color: 'var(--text-primary)',
+                    outline: 'none', boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Full Name</label>
+                <input
+                  type="text"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  placeholder="Jane Doe"
+                  style={{
+                    width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-strong)',
+                    borderRadius: 6, padding: '8px 10px', fontSize: 13, color: 'var(--text-primary)',
+                    outline: 'none', boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Role</label>
+                <select
+                  value={newRole}
+                  onChange={(e) => setNewRole(e.target.value)}
+                  style={{
+                    width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-strong)',
+                    borderRadius: 6, padding: '8px 10px', fontSize: 13, color: 'var(--text-primary)',
+                    outline: 'none', boxSizing: 'border-box',
+                  }}
+                >
+                  <option value="ae">AE</option>
+                  <option value="manager">Manager</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Credits</label>
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={newCredits}
+                  onChange={(e) => setNewCredits(parseInt(e.target.value) || 0)}
+                  style={{
+                    width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-strong)',
+                    borderRadius: 6, padding: '8px 10px', fontSize: 13, color: 'var(--text-primary)',
+                    outline: 'none', boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <button
+                onClick={createUser}
+                disabled={creating || !newEmail.trim()}
+                style={{
+                  background: creating || !newEmail.trim() ? 'var(--bg-elevated)' : 'var(--accent)',
+                  color: creating || !newEmail.trim() ? 'var(--text-tertiary)' : '#fff',
+                  border: 'none', padding: '7px 16px', fontSize: 13,
+                  fontWeight: 500, borderRadius: 6, cursor: creating ? 'wait' : 'pointer',
+                }}
+              >
+                {creating ? 'Creating...' : 'Create User'}
+              </button>
+              {createResult && (
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  fontSize: 13,
+                  color: createResult.ok ? 'var(--status-complete-text)' : 'var(--status-failed)',
+                }}>
+                  {createResult.ok && <Check size={14} />}
+                  {createResult.message}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
       <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
