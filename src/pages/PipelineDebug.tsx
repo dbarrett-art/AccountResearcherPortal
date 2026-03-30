@@ -6,8 +6,9 @@ import usePageTitle from '../hooks/usePageTitle';
 import {
   ChevronDown, ChevronRight, Search, Upload, Clock, DollarSign,
   Cpu, Globe, Users, Zap, FileText, Layers, AlertTriangle, CheckCircle,
-  XCircle, ArrowRight, Filter, Activity
+  XCircle, ArrowRight, Filter, Activity, LayoutGrid, StickyNote
 } from 'lucide-react';
+import PostItView from '../components/PostItView';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -754,6 +755,7 @@ export default function PipelineDebug() {
   const [selectedModule, setSelectedModule] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [runCompany, setRunCompany] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'modules' | 'postit'>('modules');
 
   usePageTitle(rawData ? `Debug: ${rawData.company}` : 'Pipeline Debug');
 
@@ -888,16 +890,50 @@ export default function PipelineDebug() {
               {parsed?.generatedAt ? new Date(parsed.generatedAt).toLocaleString() : ''}
             </div>
           </div>
-          <button
-            onClick={() => { setRawData(null); setSelectedModule(null); setSearchQuery(''); setError(null); }}
-            style={{
-              padding: '6px 12px', borderRadius: 6, fontSize: 12, fontWeight: 500,
-              background: 'var(--bg-elevated)', border: '1px solid var(--border)',
-              color: 'var(--text-secondary)', cursor: 'pointer',
-            }}
-          >
-            Load different file
-          </button>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {/* View toggle */}
+            <div style={{
+              display: 'flex', borderRadius: 6, overflow: 'hidden',
+              border: '1px solid var(--border)',
+            }}>
+              <button
+                onClick={() => setViewMode('modules')}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 4,
+                  padding: '6px 12px', fontSize: 12, fontWeight: 500,
+                  background: viewMode === 'modules' ? 'var(--accent-subtle)' : 'var(--bg-elevated)',
+                  color: viewMode === 'modules' ? 'var(--accent)' : 'var(--text-secondary)',
+                  border: 'none', borderRight: '1px solid var(--border)',
+                  cursor: 'pointer',
+                }}
+              >
+                <LayoutGrid size={13} /> Modules
+              </button>
+              <button
+                onClick={() => setViewMode('postit')}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 4,
+                  padding: '6px 12px', fontSize: 12, fontWeight: 500,
+                  background: viewMode === 'postit' ? 'var(--accent-subtle)' : 'var(--bg-elevated)',
+                  color: viewMode === 'postit' ? 'var(--accent)' : 'var(--text-secondary)',
+                  border: 'none', cursor: 'pointer',
+                }}
+              >
+                <StickyNote size={13} /> Pipeline Flow
+              </button>
+            </div>
+
+            <button
+              onClick={() => { setRawData(null); setSelectedModule(null); setSearchQuery(''); setError(null); }}
+              style={{
+                padding: '6px 12px', borderRadius: 6, fontSize: 12, fontWeight: 500,
+                background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+                color: 'var(--text-secondary)', cursor: 'pointer',
+              }}
+            >
+              Load different file
+            </button>
+          </div>
         </div>
 
         {/* Summary stats */}
@@ -926,80 +962,86 @@ export default function PipelineDebug() {
         {/* Data flow */}
         {parsed && <DataFlowBar modules={parsed.modules} />}
 
-        {/* Search */}
-        <div style={{ position: 'relative', marginBottom: 16 }}>
-          <Search size={14} style={{ position: 'absolute', left: 10, top: 9, color: 'var(--text-tertiary)' }} />
-          <input
-            type="text"
-            placeholder="Search events..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            style={{
-              width: '100%', padding: '8px 8px 8px 30px', borderRadius: 6,
-              border: '1px solid var(--border)', background: 'var(--bg-input)',
-              color: 'var(--text-primary)', fontSize: 13, outline: 'none',
-              fontFamily: 'var(--font)',
-            }}
-          />
-        </div>
-
-        {/* Module cards + detail panel */}
-        <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr', gap: 16 }}>
-          {/* Left: module cards */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {filteredModules.map(mod => (
-              <PipelineCard
-                key={mod.id}
-                mod={mod}
-                selected={selectedMod?.id === mod.id}
-                onClick={() => setSelectedModule(mod.id)}
-                totalMs={parsed?.totalDurationMs || 1}
+        {viewMode === 'postit' && rawData ? (
+          <PostItView data={rawData} />
+        ) : (
+          <>
+            {/* Search */}
+            <div style={{ position: 'relative', marginBottom: 16 }}>
+              <Search size={14} style={{ position: 'absolute', left: 10, top: 9, color: 'var(--text-tertiary)' }} />
+              <input
+                type="text"
+                placeholder="Search events..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={{
+                  width: '100%', padding: '8px 8px 8px 30px', borderRadius: 6,
+                  border: '1px solid var(--border)', background: 'var(--bg-input)',
+                  color: 'var(--text-primary)', fontSize: 13, outline: 'none',
+                  fontFamily: 'var(--font)',
+                }}
               />
-            ))}
-
-            {/* Credit summary */}
-            {parsed && Object.keys(parsed.totalCredits).length > 0 && (
-              <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 12, marginTop: 8 }}>
-                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  Credit Summary
-                </div>
-                {Object.entries(parsed.totalCredits).map(([api, count]) => (
-                  <div key={api} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--text-secondary)', padding: '2px 0' }}>
-                    <span>{api}</span>
-                    <span>{count}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* File drop fallback */}
-            <div style={{ marginTop: 8 }}>
-              <FileDropZone onData={(data) => { setRawData(data); setError(null); setSelectedModule(null); setSearchQuery(''); }} />
             </div>
-          </div>
 
-          {/* Right: detail panel */}
-          <div style={{
-            background: 'var(--bg-surface)', border: '1px solid var(--border)',
-            borderRadius: 8, padding: 16, minHeight: 400,
-          }}>
-            {selectedMod ? (
-              <>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                  <h2 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)' }}>{selectedMod.label}</h2>
-                  <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
-                    {fmtMs(selectedMod.durationMs)} · {selectedMod.events.length} events
-                  </span>
+            {/* Module cards + detail panel */}
+            <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr', gap: 16 }}>
+              {/* Left: module cards */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {filteredModules.map(mod => (
+                  <PipelineCard
+                    key={mod.id}
+                    mod={mod}
+                    selected={selectedMod?.id === mod.id}
+                    onClick={() => setSelectedModule(mod.id)}
+                    totalMs={parsed?.totalDurationMs || 1}
+                  />
+                ))}
+
+                {/* Credit summary */}
+                {parsed && Object.keys(parsed.totalCredits).length > 0 && (
+                  <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 12, marginTop: 8 }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      Credit Summary
+                    </div>
+                    {Object.entries(parsed.totalCredits).map(([api, count]) => (
+                      <div key={api} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--text-secondary)', padding: '2px 0' }}>
+                        <span>{api}</span>
+                        <span>{count}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* File drop fallback */}
+                <div style={{ marginTop: 8 }}>
+                  <FileDropZone onData={(data) => { setRawData(data); setError(null); setSelectedModule(null); setSearchQuery(''); }} />
                 </div>
-                <ModuleDetail mod={selectedMod} totalMs={parsed?.totalDurationMs || 1} />
-              </>
-            ) : (
-              <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-tertiary)' }}>
-                Select a module to view details
               </div>
-            )}
-          </div>
-        </div>
+
+              {/* Right: detail panel */}
+              <div style={{
+                background: 'var(--bg-surface)', border: '1px solid var(--border)',
+                borderRadius: 8, padding: 16, minHeight: 400,
+              }}>
+                {selectedMod ? (
+                  <>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                      <h2 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)' }}>{selectedMod.label}</h2>
+                      <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
+                        {fmtMs(selectedMod.durationMs)} · {selectedMod.events.length} events
+                      </span>
+                    </div>
+                    <ModuleDetail mod={selectedMod} totalMs={parsed?.totalDurationMs || 1} />
+                  </>
+                ) : (
+                  <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-tertiary)' }}>
+                    Select a module to view details
+                  </div>
+                )}
+              </div>
+            </div>
+          </>
+        )}
       </div>
     );
   }
