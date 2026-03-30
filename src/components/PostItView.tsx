@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { ChevronRight, X, ExternalLink } from 'lucide-react';
+import { ChevronRight, ChevronDown, X, ExternalLink, Search } from 'lucide-react';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -43,6 +43,97 @@ interface Column {
   postIts: PostIt[];
 }
 
+interface QueryGroup {
+  category: string;
+  query: string;
+  results: { url: string; title: string; snippet?: string }[];
+  keptCount: number;
+  unusedCount: number;
+  droppedCount: number;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Query categorisation — maps query strings to human-readable labels */
+/* ------------------------------------------------------------------ */
+
+function categoriseQuery(query: string): string {
+  const q = query.toLowerCase();
+
+  // Q1: Investor relations & strategic direction
+  if ((q.includes('annual report') || q.includes('investor day') || q.includes('earnings call') || q.includes('capital markets day')) && q.includes('strategy'))
+    return 'Investor relations';
+
+  // Q2: Press releases & announcements
+  if (q.includes('press release') || q.includes('newsroom') || (q.includes('announces') && (q.includes('appoints') || q.includes('launches') || q.includes('acquires'))))
+    return 'Press releases';
+
+  // Q3: Product scale & user metrics
+  if ((q.includes('million users') || q.includes('million customers') || q.includes('million downloads') || q.includes('mau') || q.includes('dau') || q.includes('active users') || q.includes('transactions per') || q.includes('nps')) && (q.includes('app') || q.includes('platform') || q.includes('digital')))
+    return 'Product scale';
+
+  // Q4: Executive leadership & voices
+  if ((q.includes('ceo') || q.includes('cto') || q.includes('cpo') || q.includes('cdo') || q.includes('chief design') || q.includes('vp product') || q.includes('vp design') || q.includes('head of design')) && (q.includes('interview') || q.includes('podcast') || q.includes('keynote') || q.includes('fireside') || q.includes('panel')))
+    return 'Executive voices';
+
+  // Q5: Design system & tooling — must check before generic design
+  if (q.includes('design system') || q.includes('component library') || q.includes('design tokens') || q.includes('designops') || q.includes('penpot') || (q.includes('figma') && (q.includes('migration') || q.includes('enterprise') || q.includes('governance'))))
+    return 'Design tooling';
+
+  // Q9: Figma enterprise signals — check before generic figma
+  if (q.includes('figma') && (q.includes('dev mode') || q.includes('variables') || q.includes('branching') || q.includes('analytics') || q.includes('enterprise') || q.includes('admin') || q.includes('sso') || q.includes('license')))
+    return 'Figma signals';
+
+  // Q6: Engineering blogs & developer content
+  if (q.includes('engineering blog') || q.includes('tech blog') || (q.includes('frontend') && (q.includes('react') || q.includes('storybook'))) || q.includes('design engineering') || q.includes('dev.to'))
+    return 'Engineering';
+
+  // Q7: Multi-brand architecture
+  if (q.includes('multi-brand') || q.includes('white-label') || q.includes('sub-brand') || q.includes('brand architecture') || q.includes('brand consolidation'))
+    return 'Multi-brand';
+
+  // Q8: Design friction & pain points
+  if ((q.includes('design') || q.includes('ux') || q.includes('product')) && (q.includes('inconsistent') || q.includes('duplication') || q.includes('rework') || q.includes('handoff') || q.includes('bottleneck') || q.includes('fragmented')))
+    return 'Design friction';
+
+  // Q10: Leadership changes
+  if ((q.includes('ceo') || q.includes('chief executive')) && (q.includes('appointed') || q.includes('started') || q.includes('joined') || q.includes('replaced') || q.includes('new')))
+    return 'Leadership';
+
+  // Q11: Financial performance
+  if ((q.includes('revenue') || q.includes('profit') || q.includes('growth') || q.includes('annual results') || q.includes('earnings')) && (q.includes('2024') || q.includes('2025') || q.includes('fy202')))
+    return 'Financial';
+
+  // Q12: Regulatory/compliance
+  if (q.includes('regulator') || q.includes('fca') || q.includes('ecb') || q.includes('compliance') || q.includes('enforcement') || q.includes('dora') || q.includes('sanction'))
+    return 'Regulatory';
+
+  // Q13: Technology partnerships
+  if (q.includes('partnered with') || q.includes('powered by') || q.includes('built on') || q.includes('integration with') || q.includes('migrated to'))
+    return 'Partnerships';
+
+  // Q14: Tech stack & architecture
+  if (q.includes('microservices') || q.includes('tech stack') || q.includes('architecture') || q.includes('kubernetes') || q.includes('platform engineering'))
+    return 'Tech stack';
+
+  // Q15: Org restructuring & transformation
+  if (q.includes('transformation') || q.includes('restructuring') || q.includes('reorganisation') || q.includes('new operating model') || q.includes('efficiency programme'))
+    return 'Transformation';
+
+  // Q16: Customer/user experience investment
+  if ((q.includes('app') || q.includes('website') || q.includes('digital')) && (q.includes('redesign') || q.includes('relaunch') || q.includes('new look') || q.includes('user experience') || q.includes('accessibility') || q.includes('wcag')))
+    return 'UX investment';
+
+  // Design hiring (first query in intelligence — uses different format)
+  if (q.includes('design') && (q.includes('hiring') || q.includes('designer') || q.includes('jobs')))
+    return 'Design hiring';
+
+  // Org structure queries (from getOrgStructure)
+  if (q.includes('subsidiaries') || q.includes('business divisions') || q.includes('operating segments') || q.includes('headcount'))
+    return 'Org structure';
+
+  return 'Other';
+}
+
 /* ------------------------------------------------------------------ */
 /*  Extract post-its from debug events                                 */
 /* ------------------------------------------------------------------ */
@@ -55,135 +146,159 @@ function getDomain(url: string): string {
   }
 }
 
+function extractQueryGroups(data: DebugData): { groups: QueryGroup[]; totalSources: number; hasWebSearch: boolean } {
+  const events = data.events || [];
+  const webSearchEvents = events.filter(e => e.event === 'm1:web_search');
+  const sourceUsageEvent = events.find(e => e.event === 'm1:source_usage');
+
+  if (webSearchEvents.length === 0) return { groups: [], totalSources: 0, hasWebSearch: false };
+
+  // Build used/unused URL sets
+  const usedUrls = new Set<string>();
+  const gatheredUrls = new Set<string>(); // in distilled intel but not cited
+  if (sourceUsageEvent) {
+    for (const s of (sourceUsageEvent.usedSources || [])) usedUrls.add(s.url);
+    for (const s of (sourceUsageEvent.unusedSources || [])) gatheredUrls.add(s.url);
+  }
+
+  // Group results by category
+  const categoryMap = new Map<string, { query: string; results: Map<string, { url: string; title: string; snippet?: string }> }>();
+  const allUrls = new Set<string>();
+
+  for (const ev of webSearchEvents) {
+    const cat = categoriseQuery(ev.query || '');
+    if (!categoryMap.has(cat)) {
+      categoryMap.set(cat, { query: ev.query || '', results: new Map() });
+    }
+    const group = categoryMap.get(cat)!;
+    for (const r of (ev.results || [])) {
+      if (r.url && !group.results.has(r.url)) {
+        group.results.set(r.url, { url: r.url, title: r.title || getDomain(r.url), snippet: r.snippet });
+        allUrls.add(r.url);
+      }
+    }
+  }
+
+  const groups: QueryGroup[] = [];
+  for (const [category, data] of categoryMap) {
+    let kept = 0, unused = 0, dropped = 0;
+    const results = Array.from(data.results.values());
+
+    for (const r of results) {
+      if (usedUrls.has(r.url)) kept++;
+      else if (gatheredUrls.has(r.url)) unused++;
+      else if (sourceUsageEvent) dropped++;
+      else kept++; // no source_usage event — can't determine
+    }
+
+    groups.push({
+      category,
+      query: data.query,
+      results,
+      keptCount: kept,
+      unusedCount: unused,
+      droppedCount: dropped,
+    });
+  }
+
+  // Sort: most results first, then alphabetical
+  groups.sort((a, b) => b.results.length - a.results.length || a.category.localeCompare(b.category));
+
+  return { groups, totalSources: allUrls.size, hasWebSearch: true };
+}
+
 function extractColumns(data: DebugData): Column[] {
   const events = data.events || [];
   const columns: Column[] = [];
 
-  // --- Column 1: Sources Found ---
+  // --- Sources + Distillation handled separately (via QueryGroups) ---
+  // We still need to add placeholder columns for the arrow layout
   const webSearchEvents = events.filter(e => e.event === 'm1:web_search');
   const newsFilteredEvent = events.find(e => e.event === 'm1:news_filtered');
   const sourceUsageEvent = events.find(e => e.event === 'm1:source_usage');
 
-  if (webSearchEvents.length > 0 || newsFilteredEvent) {
-    // Collect all unique URLs from web searches
-    const allSources = new Map<string, { url: string; title: string; query: string }>();
-    for (const ev of webSearchEvents) {
-      for (const r of (ev.results || [])) {
-        if (r.url && !allSources.has(r.url)) {
-          allSources.set(r.url, { url: r.url, title: r.title || getDomain(r.url), query: ev.query });
-        }
-      }
-    }
+  // For legacy runs without web_search events, fall back to old behaviour
+  if (webSearchEvents.length === 0 && (newsFilteredEvent || sourceUsageEvent)) {
+    // Legacy Sources column from news_filtered
+    if (newsFilteredEvent) {
+      const sourcePostIts: PostIt[] = [];
+      const kept = newsFilteredEvent.kept || [];
+      const removed = newsFilteredEvent.removed || [];
 
-    // Build used/unused sets from source_usage
-    const usedUrls = new Set<string>();
-    const unusedUrls = new Set<string>();
-    if (sourceUsageEvent) {
-      for (const s of (sourceUsageEvent.usedSources || [])) {
-        usedUrls.add(s.url);
+      for (const s of kept) {
+        sourcePostIts.push({
+          id: `src-kept-${s.url || s.title}`,
+          title: truncate(s.title || '', 45),
+          subtitle: s.url ? getDomain(s.url) : '',
+          stage: 'sources',
+          status: 'survived',
+          detail: s,
+        });
       }
-      for (const s of (sourceUsageEvent.unusedSources || [])) {
-        unusedUrls.add(s.url);
+      for (const s of removed) {
+        sourcePostIts.push({
+          id: `src-rm-${s.url || s.title}`,
+          title: truncate(s.title || '', 45),
+          subtitle: s.url ? getDomain(s.url) : '',
+          stage: 'sources',
+          status: 'discarded',
+          reason: s.reason || 'Filtered',
+          detail: s,
+        });
       }
-    }
 
-    const sourcePostIts: PostIt[] = [];
-    for (const [url, info] of allSources) {
-      let status: PostItStatus = 'unused';
-      if (usedUrls.has(url)) status = 'survived';
-      else if (sourceUsageEvent) status = 'unused'; // explicitly not used
-      // If no source_usage event, we can't determine — default to survived
-      if (!sourceUsageEvent) status = 'survived';
-
-      sourcePostIts.push({
-        id: `src-${url}`,
-        title: truncate(info.title, 45),
-        subtitle: getDomain(url),
-        stage: 'sources',
-        status,
-        reason: status === 'unused' ? 'Not cited in POV' : undefined,
-        detail: { url, title: info.title, query: info.query },
+      columns.push({
+        id: 'sources',
+        title: 'Sources Found',
+        inCount: sourcePostIts.length,
+        survivedCount: kept.length,
+        discardedCount: removed.length,
+        unusedCount: 0,
+        postIts: sourcePostIts,
       });
     }
 
-    // Sort: survived first, then unused
-    sourcePostIts.sort((a, b) => statusOrder(a.status) - statusOrder(b.status));
+    // Legacy Distillation column
+    if (sourceUsageEvent) {
+      const used = (sourceUsageEvent.usedSources || []).map((s: any, i: number): PostIt => ({
+        id: `dist-used-${i}`,
+        title: truncate(s.title || getDomain(s.url), 45),
+        subtitle: getDomain(s.url),
+        stage: 'distillation',
+        status: 'survived',
+        detail: s,
+      }));
+      const unused = (sourceUsageEvent.unusedSources || []).map((s: any, i: number): PostIt => ({
+        id: `dist-unused-${i}`,
+        title: truncate(s.title || getDomain(s.url), 45),
+        subtitle: getDomain(s.url),
+        stage: 'distillation',
+        status: 'unused',
+        reason: 'Gathered but not cited',
+        detail: s,
+      }));
 
-    const survived = sourcePostIts.filter(p => p.status === 'survived').length;
-    const unused = sourcePostIts.filter(p => p.status === 'unused').length;
-
-    columns.push({
-      id: 'sources',
-      title: 'Sources Found',
-      inCount: sourcePostIts.length,
-      survivedCount: survived,
-      discardedCount: 0,
-      unusedCount: unused,
-      postIts: sourcePostIts,
-    });
-  }
-
-  // --- Column 2: Distillation (source usage) ---
-  if (sourceUsageEvent) {
-    const used = (sourceUsageEvent.usedSources || []).map((s: any, i: number): PostIt => ({
-      id: `dist-used-${i}`,
-      title: truncate(s.title || getDomain(s.url), 45),
-      subtitle: getDomain(s.url),
-      stage: 'distillation',
-      status: 'survived',
-      detail: s,
-    }));
-
-    const unused = (sourceUsageEvent.unusedSources || []).map((s: any, i: number): PostIt => ({
-      id: `dist-unused-${i}`,
-      title: truncate(s.title || getDomain(s.url), 45),
-      subtitle: getDomain(s.url),
-      stage: 'distillation',
-      status: 'unused',
-      reason: 'Gathered but not cited',
-      detail: s,
-    }));
-
-    const all = [...used, ...unused];
-
-    columns.push({
-      id: 'distillation',
-      title: 'Distillation',
-      inCount: sourceUsageEvent.totalSourcesFound || all.length,
-      survivedCount: sourceUsageEvent.sourcesUsedInPov || used.length,
-      discardedCount: 0,
-      unusedCount: unused.length,
-      postIts: all,
-    });
+      columns.push({
+        id: 'distillation',
+        title: 'Distillation',
+        inCount: sourceUsageEvent.totalSourcesFound || (used.length + unused.length),
+        survivedCount: sourceUsageEvent.sourcesUsedInPov || used.length,
+        discardedCount: 0,
+        unusedCount: unused.length,
+        postIts: [...used, ...unused],
+      });
+    }
   }
 
   // --- Column 3: Contacts Found (M2 matrix) ---
   const matrixSnapshots = events.filter(e => e.event === 'm2:matrix_snapshot');
   const formerSkipsM2 = events.find(e => e.event === 'm2:former_skips');
-  const reconciliation = events.find(e => e.event === 'm2:contact_reconciliation');
   const gapsEvent = events.find(e => e.event === 'gaps:detected');
 
   if (matrixSnapshots.length > 0) {
-    // Use the final snapshot if available, else the first
     const snapshot = matrixSnapshots.find(e => e.label === 'final') || matrixSnapshots[matrixSnapshots.length - 1];
     const summary = snapshot.summary || {};
     const contactPostIts: PostIt[] = [];
-
-    const formerNames = new Set<string>();
-    if (formerSkipsM2?.skipped) {
-      for (const s of formerSkipsM2.skipped) {
-        formerNames.add(s.name);
-      }
-    }
-
-    const reconNames = new Map<string, string>();
-    if (reconciliation?.deduped) {
-      for (const d of reconciliation.deduped) {
-        for (const rm of (d.removedFrom || [])) {
-          reconNames.set(`${d.name}-${rm}`, `Deduped → kept in ${d.primary}`);
-        }
-      }
-    }
 
     for (const [fn, tiers] of Object.entries(summary) as [string, any][]) {
       for (const [tier, contacts] of Object.entries(tiers) as [string, any[]][]) {
@@ -202,7 +317,6 @@ function extractColumns(data: DebugData): Column[] {
       }
     }
 
-    // Add former employee skips as discarded
     if (formerSkipsM2?.skipped) {
       for (const s of formerSkipsM2.skipped) {
         contactPostIts.push({
@@ -240,7 +354,6 @@ function extractColumns(data: DebugData): Column[] {
   if (m3Complete) {
     const enrichPostIts: PostIt[] = [];
 
-    // Matched contacts
     for (let i = 0; i < (m3Complete.matched || 0); i++) {
       enrichPostIts.push({
         id: `enrich-match-${i}`,
@@ -251,7 +364,6 @@ function extractColumns(data: DebugData): Column[] {
       });
     }
 
-    // Unmatched contacts
     for (let i = 0; i < (m3Complete.unmatched || 0); i++) {
       enrichPostIts.push({
         id: `enrich-unmatch-${i}`,
@@ -350,7 +462,7 @@ function statusOrder(s: PostItStatus): number {
 }
 
 function truncate(s: string, max: number): string {
-  return s.length > max ? s.slice(0, max - 1) + '…' : s;
+  return s.length > max ? s.slice(0, max - 1) + '\u2026' : s;
 }
 
 /* ------------------------------------------------------------------ */
@@ -360,11 +472,10 @@ function truncate(s: string, max: number): string {
 function statusBg(status: PostItStatus, tier?: string): string {
   if (status === 'discarded') return 'rgba(220, 38, 38, 0.12)';
   if (status === 'unused') return 'rgba(217, 119, 6, 0.12)';
-  // Survived — colour by tier if contact
   if (tier === 'eb') return 'rgba(13, 148, 136, 0.15)';
   if (tier === 'champion') return 'rgba(59, 130, 246, 0.15)';
   if (tier === 'coach') return 'rgba(217, 119, 6, 0.12)';
-  return 'rgba(16, 185, 129, 0.12)'; // default survived green
+  return 'rgba(16, 185, 129, 0.12)';
 }
 
 function statusBorder(status: PostItStatus, tier?: string): string {
@@ -395,11 +506,534 @@ function seededRandom(seed: string): number {
 }
 
 /* ------------------------------------------------------------------ */
-/*  PostIt Card                                                        */
+/*  Query Group Card — compact card for each query category            */
+/* ------------------------------------------------------------------ */
+
+function sourceStatusColor(url: string, usedUrls: Set<string>, gatheredUrls: Set<string>, hasSourceUsage: boolean): PostItStatus {
+  if (!hasSourceUsage) return 'survived';
+  if (usedUrls.has(url)) return 'survived';
+  if (gatheredUrls.has(url)) return 'unused';
+  return 'discarded';
+}
+
+function QueryGroupCard({ group, usedUrls, gatheredUrls, hasSourceUsage, onClickSource }: {
+  group: QueryGroup;
+  usedUrls: Set<string>;
+  gatheredUrls: Set<string>;
+  hasSourceUsage: boolean;
+  onClickSource: (postIt: PostIt) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const total = group.results.length;
+  const tilt = (seededRandom(group.category) - 0.5) * 3;
+
+  return (
+    <div style={{
+      borderRadius: 8,
+      border: '1px solid var(--border)',
+      background: 'var(--bg-surface)',
+      overflow: 'hidden',
+      transform: `rotate(${tilt}deg)`,
+      transition: 'transform 0.15s',
+    }}>
+      {/* Header — always visible, clickable */}
+      <button
+        onClick={() => setExpanded(!expanded)}
+        style={{
+          width: '100%',
+          padding: '10px 12px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 6,
+          background: 'none',
+          border: 'none',
+          cursor: 'pointer',
+          textAlign: 'left',
+        }}
+      >
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          width: '100%',
+        }}>
+          <Search size={12} style={{ color: 'var(--text-tertiary)', flexShrink: 0 }} />
+          <span style={{
+            fontSize: 12,
+            fontWeight: 600,
+            color: 'var(--text-primary)',
+            flex: 1,
+          }}>
+            {group.category}
+          </span>
+          {expanded
+            ? <ChevronDown size={14} style={{ color: 'var(--text-tertiary)', flexShrink: 0 }} />
+            : <ChevronRight size={14} style={{ color: 'var(--text-tertiary)', flexShrink: 0 }} />
+          }
+        </div>
+
+        {/* Stats line */}
+        <div style={{ display: 'flex', gap: 4, fontSize: 10 }}>
+          <span style={{
+            padding: '1px 5px', borderRadius: 3,
+            background: 'var(--bg-elevated)', color: 'var(--text-secondary)',
+          }}>
+            {total}
+          </span>
+          {group.keptCount > 0 && (
+            <span style={{
+              padding: '1px 5px', borderRadius: 3,
+              background: 'rgba(16,185,129,0.1)', color: '#10b981',
+            }}>
+              {group.keptCount} cited
+            </span>
+          )}
+          {group.unusedCount > 0 && (
+            <span style={{
+              padding: '1px 5px', borderRadius: 3,
+              background: 'rgba(217,119,6,0.1)', color: '#d97706',
+            }}>
+              {group.unusedCount} gathered
+            </span>
+          )}
+          {group.droppedCount > 0 && (
+            <span style={{
+              padding: '1px 5px', borderRadius: 3,
+              background: 'rgba(220,38,38,0.08)', color: '#dc2626',
+            }}>
+              {group.droppedCount} dropped
+            </span>
+          )}
+        </div>
+
+        {/* Mini colour squares — compact representation */}
+        <div style={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+          {group.results.map((r, i) => {
+            const st = sourceStatusColor(r.url, usedUrls, gatheredUrls, hasSourceUsage);
+            return (
+              <div key={i} style={{
+                width: 8, height: 8, borderRadius: 2,
+                background: st === 'survived' ? '#10b981' : st === 'unused' ? '#d97706' : 'rgba(220,38,38,0.4)',
+              }} />
+            );
+          })}
+        </div>
+      </button>
+
+      {/* Expanded: individual source post-its */}
+      {expanded && (
+        <div style={{
+          padding: '0 10px 10px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 4,
+          borderTop: '1px solid var(--border)',
+          paddingTop: 8,
+        }}>
+          <div style={{
+            fontSize: 10,
+            color: 'var(--text-tertiary)',
+            fontFamily: 'var(--font-mono)',
+            padding: '0 2px 4px',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}>
+            {truncate(group.query, 80)}
+          </div>
+          {group.results.map((r, i) => {
+            const st = sourceStatusColor(r.url, usedUrls, gatheredUrls, hasSourceUsage);
+            const tiltR = (seededRandom(`${group.category}-${i}`) - 0.5) * 3;
+            return (
+              <div
+                key={r.url}
+                onClick={() => onClickSource({
+                  id: `src-${r.url}`,
+                  title: truncate(r.title, 45),
+                  subtitle: getDomain(r.url),
+                  stage: 'sources',
+                  status: st,
+                  reason: st === 'survived' ? undefined : st === 'unused' ? 'Gathered but not cited in POV' : 'Not in distilled intelligence',
+                  detail: { url: r.url, title: r.title, query: group.query, snippet: r.snippet },
+                })}
+                style={{
+                  padding: '6px 8px',
+                  borderRadius: 4,
+                  fontSize: 10,
+                  lineHeight: 1.3,
+                  background: st === 'survived' ? 'rgba(16,185,129,0.1)' : st === 'unused' ? 'rgba(217,119,6,0.08)' : 'rgba(220,38,38,0.06)',
+                  border: `1px solid ${st === 'survived' ? 'rgba(16,185,129,0.2)' : st === 'unused' ? 'rgba(217,119,6,0.15)' : 'rgba(220,38,38,0.12)'}`,
+                  cursor: 'pointer',
+                  transform: `rotate(${tiltR}deg)`,
+                  opacity: st === 'discarded' ? 0.65 : 1,
+                  textDecoration: st === 'discarded' ? 'line-through' : 'none',
+                  transition: 'transform 0.12s',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                }}
+              >
+                <div style={{
+                  width: 5, height: 5, borderRadius: '50%', flexShrink: 0,
+                  background: st === 'survived' ? '#10b981' : st === 'unused' ? '#d97706' : '#dc2626',
+                }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{
+                    fontWeight: 500,
+                    color: 'var(--text-primary)',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                  }}>
+                    {r.title}
+                  </div>
+                  <div style={{ color: 'var(--text-tertiary)', fontSize: 9 }}>
+                    {getDomain(r.url)}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Sources Grid — replaces the single Sources Found column            */
+/* ------------------------------------------------------------------ */
+
+function SourcesGrid({ data, onClickSource }: {
+  data: DebugData;
+  onClickSource: (postIt: PostIt) => void;
+}) {
+  const events = data.events || [];
+  const sourceUsageEvent = events.find(e => e.event === 'm1:source_usage');
+
+  const usedUrls = useMemo(() => {
+    const s = new Set<string>();
+    if (sourceUsageEvent) for (const src of (sourceUsageEvent.usedSources || [])) s.add(src.url);
+    return s;
+  }, [sourceUsageEvent]);
+
+  const gatheredUrls = useMemo(() => {
+    const s = new Set<string>();
+    if (sourceUsageEvent) for (const src of (sourceUsageEvent.unusedSources || [])) s.add(src.url);
+    return s;
+  }, [sourceUsageEvent]);
+
+  const { groups, totalSources } = useMemo(() => extractQueryGroups(data), [data]);
+
+  const totalKept = groups.reduce((n, g) => n + g.keptCount, 0);
+  const totalGathered = groups.reduce((n, g) => n + g.unusedCount, 0);
+  const totalDropped = groups.reduce((n, g) => n + g.droppedCount, 0);
+
+  return (
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 8,
+      minWidth: 280,
+      maxWidth: 420,
+    }}>
+      {/* Section header */}
+      <div style={{
+        fontWeight: 600, fontSize: 13, color: 'var(--text-primary)',
+      }}>
+        Sources Found
+      </div>
+
+      {/* Summary stats */}
+      <div style={{
+        display: 'flex', gap: 6, flexWrap: 'wrap', fontSize: 10, marginBottom: 2,
+      }}>
+        <span style={{
+          padding: '2px 6px', borderRadius: 4,
+          background: 'var(--bg-elevated)', color: 'var(--text-secondary)',
+        }}>
+          {totalSources} sources across {groups.length} queries
+        </span>
+        {totalKept > 0 && (
+          <span style={{
+            padding: '2px 6px', borderRadius: 4,
+            background: 'rgba(16,185,129,0.1)', color: '#10b981',
+          }}>
+            {totalKept} cited
+          </span>
+        )}
+        {totalGathered > 0 && (
+          <span style={{
+            padding: '2px 6px', borderRadius: 4,
+            background: 'rgba(217,119,6,0.1)', color: '#d97706',
+          }}>
+            {totalGathered} gathered
+          </span>
+        )}
+        {totalDropped > 0 && (
+          <span style={{
+            padding: '2px 6px', borderRadius: 4,
+            background: 'rgba(220,38,38,0.08)', color: '#dc2626',
+          }}>
+            {totalDropped} dropped
+          </span>
+        )}
+      </div>
+
+      {/* Query group cards — 2-column grid */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
+        gap: 8,
+      }}>
+        {groups.map(g => (
+          <QueryGroupCard
+            key={g.category}
+            group={g}
+            usedUrls={usedUrls}
+            gatheredUrls={gatheredUrls}
+            hasSourceUsage={!!sourceUsageEvent}
+            onClickSource={onClickSource}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Distillation Funnel — replaces the old distillation column         */
+/* ------------------------------------------------------------------ */
+
+function DistillationFunnel({ data, onClickSource }: {
+  data: DebugData;
+  onClickSource: (postIt: PostIt) => void;
+}) {
+  const events = data.events || [];
+  const sourceUsageEvent = events.find(e => e.event === 'm1:source_usage');
+
+  if (!sourceUsageEvent) return null;
+
+  const totalFound = sourceUsageEvent.totalSourcesFound || 0;
+  const used = sourceUsageEvent.usedSources || [];
+  const unused = sourceUsageEvent.unusedSources || [];
+  const usedCount = sourceUsageEvent.sourcesUsedInPov || used.length;
+  const gatheredCount = unused.length;
+
+  // Funnel widths (relative to 100%)
+  const maxWidth = 160;
+  const usedWidth = totalFound > 0 ? Math.max(20, (usedCount / totalFound) * maxWidth) : maxWidth;
+
+  return (
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 8,
+      minWidth: 150,
+      maxWidth: 180,
+    }}>
+      <div style={{
+        fontWeight: 600, fontSize: 13, color: 'var(--text-primary)',
+      }}>
+        Distillation
+      </div>
+
+      {/* Funnel visualisation */}
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 4,
+        alignItems: 'center',
+        padding: '8px 0',
+      }}>
+        {/* Bar: total found */}
+        <div style={{
+          width: maxWidth,
+          height: 20,
+          borderRadius: 4,
+          background: 'var(--bg-elevated)',
+          border: '1px solid var(--border)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: 10,
+          fontWeight: 600,
+          color: 'var(--text-secondary)',
+        }}>
+          {totalFound} found
+        </div>
+
+        <div style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>&darr;</div>
+
+        {/* Bar: gathered (in distilled intel) */}
+        <div style={{
+          width: Math.max(40, ((usedCount + gatheredCount) / Math.max(1, totalFound)) * maxWidth),
+          height: 20,
+          borderRadius: 4,
+          background: 'rgba(217,119,6,0.12)',
+          border: '1px solid rgba(217,119,6,0.25)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: 10,
+          fontWeight: 600,
+          color: '#d97706',
+        }}>
+          {usedCount + gatheredCount} gathered
+        </div>
+
+        <div style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>&darr;</div>
+
+        {/* Bar: cited in POV */}
+        <div style={{
+          width: usedWidth,
+          height: 20,
+          borderRadius: 4,
+          background: 'rgba(16,185,129,0.15)',
+          border: '1px solid rgba(16,185,129,0.3)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: 10,
+          fontWeight: 600,
+          color: '#10b981',
+        }}>
+          {usedCount} cited
+        </div>
+      </div>
+
+      {/* Cited sources as green post-its */}
+      <div style={{
+        fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)',
+        marginTop: 4,
+      }}>
+        Cited in POV
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {used.map((s: any, i: number) => {
+          const tilt = (seededRandom(`dist-${i}`) - 0.5) * 3;
+          return (
+            <div
+              key={s.url}
+              onClick={() => onClickSource({
+                id: `dist-used-${i}`,
+                title: truncate(s.title || getDomain(s.url), 45),
+                subtitle: getDomain(s.url),
+                stage: 'distillation',
+                status: 'survived',
+                detail: s,
+              })}
+              style={{
+                padding: '5px 8px',
+                borderRadius: 4,
+                fontSize: 10,
+                lineHeight: 1.3,
+                background: 'rgba(16,185,129,0.1)',
+                border: '1px solid rgba(16,185,129,0.2)',
+                cursor: 'pointer',
+                transform: `rotate(${tilt}deg)`,
+                transition: 'transform 0.12s',
+              }}
+            >
+              <div style={{
+                fontWeight: 500, color: 'var(--text-primary)',
+                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+              }}>
+                {truncate(s.title || getDomain(s.url), 40)}
+              </div>
+              <div style={{ fontSize: 9, color: 'var(--text-tertiary)' }}>
+                {getDomain(s.url)}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Unused sources (collapsed by default) */}
+      {unused.length > 0 && <UnusedSourcesList unused={unused} onClickSource={onClickSource} />}
+    </div>
+  );
+}
+
+function UnusedSourcesList({ unused, onClickSource }: {
+  unused: any[];
+  onClickSource: (postIt: PostIt) => void;
+}) {
+  const [showUnused, setShowUnused] = useState(false);
+
+  return (
+    <>
+      <button
+        onClick={() => setShowUnused(!showUnused)}
+        style={{
+          padding: '4px 8px',
+          borderRadius: 4,
+          fontSize: 10,
+          background: 'var(--bg-elevated)',
+          border: '1px solid var(--border)',
+          color: 'var(--text-secondary)',
+          cursor: 'pointer',
+          fontWeight: 500,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 4,
+        }}
+      >
+        {showUnused ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+        {unused.length} gathered but unused
+      </button>
+      {showUnused && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+          {unused.map((s: any, i: number) => {
+            const tilt = (seededRandom(`dist-un-${i}`) - 0.5) * 3;
+            return (
+              <div
+                key={s.url}
+                onClick={() => onClickSource({
+                  id: `dist-unused-${i}`,
+                  title: truncate(s.title || getDomain(s.url), 45),
+                  subtitle: getDomain(s.url),
+                  stage: 'distillation',
+                  status: 'unused',
+                  reason: 'Gathered but not cited',
+                  detail: s,
+                })}
+                style={{
+                  padding: '4px 8px',
+                  borderRadius: 4,
+                  fontSize: 10,
+                  background: 'rgba(217,119,6,0.06)',
+                  border: '1px solid rgba(217,119,6,0.12)',
+                  cursor: 'pointer',
+                  transform: `rotate(${tilt}deg)`,
+                  opacity: 0.75,
+                  transition: 'transform 0.12s',
+                }}
+              >
+                <div style={{
+                  fontWeight: 500, color: 'var(--text-primary)',
+                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                }}>
+                  {truncate(s.title || getDomain(s.url), 40)}
+                </div>
+                <div style={{ fontSize: 9, color: 'var(--text-tertiary)' }}>
+                  {getDomain(s.url)}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  PostIt Card (for contact/enrichment/hook columns)                  */
 /* ------------------------------------------------------------------ */
 
 function PostItCard({ postIt, onClick }: { postIt: PostIt; onClick: () => void }) {
-  const tilt = (seededRandom(postIt.id) - 0.5) * 4; // ±2 degrees
+  const tilt = (seededRandom(postIt.id) - 0.5) * 4;
   const [hovered, setHovered] = useState(false);
 
   return (
@@ -460,7 +1094,7 @@ function PostItCard({ postIt, onClick }: { postIt: PostIt; onClick: () => void }
           marginTop: 4, fontSize: 9, color: '#dc2626', fontWeight: 500,
           textDecoration: 'none',
         }}>
-          ✕ {truncate(postIt.reason, 35)}
+          {'\u2715'} {truncate(postIt.reason, 35)}
         </div>
       )}
     </div>
@@ -514,7 +1148,7 @@ function DetailPanel({ postIt, onClose }: { postIt: PostIt; onClose: () => void 
           background: statusBg('survived', postIt.tier),
           color: postIt.tier === 'eb' ? '#0d9488' : postIt.tier === 'champion' ? '#3b82f6' : '#d97706',
         }}>
-          {postIt.tier} — {postIt.function}
+          {postIt.tier} {'\u2014'} {postIt.function}
         </div>
       )}
 
@@ -557,6 +1191,20 @@ function DetailPanel({ postIt, onClose }: { postIt: PostIt; onClose: () => void 
         </div>
       )}
 
+      {postIt.detail?.snippet && (
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', marginBottom: 4, textTransform: 'uppercase' }}>
+            Snippet
+          </div>
+          <div style={{
+            fontSize: 12, padding: 8, background: 'var(--bg-input)',
+            borderRadius: 4, color: 'var(--text-secondary)', fontStyle: 'italic',
+          }}>
+            {postIt.detail.snippet}
+          </div>
+        </div>
+      )}
+
       {postIt.detail && (
         <div>
           <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', marginBottom: 4, textTransform: 'uppercase' }}>
@@ -592,7 +1240,7 @@ function ColumnArrow() {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Column Component                                                   */
+/*  Column Component (for contacts, enrichment, hooks)                 */
 /* ------------------------------------------------------------------ */
 
 const MAX_VISIBLE = 20;
@@ -670,7 +1318,7 @@ function ColumnView({ column, onClickPostIt }: {
               fontWeight: 500,
             }}
           >
-            Show {hidden} more…
+            Show {hidden} more{'\u2026'}
           </button>
         )}
         {showAll && hidden > 0 && (
@@ -697,9 +1345,9 @@ function ColumnView({ column, onClickPostIt }: {
 
 function Legend() {
   const items = [
-    { label: 'Survived / Used', color: 'rgba(16,185,129,0.12)', dot: '#10b981' },
+    { label: 'Cited in POV', color: 'rgba(16,185,129,0.12)', dot: '#10b981' },
     { label: 'Gathered / Unused', color: 'rgba(217,119,6,0.12)', dot: '#d97706' },
-    { label: 'Discarded', color: 'rgba(220,38,38,0.12)', dot: '#dc2626' },
+    { label: 'Dropped', color: 'rgba(220,38,38,0.12)', dot: '#dc2626' },
     { label: 'EB', color: 'rgba(13,148,136,0.15)', dot: '#0d9488' },
     { label: 'Champion', color: 'rgba(59,130,246,0.15)', dot: '#3b82f6' },
   ];
@@ -747,10 +1395,13 @@ function EmptyState() {
 /* ------------------------------------------------------------------ */
 
 export default function PostItView({ data }: { data: DebugData }) {
+  const { hasWebSearch } = useMemo(() => extractQueryGroups(data), [data]);
   const columns = useMemo(() => extractColumns(data), [data]);
   const [selectedPostIt, setSelectedPostIt] = useState<PostIt | null>(null);
 
-  if (columns.length === 0) return <EmptyState />;
+  // Check if there's any data at all
+  const hasLegacySources = columns.some(c => c.id === 'sources' || c.id === 'distillation');
+  if (!hasWebSearch && !hasLegacySources && columns.length === 0) return <EmptyState />;
 
   return (
     <div>
@@ -760,19 +1411,41 @@ export default function PostItView({ data }: { data: DebugData }) {
       <div style={{
         display: 'flex', gap: 0, overflowX: 'auto',
         padding: '16px 0', minHeight: 300,
+        alignItems: 'flex-start',
       }}>
+        {/* Sources grid — new grouped layout for runs with web_search events */}
+        {hasWebSearch && (
+          <>
+            <SourcesGrid data={data} onClickSource={setSelectedPostIt} />
+            <ColumnArrow />
+            <DistillationFunnel data={data} onClickSource={setSelectedPostIt} />
+          </>
+        )}
+
+        {/* Remaining columns (contacts, enrichment, hooks — or legacy sources/distillation) */}
         {columns.map((col, i) => (
           <div key={col.id} style={{ display: 'flex' }}>
-            {i > 0 && <ColumnArrow />}
+            {(i > 0 || hasWebSearch) && <ColumnArrow />}
             <ColumnView column={col} onClickPostIt={setSelectedPostIt} />
           </div>
         ))}
+
+        {/* Fallback note for legacy runs */}
+        {!hasWebSearch && hasLegacySources && (
+          <div style={{
+            padding: '8px 12px', marginLeft: 16, fontSize: 11,
+            color: 'var(--text-tertiary)', maxWidth: 200,
+            background: 'var(--bg-elevated)', borderRadius: 6,
+            alignSelf: 'flex-start',
+          }}>
+            Web search detail not available for this run {'\u2014'} run with latest pipeline for full query-level breakdown.
+          </div>
+        )}
       </div>
 
       {/* Detail panel */}
       {selectedPostIt && (
         <>
-          {/* Backdrop */}
           <div
             onClick={() => setSelectedPostIt(null)}
             style={{
