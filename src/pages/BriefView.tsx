@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import Layout from '../components/Layout';
 import TableSkeleton from '../components/TableSkeleton';
 import usePageTitle from '../hooks/usePageTitle';
-import { ArrowLeft, MessageSquare, FileText, Table, X, ChevronDown, ExternalLink, Send, Trash2, Target, Zap, TrendingUp, Wrench, Building2, Users, Briefcase, BookOpen, Link2, Share2, Sun, Moon, Globe, Layers, Handshake } from 'lucide-react';
+import { ArrowLeft, MessageSquare, FileText, Table, X, ChevronDown, ExternalLink, Send, Trash2, Target, Zap, TrendingUp, Wrench, Building2, Users, Briefcase, BookOpen, Link2, Share2, Sun, Moon, Globe, Layers, Handshake, Activity } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 
 /* ------------------------------------------------------------------ */
@@ -22,6 +22,7 @@ interface Run {
   excel_url: string | null;
   brief_id: string | null;
   market: string | null;
+  debug_events_url: string | null;
 }
 
 const LANGUAGE_FLAGS: Record<string, string> = {
@@ -1370,7 +1371,7 @@ export default function BriefView() {
       // Fetch run
       const { data: runData, error: runErr } = await supabase
         .from('runs')
-        .select('id, company, url, created_at, status, pdf_url, excel_url, brief_id, market')
+        .select('id, company, url, created_at, status, pdf_url, excel_url, brief_id, market, debug_events_url')
         .eq('id', run_id)
         .single();
 
@@ -1598,6 +1599,16 @@ export default function BriefView() {
                 textDecoration: 'none', transition: 'all 120ms',
               }}>
                 <Table size={14} /> Excel
+              </a>
+            )}
+            {run.debug_events_url && (
+              <a href={`/AccountResearcherPortal/debug/${run.id}`} style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                padding: '6px 14px', fontSize: 13, fontWeight: 500, borderRadius: 6,
+                border: '1px solid var(--border-strong)', color: 'var(--text-secondary)',
+                textDecoration: 'none', transition: 'all 120ms',
+              }}>
+                <Activity size={14} /> Debug
               </a>
             )}
             {run.market && run.market !== 'en' && run.market !== 'auto' && !englishSubmitted && (
