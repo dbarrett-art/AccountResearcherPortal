@@ -94,15 +94,21 @@ function SectionRow({
 }
 
 
-function CitedProse({ text }: { text: string | undefined | null }) {
+function CitedProse({ text, sources }: { text: string | undefined | null; sources?: any[] }) {
   if (!text) return null;
-  const html = text.replace(/\[(\d+)\]/g, (_, n: string) =>
-    `<sup><a href="#cite-${n}" style="color:var(--accent);text-decoration:none">[${n}]</a></sup>`
-  );
+  const html = text.replace(/\[(\d+)\]/g, (_, n: string) => {
+    const idx = parseInt(n, 10) - 1;
+    const src = sources?.[idx];
+    const url = src ? (typeof src === 'string' ? src : (src?.url || src?.source || '')) : '';
+    if (url && url.startsWith('http')) {
+      return `<sup><a href="${url.replace(/"/g, '&quot;')}" target="_blank" rel="noopener noreferrer" style="color:var(--accent);text-decoration:none;cursor:pointer">[${n}]</a></sup>`;
+    }
+    return `<sup><a href="#cite-${n}" style="color:var(--accent);text-decoration:none">[${n}]</a></sup>`;
+  });
   return <p style={{ fontSize: 14, lineHeight: 1.9, color: 'var(--text-primary)' }} dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
-function CollapsibleProse({ text, maxLength = 320 }: { text: string; maxLength?: number }) {
+function CollapsibleProse({ text, maxLength = 320, sources }: { text: string; maxLength?: number; sources?: any[] }) {
   const [expanded, setExpanded] = useState(false);
   if (!text) return null;
   const isLong = text.length > maxLength;
@@ -120,7 +126,7 @@ function CollapsibleProse({ text, maxLength = 320 }: { text: string; maxLength?:
 
   return (
     <div>
-      <CitedProse text={display} />
+      <CitedProse text={display} sources={sources} />
       {isLong && (
         <button
           onClick={() => setExpanded(e => !e)}
@@ -529,7 +535,7 @@ function ContactMatrix({ personas }: { personas: any }) {
 /*  About section with markdown rendering                              */
 /* ------------------------------------------------------------------ */
 
-function AboutMarkdown({ text }: { text: string | undefined | null }) {
+function AboutMarkdown({ text, sources }: { text: string | undefined | null; sources?: any[] }) {
   if (!text) return null;
   // If it contains ## headings, render structured
   if (text.includes('##')) {
@@ -552,7 +558,7 @@ function AboutMarkdown({ text }: { text: string | undefined | null }) {
     if (inList) html.push('</ul>');
     return <div dangerouslySetInnerHTML={{ __html: html.join('') }} />;
   }
-  return <CitedProse text={text} />;
+  return <CitedProse text={text} sources={sources} />;
 }
 
 /* ------------------------------------------------------------------ */
@@ -1032,20 +1038,20 @@ function BriefContent({ pov, personas, runId, session }: { pov: any; personas: a
 
       {/* 2. ICP Fit */}
       <SectionRow icon={<Target size={11} style={{ color: '#6fcf6f' }} />} title="ICP Fit" count={pov?.icp_fit?.score || undefined} iconColor="rgba(99,153,34,0.18)">
-        <CitedProse text={pov?.icp_fit?.rationale} />
+        <CitedProse text={pov?.icp_fit?.rationale} sources={allSources} />
       </SectionRow>
 
       {/* 4. About */}
       {pov?.about && (
         <SectionRow icon={<Building2 size={11} style={{ color: '#888780' }} />} title="About" iconColor="rgba(255,255,255,0.07)">
           {pov.about.who_they_are && (
-            <CitedProse text={pov.about.who_they_are} />
+            <CitedProse text={pov.about.who_they_are} sources={allSources} />
           )}
-          <AboutMarkdown text={pov.about.what_they_do} />
+          <AboutMarkdown text={pov.about.what_they_do} sources={allSources} />
           {pov.about.how_they_make_money && (
             <div style={{ marginTop: 12 }}>
               <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 4 }}>REVENUE MODEL</div>
-              <CitedProse text={pov.about.how_they_make_money} />
+              <CitedProse text={pov.about.how_they_make_money} sources={allSources} />
             </div>
           )}
         </SectionRow>
@@ -1097,11 +1103,11 @@ function BriefContent({ pov, personas, runId, session }: { pov: any; personas: a
           {pov.why_anything.macro_forces && (
             <div style={{ marginBottom: 12 }}>
               <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 4 }}>MACRO FORCES</div>
-              <CitedProse text={pov.why_anything.macro_forces} />
+              <CitedProse text={pov.why_anything.macro_forces} sources={allSources} />
             </div>
           )}
           {pov.why_anything.narrative && (
-            <CollapsibleProse text={pov.why_anything.narrative} />
+            <CollapsibleProse text={pov.why_anything.narrative} sources={allSources} />
           )}
         </SectionRow>
       )}
@@ -1110,7 +1116,7 @@ function BriefContent({ pov, personas, runId, session }: { pov: any; personas: a
       {triggers.length > 0 && (
         <SectionRow icon={<Zap size={11} style={{ color: '#85b7eb' }} />} title="Why Now" count={`${triggers.length} triggers`} iconColor="rgba(55,138,221,0.18)">
           {pov?.why_now?.urgency_rationale && (
-            <CollapsibleProse text={pov.why_now.urgency_rationale} />
+            <CollapsibleProse text={pov.why_now.urgency_rationale} sources={allSources} />
           )}
           {triggers.map((t: any, i: number) => (
             <TriggerCard key={i} trigger={t} />
@@ -1129,11 +1135,11 @@ function BriefContent({ pov, personas, runId, session }: { pov: any; personas: a
               <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--accent)', marginBottom: 4 }}>
                 STRONGEST ANGLE
               </div>
-              <CollapsibleProse text={pov.why_figma.strongest_angle} maxLength={200} />
+              <CollapsibleProse text={pov.why_figma.strongest_angle} maxLength={200} sources={allSources} />
             </div>
           )}
           {pov.why_figma.rationale && (
-            <CollapsibleProse text={pov.why_figma.rationale} />
+            <CollapsibleProse text={pov.why_figma.rationale} sources={allSources} />
           )}
           {products.length > 0 && (
             <div style={{ marginTop: 16 }}>
