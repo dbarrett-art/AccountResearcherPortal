@@ -5,7 +5,7 @@ import { supabase, workerFetch } from '../lib/supabase';
 import Layout from '../components/Layout';
 import TableSkeleton from '../components/TableSkeleton';
 import usePageTitle from '../hooks/usePageTitle';
-import { Target, Eye, Map, Clock, ChevronUp, ChevronDown, RotateCcw, Users, Filter, Send } from 'lucide-react';
+import { Target, Eye, Map as MapIcon, Clock, ChevronUp, ChevronDown, RotateCcw, Users, Filter, Send } from 'lucide-react';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -321,7 +321,7 @@ export default function Territory() {
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)', paddingBottom: 20, marginBottom: 24 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <Map size={18} style={{ color: 'var(--accent)' }} />
+          <MapIcon size={18} style={{ color: 'var(--accent)' }} />
           <h1 style={{ fontSize: 16, fontWeight: 600, margin: 0 }}>Territory</h1>
           {!loading && (
             <span style={{ fontSize: 12, color: 'var(--text-tertiary)', background: 'var(--bg-surface)', padding: '2px 8px', borderRadius: 4 }}>
@@ -347,7 +347,7 @@ export default function Territory() {
       {loading ? <TableSkeleton rows={6} cols={6} /> : rows.length === 0 ? (
         /* Empty state */
         <div style={{ textAlign: 'center', padding: '80px 0' }}>
-          <Map size={32} style={{ color: 'var(--text-tertiary)', marginBottom: 12 }} />
+          <MapIcon size={32} style={{ color: 'var(--text-tertiary)', marginBottom: 12 }} />
           <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 4 }}>No briefs yet</div>
           <div style={{ fontSize: 13, color: 'var(--text-tertiary)', marginBottom: 16 }}>Submit your first research request to build your territory.</div>
           <button
