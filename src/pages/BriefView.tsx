@@ -292,7 +292,7 @@ function TriggerCard({ trigger }: { trigger: any }) {
 
       {trigger?.evidence && (
         <div style={{ fontSize: 12, color: 'var(--text-tertiary)', lineHeight: 1.5 }}>
-          {trigger.evidence}
+          <IntelInline text={trigger.evidence} />
         </div>
       )}
 
@@ -366,7 +366,7 @@ function CopyableProductCard({ product }: { product: any }) {
       <div style={{ display: 'inline-block', padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700, marginBottom: 10, background: chipStyle.bg, color: chipStyle.color }}>
         {name}
       </div>
-      <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.65 }}>{product?.relevance}</div>
+      <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.65 }}><IntelInline text={product?.relevance ?? ''} /></div>
     </div>
   );
 }
