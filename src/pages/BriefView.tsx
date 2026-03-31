@@ -1114,8 +1114,10 @@ function FeedbackPanel({ runId }: { runId: string }) {
 /* ------------------------------------------------------------------ */
 
 function ResearchDeepDive({ intel }: { intel: string }) {
+  // Strip source decisions metadata if present
+  const cleanIntel = intel.split('---SOURCE_DECISIONS_START---')[0].trim();
   // Split on ## headings (skip the preamble before first ##)
-  const rawSections = intel.split(/^## /m).filter(Boolean);
+  const rawSections = cleanIntel.split(/^## /m).filter(Boolean);
   // First chunk is often the title/header before any ## — skip if it doesn't start with a number
   const sections = rawSections.filter(s => /^\d+\./.test(s.trim()));
 
