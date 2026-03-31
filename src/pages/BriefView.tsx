@@ -840,64 +840,135 @@ const isNoisySource = (url: string, title?: string) => {
 /*  Value Pyramid                                                      */
 /* ------------------------------------------------------------------ */
 
+function VPCollapsibleRow({ label, children, defaultOpen = false }: { label: React.ReactNode; children: React.ReactNode; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div style={{ marginBottom: 6 }}>
+      <div onClick={() => setOpen(!open)} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ fontSize: 10, color: 'var(--text-secondary)', transition: 'transform 0.15s', transform: open ? 'rotate(90deg)' : 'rotate(0deg)' }}>&#9654;</span>
+        <div style={{ flex: 1 }}>{label}</div>
+      </div>
+      {open && <div style={{ paddingLeft: 18, paddingTop: 6, paddingBottom: 4 }}>{children}</div>}
+    </div>
+  );
+}
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1500); }}
+      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', fontSize: 11, color: copied ? '#10b981' : 'var(--text-secondary)', opacity: 0.7 }}
+      title="Copy talk track"
+    >{copied ? '\u2713' : '\u{1f4cb}'}</button>
+  );
+}
+
+function TalkTrack({ text }: { text: string }) {
+  if (!text) return null;
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 4, marginTop: 4 }}>
+      <div style={{ borderLeft: '2px solid #A855F7', paddingLeft: 8, fontSize: 13, color: 'var(--text-secondary)', fontStyle: 'italic', lineHeight: 1.5, flex: 1 }}>{text}</div>
+      <CopyButton text={text} />
+    </div>
+  );
+}
+
 function ValuePyramid({ pyramid }: { pyramid: any }) {
   if (!pyramid) return null;
-  const { strategic, operational, tactical } = pyramid;
-  if (!strategic && !operational?.length && !tactical?.length) return null;
+  const objectives = pyramid.corporate_objectives || [];
+  const strategies = pyramid.business_strategies || [];
+  const initiatives = pyramid.targeted_initiatives || [];
+  if (!objectives.length && !strategies.length && !initiatives.length) return null;
+
+  const totalItems = objectives.length + strategies.length + initiatives.length;
+
+  const figmaColors: Record<string, string> = {
+    'Enterprise': '#5E6AD2', 'Dev Mode': '#10b981', 'FigJam': '#f59e0b',
+    'Make': '#ec4899', 'Governance+': '#8b5cf6',
+  };
 
   return (
-    <SectionRow icon={<Layers size={11} style={{ color: '#888780' }} />} title="Value Pyramid" count={`${(operational?.length || 0) + (tactical?.length || 0)} items`} iconColor="rgba(127,119,221,0.18)">
-      {/* Strategic — top of pyramid */}
-      {strategic && (
-        <div style={{
-          background: 'linear-gradient(135deg, rgba(94,106,210,0.12), rgba(168,85,247,0.08))',
-          border: '1px solid rgba(94,106,210,0.25)', borderRadius: 10,
-          padding: '18px 20px', marginBottom: 16, textAlign: 'center',
-        }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--accent)',
-                        letterSpacing: '0.1em', marginBottom: 8 }}>STRATEGIC</div>
-          <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)',
-                        lineHeight: 1.5, marginBottom: 6 }}>{strategic.headline}</div>
-          {strategic.detail && (
-            <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>{strategic.detail}</div>
-          )}
+    <SectionRow icon={<Layers size={11} style={{ color: '#888780' }} />} title="Value Pyramid" count={`${totalItems} items`} iconColor="rgba(127,119,221,0.18)">
+      {/* Layer 1: Corporate Objectives — widest */}
+      <div style={{
+        maxWidth: '100%', margin: '0 auto 14px',
+        background: 'linear-gradient(135deg, rgba(94,106,210,0.10), rgba(168,85,247,0.06))',
+        border: '1px solid rgba(94,106,210,0.20)', borderRadius: 10, padding: '14px 18px',
+      }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: '#5E6AD2', letterSpacing: '0.1em', marginBottom: 10 }}>
+          CORPORATE OBJECTIVES <span style={{ background: 'rgba(94,106,210,0.15)', padding: '1px 6px', borderRadius: 8, fontSize: 9, marginLeft: 6 }}>{objectives.length}</span>
         </div>
-      )}
-
-      {/* Operational — middle */}
-      {operational?.length > 0 && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-                      gap: 10, marginBottom: 16 }}>
-          {operational.map((op: any, i: number) => (
-            <div key={i} style={{
-              background: 'var(--bg-surface)', border: '1px solid var(--border)',
-              borderRadius: 8, padding: '14px 16px',
-            }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: '#f59e0b',
-                            letterSpacing: '0.1em', marginBottom: 6 }}>OPERATIONAL</div>
-              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>{op.area}</div>
-              <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>{op.value}</div>
+        {objectives.map((o: any, i: number) => (
+          <VPCollapsibleRow key={i} label={
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+              <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{o.objective}</span>
+              {o.source && <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{o.source}</span>}
             </div>
-          ))}
-        </div>
-      )}
+          }>
+            <TalkTrack text={o.talk_track} />
+            {o.kpis?.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
+                {o.kpis.map((k: string, ki: number) => (
+                  <span key={ki} style={{ fontSize: 11, background: 'rgba(94,106,210,0.10)', color: '#5E6AD2', padding: '2px 8px', borderRadius: 4 }}>{k}</span>
+                ))}
+              </div>
+            )}
+          </VPCollapsibleRow>
+        ))}
+      </div>
 
-      {/* Tactical — base */}
-      {tactical?.length > 0 && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          {tactical.map((t: any, i: number) => (
-            <div key={i} style={{
-              background: 'var(--bg-surface)', border: '1px solid var(--border)',
-              borderRadius: 6, padding: '10px 14px', flex: '1 1 200px', minWidth: 200,
-            }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: '#10b981',
-                            letterSpacing: '0.1em', marginBottom: 4 }}>TACTICAL</div>
-              <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 2 }}>{t.feature}</div>
-              <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.4 }}>{t.use_case}</div>
-            </div>
-          ))}
+      {/* Layer 2: Business Strategies — 92% width */}
+      <div style={{
+        maxWidth: '92%', margin: '0 auto 14px',
+        background: 'rgba(245,158,11,0.06)',
+        border: '1px solid rgba(245,158,11,0.18)', borderRadius: 10, padding: '14px 18px',
+      }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: '#D97706', letterSpacing: '0.1em', marginBottom: 10 }}>
+          BUSINESS STRATEGIES <span style={{ background: 'rgba(245,158,11,0.12)', padding: '1px 6px', borderRadius: 8, fontSize: 9, marginLeft: 6 }}>{strategies.length}</span>
         </div>
-      )}
+        {strategies.map((s: any, i: number) => (
+          <VPCollapsibleRow key={i} label={
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{s.strategy}</span>
+              {s.linked_objective && <span style={{ fontSize: 10, background: 'rgba(94,106,210,0.10)', color: '#5E6AD2', padding: '1px 6px', borderRadius: 4 }}>{s.linked_objective}</span>}
+            </div>
+          }>
+            <TalkTrack text={s.talk_track} />
+            {s.evidence && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>{s.evidence}</div>}
+            {s.source_url && <a href={s.source_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, color: 'var(--accent)' }}>{s.source_url}</a>}
+          </VPCollapsibleRow>
+        ))}
+      </div>
+
+      {/* Layer 3: Targeted Initiatives — 84% width */}
+      <div style={{
+        maxWidth: '84%', margin: '0 auto 14px',
+        background: 'rgba(16,185,129,0.06)',
+        border: '1px solid rgba(16,185,129,0.18)', borderRadius: 10, padding: '14px 18px',
+      }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: '#059669', letterSpacing: '0.1em', marginBottom: 10 }}>
+          TARGETED INITIATIVES <span style={{ background: 'rgba(16,185,129,0.12)', padding: '1px 6px', borderRadius: 8, fontSize: 9, marginLeft: 6 }}>{initiatives.length}</span>
+        </div>
+        {initiatives.map((ti: any, i: number) => (
+          <VPCollapsibleRow key={i} label={
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{ti.initiative}</span>
+              {ti.figma_relevance && (
+                <span style={{ fontSize: 10, fontWeight: 600, background: (figmaColors[ti.figma_relevance] || '#7c3aed') + '18', color: figmaColors[ti.figma_relevance] || '#7c3aed', padding: '1px 6px', borderRadius: 4 }}>{ti.figma_relevance}</span>
+              )}
+            </div>
+          }>
+            <TalkTrack text={ti.talk_track} />
+            {ti.digital_product_implication && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>{ti.digital_product_implication}</div>}
+            {ti.source_url && <a href={ti.source_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, color: 'var(--accent)' }}>{ti.source_url}</a>}
+          </VPCollapsibleRow>
+        ))}
+      </div>
+
+      <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontStyle: 'italic', textAlign: 'center', marginTop: 8 }}>
+        Key Challenges, Required Capabilities, and How Figma Can Help are discovered during customer conversations.
+      </div>
     </SectionRow>
   );
 }
