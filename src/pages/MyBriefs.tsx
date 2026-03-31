@@ -333,14 +333,14 @@ export default function MyBriefs() {
                           <FileText size={16} style={{ color: 'var(--text-secondary)' }} />
                         </a>
                       ) : (
-                        <FileText size={16} style={{ color: 'var(--text-disabled)' }} />
+                        <span title="PDF not available"><FileText size={16} style={{ color: 'var(--text-disabled)' }} /></span>
                       )}
                       {run.excel_url ? (
                         <a href={run.excel_url} target="_blank" rel="noopener noreferrer" title="Download Excel">
                           <Table size={16} style={{ color: 'var(--text-secondary)' }} />
                         </a>
                       ) : (
-                        <Table size={16} style={{ color: 'var(--text-disabled)' }} />
+                        <span title="Excel not available"><Table size={16} style={{ color: 'var(--text-disabled)' }} /></span>
                       )}
                     </div>
                   </td>
