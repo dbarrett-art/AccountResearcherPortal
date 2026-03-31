@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import Layout from '../components/Layout';
 import TableSkeleton from '../components/TableSkeleton';
 import usePageTitle from '../hooks/usePageTitle';
-import { ArrowLeft, MessageSquare, FileText, Table, X, ChevronDown, ExternalLink, Send, Trash2, Target, Zap, TrendingUp, Wrench, Building2, Users, Briefcase, BookOpen, Link2, Share2, Sun, Moon, Globe, Layers, Handshake, Activity } from 'lucide-react';
+import { ArrowLeft, MessageSquare, FileText, Table, X, ChevronDown, ExternalLink, Send, Trash2, Target, Zap, TrendingUp, Wrench, Building2, Users, Briefcase, BookOpen, Link2, Share2, Sun, Moon, Globe, Layers, Handshake, Activity, Search } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 
 /* ------------------------------------------------------------------ */
@@ -967,6 +967,254 @@ function FeedbackPanel({ runId }: { runId: string }) {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Research Deep Dive                                                 */
+/* ------------------------------------------------------------------ */
+
+function ResearchDeepDive({ intel }: { intel: string }) {
+  // Split on ## headings (skip the preamble before first ##)
+  const rawSections = intel.split(/^## /m).filter(Boolean);
+  // First chunk is often the title/header before any ## — skip if it doesn't start with a number
+  const sections = rawSections.filter(s => /^\d+\./.test(s.trim()));
+
+  if (sections.length === 0) return null;
+
+  return (
+    <SectionRow
+      icon={<Search size={11} style={{ color: '#c084fc' }} />}
+      title="Research Deep Dive"
+      count={`${sections.length} sections`}
+      iconColor="rgba(168,85,247,0.18)"
+    >
+      {sections.map((section, i) => {
+        const lines = section.split('\n');
+        const heading = lines[0].trim();
+        const body = lines.slice(1).join('\n').trim();
+        return <DeepDiveSubsection key={i} heading={heading} body={body} />;
+      })}
+    </SectionRow>
+  );
+}
+
+function DeepDiveSubsection({ heading, body }: { heading: string; body: string }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div style={{ marginBottom: 4 }}>
+      <div
+        onClick={() => setOpen(o => !o)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          padding: '10px 14px', cursor: 'pointer', userSelect: 'none',
+          background: 'rgba(255,255,255,0.03)',
+          borderRadius: 8,
+          border: '0.5px solid var(--border)',
+        }}
+      >
+        <ChevronDown size={12} style={{
+          color: 'var(--text-tertiary)',
+          transform: open ? 'rotate(180deg)' : 'rotate(-90deg)',
+          transition: 'transform 0.18s', flexShrink: 0
+        }} />
+        <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>
+          {heading}
+        </span>
+      </div>
+      {open && (
+        <div style={{ padding: '12px 14px 8px', fontSize: 13, lineHeight: 1.7, color: 'var(--text-secondary)' }}>
+          <IntelMarkdown text={body} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function IntelMarkdown({ text }: { text: string }) {
+  const lines = text.split('\n');
+  const elements: React.ReactNode[] = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    // ### subheading
+    if (line.startsWith('### ')) {
+      elements.push(
+        <div key={i} style={{
+          fontSize: 12, fontWeight: 600, color: 'var(--text-primary)',
+          textTransform: 'uppercase', letterSpacing: '0.03em',
+          marginTop: elements.length > 0 ? 16 : 0, marginBottom: 6,
+        }}>
+          {line.replace(/^### /, '')}
+        </div>
+      );
+      i++;
+      continue;
+    }
+
+    // Pain quote: > *"..."*
+    if (/^>\s*\*"/.test(line)) {
+      // Look for [SOURCE: url] in the preceding line
+      const prevLine = i > 0 ? lines[i - 1] : '';
+      const srcMatch = prevLine.match(/\[SOURCE:\s*(https?:\/\/[^\]]+)\]/);
+      const quoteText = line
+        .replace(/^>\s*\*"?/, '')
+        .replace(/"?\*\s*$/, '')
+        .trim();
+      elements.push(
+        <div key={i} style={{
+          borderLeft: '3px solid #a855f7',
+          padding: '10px 14px',
+          margin: '8px 0',
+          background: 'rgba(168,85,247,0.06)',
+          borderRadius: '0 6px 6px 0',
+        }}>
+          <div style={{ fontStyle: 'italic', fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.6 }}>
+            &ldquo;{quoteText}&rdquo;
+          </div>
+          {srcMatch && (
+            <a
+              href={srcMatch[1]}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 6, display: 'block', textDecoration: 'none' }}
+            >
+              {new URL(srcMatch[1]).hostname} &rarr;
+            </a>
+          )}
+        </div>
+      );
+      i++;
+      continue;
+    }
+
+    // [SOURCE: url] line — render as small linked citation
+    const sourceMatch = line.match(/^\[SOURCE:\s*(https?:\/\/[^\]]+)\]\s*(.*)/);
+    if (sourceMatch) {
+      const url = sourceMatch[1];
+      const rest = sourceMatch[2].trim();
+      // If next line is a quote, skip rendering the source separately (handled by quote block above)
+      if (i + 1 < lines.length && /^>\s*\*"/.test(lines[i + 1])) {
+        i++;
+        continue;
+      }
+      let hostname = url;
+      try { hostname = new URL(url).hostname; } catch {}
+      elements.push(
+        <div key={i} style={{ marginBottom: 4 }}>
+          <a
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ fontSize: 11, color: 'var(--accent)', textDecoration: 'none', marginRight: 6 }}
+          >
+            [{hostname}]
+          </a>
+          {rest && <IntelInline text={rest} />}
+        </div>
+      );
+      i++;
+      continue;
+    }
+
+    // Inline [SOURCE: url] within a paragraph line
+    if (line.includes('[SOURCE:') && !line.startsWith('[SOURCE:')) {
+      elements.push(<div key={i} style={{ marginBottom: 4 }}><IntelInline text={line} /></div>);
+      i++;
+      continue;
+    }
+
+    // Empty line
+    if (line.trim() === '') { i++; continue; }
+
+    // Bullet list items
+    if (/^\s*[-•]\s/.test(line)) {
+      const bullets: string[] = [];
+      while (i < lines.length && /^\s*[-•]\s/.test(lines[i])) {
+        bullets.push(lines[i].replace(/^\s*[-•]\s*/, ''));
+        i++;
+      }
+      elements.push(
+        <ul key={`ul-${i}`} style={{ paddingLeft: 20, margin: '4px 0' }}>
+          {bullets.map((b, j) => (
+            <li key={j} style={{ marginBottom: 2, fontSize: 13 }}><IntelInline text={b} /></li>
+          ))}
+        </ul>
+      );
+      continue;
+    }
+
+    // Regular paragraph
+    elements.push(<div key={i} style={{ marginBottom: 4 }}><IntelInline text={line} /></div>);
+    i++;
+  }
+
+  return <>{elements}</>;
+}
+
+/** Renders inline markdown: **bold**, [SOURCE: url] inline */
+function IntelInline({ text }: { text: string }) {
+  // Split on **bold** and [SOURCE: url] patterns
+  const parts: React.ReactNode[] = [];
+  let remaining = text;
+  let key = 0;
+
+  while (remaining.length > 0) {
+    // Find next **bold** or [SOURCE: url]
+    const boldIdx = remaining.indexOf('**');
+    const srcIdx = remaining.indexOf('[SOURCE:');
+    const nextIdx = Math.min(
+      boldIdx >= 0 ? boldIdx : Infinity,
+      srcIdx >= 0 ? srcIdx : Infinity
+    );
+
+    if (nextIdx === Infinity) {
+      parts.push(<span key={key++}>{remaining}</span>);
+      break;
+    }
+
+    // Text before the match
+    if (nextIdx > 0) {
+      parts.push(<span key={key++}>{remaining.slice(0, nextIdx)}</span>);
+    }
+
+    if (nextIdx === boldIdx) {
+      const closeIdx = remaining.indexOf('**', boldIdx + 2);
+      if (closeIdx > boldIdx) {
+        parts.push(
+          <strong key={key++} style={{ color: 'var(--text-primary)' }}>
+            {remaining.slice(boldIdx + 2, closeIdx)}
+          </strong>
+        );
+        remaining = remaining.slice(closeIdx + 2);
+      } else {
+        parts.push(<span key={key++}>{remaining.slice(boldIdx, boldIdx + 2)}</span>);
+        remaining = remaining.slice(boldIdx + 2);
+      }
+    } else {
+      const closeIdx = remaining.indexOf(']', srcIdx);
+      if (closeIdx > srcIdx) {
+        const urlMatch = remaining.slice(srcIdx, closeIdx + 1).match(/\[SOURCE:\s*(https?:\/\/[^\]]+)\]/);
+        if (urlMatch) {
+          let hostname = urlMatch[1];
+          try { hostname = new URL(urlMatch[1]).hostname; } catch {}
+          parts.push(
+            <a key={key++} href={urlMatch[1]} target="_blank" rel="noopener noreferrer"
+              style={{ fontSize: 11, color: 'var(--accent)', textDecoration: 'none' }}
+            >[{hostname}]</a>
+          );
+        }
+        remaining = remaining.slice(closeIdx + 1);
+      } else {
+        parts.push(<span key={key++}>{remaining.slice(srcIdx, srcIdx + 8)}</span>);
+        remaining = remaining.slice(srcIdx + 8);
+      }
+    }
+  }
+
+  return <>{parts}</>;
+}
+
+/* ------------------------------------------------------------------ */
 /*  Brief content (reordered sections)                                 */
 /* ------------------------------------------------------------------ */
 
@@ -1146,6 +1394,66 @@ function BriefContent({ pov, personas, runId, session }: { pov: any; personas: a
               ))}
             </div>
           )}
+
+          {/* Design Infrastructure */}
+          {pov.why_figma.design_infrastructure && (() => {
+            const di = pov.why_figma.design_infrastructure;
+            const hasContent = (di.named_systems?.length > 0) || (di.confirmed_tools?.length > 0) || di.design_team_size || di.handoff_approach || di.multi_brand_complexity;
+            if (!hasContent) return null;
+            return (
+              <div style={{ marginTop: 20, background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '14px 16px' }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Design Infrastructure</div>
+
+                {di.named_systems?.length > 0 && (
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 6 }}>Named Systems</div>
+                    {di.named_systems.map((sys: any, i: number) => (
+                      <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, padding: '8px 0', borderBottom: i < di.named_systems.length - 1 ? '1px solid var(--border)' : 'none', fontSize: 12 }}>
+                        <div><span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{sys.name}</span></div>
+                        <div style={{ color: 'var(--text-secondary)' }}>{sys.scope}</div>
+                        <div style={{ color: 'var(--text-tertiary)' }}>{sys.maturity}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {di.confirmed_tools?.length > 0 && (
+                  <div style={{ marginBottom: 10, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {di.confirmed_tools.map((tool: string, i: number) => (
+                      <span key={i} style={{ fontSize: 11, padding: '3px 10px', borderRadius: 12, background: 'rgba(127,119,221,0.12)', color: 'var(--accent)', fontWeight: 500 }}>{tool}</span>
+                    ))}
+                  </div>
+                )}
+
+                {di.design_team_size && (
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}><strong>Team size:</strong> {di.design_team_size}</div>
+                )}
+                {di.handoff_approach && (
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}><strong>Handoff:</strong> {di.handoff_approach}</div>
+                )}
+                {di.multi_brand_complexity && (
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}><strong>Multi-brand:</strong> {di.multi_brand_complexity}</div>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* Pain Signals */}
+          {pov.why_figma.pain_signals?.length > 0 && (
+            <div style={{ marginTop: 16 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Pain Signals</div>
+              {pov.why_figma.pain_signals.map((ps: any, i: number) => (
+                <div key={i} style={{ borderLeft: '3px solid #a855f7', background: 'rgba(168,85,247,0.06)', borderRadius: '0 8px 8px 0', padding: '10px 14px', marginBottom: 8 }}>
+                  <div style={{ fontSize: 13, fontStyle: 'italic', color: 'var(--text-primary)', lineHeight: 1.6 }}>"{ps.quote}"</div>
+                  {ps.speaker && <div style={{ fontSize: 11, fontWeight: 500, color: '#a855f7', marginTop: 4 }}>{ps.speaker}</div>}
+                  {ps.relevance && <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 4 }}>{ps.relevance}</div>}
+                  {ps.source && (
+                    <a href={ps.source} target="_blank" rel="noopener noreferrer" style={{ fontSize: 10, color: 'var(--accent)', marginTop: 4, display: 'inline-block' }}>Source</a>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </SectionRow>
       )}
 
@@ -1165,7 +1473,13 @@ function BriefContent({ pov, personas, runId, session }: { pov: any; personas: a
         </SectionRow>
       )}
 
-      {/* 12. Key Executives */}
+      {/* 12. Contact Matrix */}
+      {personas && <ContactMatrix personas={personas} />}
+
+      {/* 13. Research Deep Dive */}
+      {pov?.distilled_intel && <ResearchDeepDive intel={pov.distilled_intel} />}
+
+      {/* 14. Key Executives */}
       {executives.length > 0 && (
         <SectionRow icon={<Users size={11} style={{ color: '#888780' }} />} title="Key Executives" count={`${executives.length} found`} iconColor="rgba(255,255,255,0.07)">
           <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -1195,7 +1509,7 @@ function BriefContent({ pov, personas, runId, session }: { pov: any; personas: a
         </SectionRow>
       )}
 
-      {/* 13. Technology Partnerships */}
+      {/* 15. Technology Partnerships */}
       {techPartners.length > 0 && (
         <SectionRow icon={<Handshake size={11} style={{ color: '#888780' }} />} title="Technology Partnerships" count={`${techPartners.length} partners`} iconColor="rgba(255,255,255,0.07)">
           <DataTable
@@ -1205,7 +1519,7 @@ function BriefContent({ pov, personas, runId, session }: { pov: any; personas: a
         </SectionRow>
       )}
 
-      {/* 14. Proof Points */}
+      {/* 16. Proof Points */}
       {proofPoints.length > 0 && (
         <SectionRow icon={<BookOpen size={11} style={{ color: '#888780' }} />} title="Proof Points" count={`${proofPoints.length} found`} iconColor="rgba(186,117,23,0.12)">
           {proofPoints.map((pp: any, i: number) => (
@@ -1227,7 +1541,7 @@ function BriefContent({ pov, personas, runId, session }: { pov: any; personas: a
         </SectionRow>
       )}
 
-      {/* 15. Sources */}
+      {/* 17. Sources */}
       {cleanSources.length > 0 && (
         <SectionRow icon={<Link2 size={11} style={{ color: '#888780' }} />} title="Sources" count={`${cleanSources.length} sources`} iconColor="rgba(255,255,255,0.07)">
           <div style={{ margin: 0 }}>
@@ -1263,10 +1577,7 @@ function BriefContent({ pov, personas, runId, session }: { pov: any; personas: a
         </SectionRow>
       )}
 
-      {/* 16. Contact Matrix */}
-      {personas && <ContactMatrix personas={personas} />}
-
-      {/* 17. Feedback */}
+      {/* 18. Feedback */}
       {runId && session && <FeedbackPanel runId={runId} />}
     </>
   );
