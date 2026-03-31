@@ -170,20 +170,43 @@ function IcpBadge({ score }: { score: string | undefined }) {
 function AgeBadge({ createdAt }: { createdAt: string | undefined }) {
   if (!createdAt) return null;
   const days = Math.floor((Date.now() - new Date(createdAt).getTime()) / 86400000);
-  let color = 'var(--text-secondary)';
-  let bg = 'rgba(74,74,74,0.3)';
-  let tooltip = '';
-  if (days > 90) { color = 'var(--status-failed-text)'; bg = 'rgba(220,38,38,0.12)'; tooltip = 'Consider refreshing this brief'; }
-  else if (days > 30) { color = 'var(--status-running-text)'; bg = 'rgba(217,119,6,0.15)'; tooltip = 'Consider refreshing this brief'; }
-  const label = days < 1 ? 'Today' : days === 1 ? '1 day ago' : `${days}d ago`;
-  return (
-    <span title={tooltip} style={{
-      display: 'inline-flex', alignItems: 'center', padding: '2px 8px',
-      borderRadius: 4, fontSize: 12, fontWeight: 500, background: bg, color,
-    }}>
-      {label}
-    </span>
-  );
+  const dateLabel = days < 1 ? 'Today' : days === 1 ? '1 day ago' : `${days}d ago`;
+
+  if (days > 90) {
+    return (
+      <span title="This brief is stale — consider re-running" style={{
+        display: 'inline-flex', alignItems: 'center', gap: 5, padding: '2px 10px',
+        borderRadius: 4, fontSize: 12, fontWeight: 500,
+        background: 'rgba(220,38,38,0.12)', color: 'var(--status-failed-text)',
+      }}>
+        Stale — {days} days old
+      </span>
+    );
+  }
+  if (days > 30) {
+    return (
+      <span title="This brief may need refreshing" style={{
+        display: 'inline-flex', alignItems: 'center', gap: 5, padding: '2px 10px',
+        borderRadius: 4, fontSize: 12, fontWeight: 500,
+        background: 'rgba(217,119,6,0.15)', color: 'var(--status-running-text)',
+      }}>
+        Review — {days} days old
+      </span>
+    );
+  }
+  if (days >= 7) {
+    return (
+      <span style={{
+        display: 'inline-flex', alignItems: 'center', padding: '2px 8px',
+        borderRadius: 4, fontSize: 12, fontWeight: 500,
+        background: 'rgba(74,74,74,0.3)', color: 'var(--text-secondary)',
+      }}>
+        {dateLabel}
+      </span>
+    );
+  }
+  // < 7 days: no badge
+  return null;
 }
 
 function TierBadge({ tier }: { tier: string }) {

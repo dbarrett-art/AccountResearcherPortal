@@ -48,6 +48,34 @@ function relativeTime(dateStr: string): string {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
+function FreshnessBadge({ createdAt, status }: { createdAt: string; status: string }) {
+  if (status !== 'complete') return null;
+  const days = Math.floor((Date.now() - new Date(createdAt).getTime()) / 86400000);
+  if (days > 90) {
+    return (
+      <span title={`${days} days old — stale`} style={{
+        display: 'inline-flex', alignItems: 'center',
+        fontSize: 10, fontWeight: 500, color: 'var(--status-failed-text)',
+        background: 'rgba(220,38,38,0.1)', padding: '1px 5px', borderRadius: 3, marginLeft: 6,
+      }}>
+        Stale
+      </span>
+    );
+  }
+  if (days > 30) {
+    return (
+      <span title={`${days} days old — may need refresh`} style={{
+        display: 'inline-flex', alignItems: 'center',
+        fontSize: 10, fontWeight: 500, color: 'var(--status-running-text)',
+        background: 'rgba(217,119,6,0.1)', padding: '1px 5px', borderRadius: 3, marginLeft: 6,
+      }}>
+        Review
+      </span>
+    );
+  }
+  return null;
+}
+
 function ConfirmDialog({ message, onConfirm, onCancel }: {
   message: string; onConfirm: () => void; onCancel: () => void;
 }) {
@@ -594,6 +622,7 @@ function RunMonitorTab() {
                 </td>
                 <td style={{ padding: '11px 16px', fontSize: 13, color: 'var(--text-secondary)' }} title={new Date(r.created_at).toLocaleString()}>
                   {relativeTime(r.created_at)}
+                  <FreshnessBadge createdAt={r.created_at} status={r.status} />
                 </td>
                 <td style={{ padding: '11px 16px', fontSize: 13, color: 'var(--text-secondary)' }}>
                   {formatDuration(r.created_at, r.completed_at)}
