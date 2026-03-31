@@ -570,7 +570,7 @@ function sourceStatusColor(url: string, usedUrls: Set<string>, gatheredUrls: Set
 /*  Level 1: Compact Query Category Card                               */
 /* ------------------------------------------------------------------ */
 
-function QueryCategoryCard({ group, isExpanded, onToggle, usedUrls, gatheredUrls, hasSourceUsage, onClickSource }: {
+function QueryCategoryCard({ group, isExpanded, onToggle, usedUrls, gatheredUrls, hasSourceUsage, onClickSource, sonnetDecisions, opusDecisions }: {
   group: QueryGroup;
   isExpanded: boolean;
   onToggle: () => void;
@@ -578,6 +578,8 @@ function QueryCategoryCard({ group, isExpanded, onToggle, usedUrls, gatheredUrls
   gatheredUrls: Set<string>;
   hasSourceUsage: boolean;
   onClickSource: (postIt: PostIt) => void;
+  sonnetDecisions: Map<string, { decision: string; reasoning: string; droppedBy?: string }>;
+  opusDecisions: Map<string, { decision: string; reasoning: string; used_in_sections?: string[] }>;
 }) {
   const total = group.results.length;
   const barTotal = Math.max(1, total);
@@ -706,6 +708,13 @@ function QueryCategoryCard({ group, isExpanded, onToggle, usedUrls, gatheredUrls
           {group.results.map((r, i) => {
             const st = sourceStatusColor(r.url, usedUrls, gatheredUrls, hasSourceUsage);
             const tiltR = (seededRandom(`${group.category}-${i}`) - 0.5) * 3;
+            const sonnetD = sonnetDecisions.get(r.url);
+            const opusD = opusDecisions.get(r.url);
+            // Pick the most relevant reasoning for this source's status
+            const reasoning = st === 'discarded' ? sonnetD?.reasoning
+              : st === 'unused' ? opusD?.reasoning
+              : undefined;
+            const usedInSections = st === 'survived' ? opusD?.used_in_sections : undefined;
             return (
               <div
                 key={r.url}
@@ -718,7 +727,11 @@ function QueryCategoryCard({ group, isExpanded, onToggle, usedUrls, gatheredUrls
                     stage: 'sources',
                     status: st,
                     reason: st === 'survived' ? undefined : st === 'unused' ? 'Gathered but not cited in POV' : 'Not in distilled intelligence',
-                    detail: { url: r.url, title: r.title, query: group.query, snippet: r.snippet, category: group.category },
+                    detail: {
+                      url: r.url, title: r.title, query: group.query, snippet: r.snippet, category: group.category,
+                      sonnetReasoning: sonnetD?.reasoning, sonnetDroppedBy: sonnetD?.droppedBy,
+                      opusReasoning: opusD?.reasoning, opusUsedInSections: opusD?.used_in_sections,
+                    },
                   });
                 }}
                 style={{
@@ -734,12 +747,12 @@ function QueryCategoryCard({ group, isExpanded, onToggle, usedUrls, gatheredUrls
                   textDecoration: st === 'discarded' ? 'line-through' : 'none',
                   transition: 'transform 0.12s',
                   display: 'flex',
-                  alignItems: 'center',
+                  alignItems: 'flex-start',
                   gap: 6,
                 }}
               >
                 <div style={{
-                  width: 5, height: 5, borderRadius: '50%', flexShrink: 0,
+                  width: 5, height: 5, borderRadius: '50%', flexShrink: 0, marginTop: 4,
                   background: st === 'survived' ? '#10b981' : st === 'unused' ? '#d97706' : '#dc2626',
                 }} />
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -755,6 +768,29 @@ function QueryCategoryCard({ group, isExpanded, onToggle, usedUrls, gatheredUrls
                   <div style={{ color: 'var(--text-tertiary)', fontSize: 9 }}>
                     {getDomain(r.url)}
                   </div>
+                  {reasoning && (
+                    <div style={{
+                      fontSize: 9, fontStyle: 'italic',
+                      color: 'var(--text-tertiary)',
+                      marginTop: 2, lineHeight: 1.3,
+                      display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+                      overflow: 'hidden', textDecoration: 'none',
+                    }}>
+                      {reasoning}
+                    </div>
+                  )}
+                  {usedInSections && usedInSections.length > 0 && (
+                    <div style={{ display: 'flex', gap: 2, marginTop: 3, flexWrap: 'wrap' }}>
+                      {usedInSections.map((s: string) => (
+                        <span key={s} style={{
+                          fontSize: 8, padding: '1px 4px', borderRadius: 3,
+                          background: 'rgba(16,185,129,0.15)', color: '#10b981', fontWeight: 500,
+                        }}>
+                          {s}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             );
@@ -788,6 +824,25 @@ function SourcesGrid({ data, onClickSource }: {
     if (sourceUsageEvent) for (const src of (sourceUsageEvent.unusedSources || [])) s.add(src.url);
     return s;
   }, [sourceUsageEvent]);
+
+  // Decision reasoning lookup maps
+  const sonnetDecisions = useMemo(() => {
+    const m = new Map<string, { decision: string; reasoning: string; droppedBy?: string }>();
+    const ev = events.find(e => e.event === 'm1:distillation_decisions');
+    if (ev?.decisions) {
+      for (const d of ev.decisions) if (d.url) m.set(d.url, d);
+    }
+    return m;
+  }, [events]);
+
+  const opusDecisions = useMemo(() => {
+    const m = new Map<string, { decision: string; reasoning: string; used_in_sections?: string[] }>();
+    const ev = events.find(e => e.event === 'm1:source_decisions');
+    if (ev?.decisions) {
+      for (const d of ev.decisions) if (d.url) m.set(d.url, d);
+    }
+    return m;
+  }, [events]);
 
   const { groups, totalSources } = useMemo(() => extractQueryGroups(data), [data]);
 
@@ -863,6 +918,8 @@ function SourcesGrid({ data, onClickSource }: {
             gatheredUrls={gatheredUrls}
             hasSourceUsage={!!sourceUsageEvent}
             onClickSource={onClickSource}
+            sonnetDecisions={sonnetDecisions}
+            opusDecisions={opusDecisions}
           />
         ))}
       </div>
@@ -879,6 +936,7 @@ function DistillationFunnel({ data }: {
 }) {
   const events = data.events || [];
   const sourceUsageEvent = events.find(e => e.event === 'm1:source_usage');
+  const distillationDecisions = events.find(e => e.event === 'm1:distillation_decisions');
 
   if (!sourceUsageEvent) return null;
 
@@ -887,6 +945,9 @@ function DistillationFunnel({ data }: {
   const unused = sourceUsageEvent.unusedSources || [];
   const usedCount = sourceUsageEvent.sourcesUsedInPov || used.length;
   const gatheredCount = unused.length;
+
+  // Aggregate drop reasons from distillation decisions
+  const dropReasons: Record<string, number> = distillationDecisions?.dropReasons || {};
 
   // Funnel widths (relative to 100%)
   const maxWidth = 120;
@@ -972,6 +1033,25 @@ function DistillationFunnel({ data }: {
 
       {/* Unused sources (collapsed by default) */}
       {unused.length > 0 && <UnusedSourcesList unused={unused} />}
+
+      {/* Drop reason breakdown from distillation decisions */}
+      {Object.keys(dropReasons).length > 0 && (
+        <div style={{
+          fontSize: 10, color: 'var(--text-tertiary)',
+          display: 'flex', flexDirection: 'column', gap: 2,
+          padding: '4px 0',
+        }}>
+          <div style={{ fontWeight: 600, fontSize: 9, textTransform: 'uppercase', marginBottom: 1 }}>
+            Dropped by
+          </div>
+          {Object.entries(dropReasons).sort((a, b) => b[1] - a[1]).map(([reason, count]) => (
+            <div key={reason} style={{ display: 'flex', justifyContent: 'space-between', gap: 4 }}>
+              <span>{reason}</span>
+              <span style={{ fontWeight: 600 }}>{count}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -1175,6 +1255,50 @@ function DetailPanel({ postIt, onClose, sourceUsageEvent }: { postIt: PostIt; on
           fontSize: 12, color: '#dc2626',
         }}>
           {postIt.reason}
+        </div>
+      )}
+
+      {/* Decision reasoning from Sonnet (distillation) and/or Opus (POV inclusion) */}
+      {(postIt.detail?.sonnetReasoning || postIt.detail?.opusReasoning) && (
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', marginBottom: 6, textTransform: 'uppercase' }}>
+            Decision reasoning
+          </div>
+          {postIt.detail.sonnetReasoning && (
+            <div style={{ fontSize: 12, padding: 8, background: 'var(--bg-input)', borderRadius: 4, marginBottom: 6 }}>
+              <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)' }}>
+                Sonnet (distillation){postIt.detail.sonnetDroppedBy ? ` \u2014 ${postIt.detail.sonnetDroppedBy}` : ''}:
+              </span>{' '}
+              {postIt.detail.sonnetReasoning}
+            </div>
+          )}
+          {postIt.detail.opusReasoning && (
+            <div style={{ fontSize: 12, padding: 8, background: 'var(--bg-input)', borderRadius: 4 }}>
+              <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)' }}>
+                Opus (POV generation):
+              </span>{' '}
+              {postIt.detail.opusReasoning}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Opus used_in_sections for cited sources */}
+      {postIt.detail?.opusUsedInSections?.length > 0 && (
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', marginBottom: 4, textTransform: 'uppercase' }}>
+            Used in POV Sections
+          </div>
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+            {postIt.detail.opusUsedInSections.map((section: string, i: number) => (
+              <span key={i} style={{
+                fontSize: 11, padding: '2px 8px', borderRadius: 4,
+                background: 'rgba(16,185,129,0.1)', color: '#10b981', fontWeight: 500,
+              }}>
+                {section}
+              </span>
+            ))}
+          </div>
         </div>
       )}
 
