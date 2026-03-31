@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import Layout from '../components/Layout';
 import TableSkeleton from '../components/TableSkeleton';
 import usePageTitle from '../hooks/usePageTitle';
-import { ArrowLeft, MessageSquare, FileText, Table, X, ChevronDown, ExternalLink, Send, Trash2, Target, Zap, TrendingUp, Wrench, Building2, Users, Briefcase, BookOpen, Link2, Share2, Sun, Moon, Globe, Layers, Handshake, Activity, Search } from 'lucide-react';
+import { ArrowLeft, MessageSquare, FileText, Table, X, ChevronDown, ExternalLink, Send, Trash2, Target, Zap, TrendingUp, Wrench, Building2, Users, Briefcase, BookOpen, Link2, Share2, Sun, Moon, Globe, Layers, Handshake, Activity, Search, RefreshCw } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 
 /* ------------------------------------------------------------------ */
@@ -40,6 +40,7 @@ const LANGUAGE_NAMES: Record<string, string> = {
 interface Brief {
   pov_json: Record<string, any> | null;
   personas_json: Record<string, any> | null;
+  hooks_json: Record<string, any> | null;
   schema_version: number | null;
 }
 
@@ -396,12 +397,13 @@ const TIERS = ['eb', 'champion', 'coach'] as const;
 
 function ContactRow({ contact }: { contact: any }) {
   const [expanded, setExpanded] = useState(false);
+  const presenceLevel = contact?.public_presence?.presence_level || contact?.presence_level;
   return (
     <>
       <div
         style={{
           display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0',
-          borderBottom: '1px solid var(--border)', cursor: 'pointer',
+          borderBottom: expanded ? 'none' : '1px solid var(--border)', cursor: 'pointer',
         }}
         onClick={() => setExpanded(!expanded)}
       >
@@ -410,56 +412,99 @@ function ContactRow({ contact }: { contact: any }) {
           <div style={{ fontWeight: 500, fontSize: 13 }}>{contact?.name}</div>
           <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{contact?.title}</div>
         </div>
-        {contact?.email && (
-          <div style={{ fontSize: 12, color: 'var(--text-tertiary)', flexShrink: 0 }}>
-            {contact.email}
-          </div>
-        )}
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
+          {contact?.departure_signal && (
+            <span style={{ fontSize: 11, padding: '2px 6px', borderRadius: 4, background: 'rgba(239,68,68,0.15)', color: '#ef4444', fontWeight: 500 }}>Departed</span>
+          )}
+          {presenceLevel && presenceLevel !== 'none' && (
+            <span style={{ fontSize: 11, padding: '2px 6px', borderRadius: 4, background: 'rgba(255,255,255,0.06)', color: 'var(--text-tertiary)' }}>{presenceLevel}</span>
+          )}
+        </div>
         <ChevronDown size={14} style={{
           color: 'var(--text-tertiary)', flexShrink: 0,
           transform: expanded ? 'rotate(180deg)' : 'none', transition: '120ms',
         }} />
       </div>
       {expanded && (
-        <div style={{ padding: '12px 0 16px 0', borderBottom: '1px solid var(--border)' }}>
-          {contact?.hook && (
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 4 }}>HOOK</div>
-              <div style={{ fontSize: 13 }}>{contact.hook}</div>
+        <div style={{ padding: '12px 16px 16px 16px', borderBottom: '1px solid var(--border)', background: 'rgba(255,255,255,0.02)', borderRadius: '0 0 8px 8px' }}>
+          {/* Outreach context — primary content with purple left border */}
+          {contact?.outreach_context && (
+            <div style={{
+              borderLeft: '3px solid #6366f1', paddingLeft: 12, fontStyle: 'italic',
+              fontSize: 13, lineHeight: 1.6, color: 'var(--text-primary)', marginBottom: 16,
+            }}>
+              {contact.outreach_context}
             </div>
           )}
+
+          {/* Briefing bullets */}
           {contact?.briefing_bullets?.length > 0 && (
             <div style={{ marginBottom: 12 }}>
-              <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 4 }}>BRIEFING</div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', marginBottom: 6, letterSpacing: '0.5px' }}>BRIEFING</div>
               <ul style={{ paddingLeft: 20, margin: 0 }}>
                 {contact.briefing_bullets.map((b: string, i: number) => (
-                  <li key={i} style={{ fontSize: 13, marginBottom: 2 }}>{b}</li>
+                  <li key={i} style={{ fontSize: 13, marginBottom: 4, color: 'var(--text-secondary)', lineHeight: 1.5 }}>{b}</li>
                 ))}
               </ul>
             </div>
           )}
-          {contact?.recommended_angle && (
-            <div>
-              <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 4 }}>ANGLE</div>
-              <div style={{ fontSize: 13 }}>{contact.recommended_angle}</div>
+
+          {/* Urgency triggers */}
+          {contact?.urgency_triggers?.length > 0 && (
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', marginBottom: 6, letterSpacing: '0.5px' }}>URGENCY</div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {contact.urgency_triggers.map((t: string, i: number) => (
+                  <span key={i} style={{ fontSize: 12, padding: '3px 8px', borderRadius: 4, background: 'rgba(245,158,11,0.12)', color: '#f59e0b' }}>{t}</span>
+                ))}
+              </div>
             </div>
           )}
-          {contact?.url && (
-            <a href={contact.url} target="_blank" rel="noopener noreferrer"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--accent)', marginTop: 8 }}>
-              LinkedIn <ExternalLink size={11} />
-            </a>
+
+          {/* Recommended angle */}
+          {contact?.recommended_angle && (
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', marginBottom: 6, letterSpacing: '0.5px' }}>ANGLE</div>
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{contact.recommended_angle}</div>
+            </div>
           )}
+
+          {/* Footer: email, presence, LinkedIn */}
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+            {contact?.email && (
+              <span style={{ fontSize: 12, padding: '3px 8px', borderRadius: 4, background: 'rgba(34,197,94,0.12)', color: '#22c55e' }}>{contact.email}</span>
+            )}
+            {presenceLevel && (
+              <span style={{ fontSize: 12, padding: '3px 8px', borderRadius: 4, background: 'rgba(255,255,255,0.06)', color: 'var(--text-tertiary)' }}>{presenceLevel} presence</span>
+            )}
+            {contact?.departure_signal && (
+              <span style={{ fontSize: 12, padding: '3px 8px', borderRadius: 4, background: 'rgba(239,68,68,0.15)', color: '#ef4444' }}>Departed</span>
+            )}
+            {contact?.url && (
+              <a href={contact.url} target="_blank" rel="noopener noreferrer"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--accent)' }}>
+                LinkedIn <ExternalLink size={11} />
+              </a>
+            )}
+          </div>
         </div>
       )}
     </>
   );
 }
 
-function ContactMatrix({ personas }: { personas: any }) {
+function ContactMatrix({ personas, hooksData }: { personas: any; hooksData?: any }) {
   const [activeTab, setActiveTab] = useState<string>('design');
   const matrix = personas?.matrix;
   if (!matrix) return null;
+
+  // Build a lookup from hooks contacts by name (case-insensitive)
+  const hooksLookup = new Map<string, any>();
+  if (hooksData?.contacts) {
+    for (const hc of hooksData.contacts) {
+      if (hc?.name) hooksLookup.set(hc.name.toLowerCase(), hc);
+    }
+  }
 
   // Find first tab that has contacts
   const availableTabs = FUNCTIONS.filter(f => {
@@ -475,12 +520,16 @@ function ContactMatrix({ personas }: { personas: any }) {
     for (const tier of TIERS) {
       const contacts = fnData?.[tier];
       if (Array.isArray(contacts)) {
-        for (const c of contacts) currentContacts.push({ ...c, tier });
+        for (const c of contacts) {
+          // Merge hooks data into contact (hooks fields take priority for enriched fields)
+          const hookContact = c?.name ? hooksLookup.get(c.name.toLowerCase()) : null;
+          currentContacts.push({ ...c, ...hookContact, tier });
+        }
       }
     }
   }
 
-  const rfm = personas?.recommended_first_move;
+  const rfm = hooksData?.recommended_first_move || personas?.recommended_first_move;
 
   const totalContacts = FUNCTIONS.reduce((n, f) => n + TIERS.reduce((m, t) => m + (matrix?.[f]?.[t]?.length || 0), 0), 0);
 
@@ -1218,7 +1267,7 @@ function IntelInline({ text }: { text: string }) {
 /*  Brief content (reordered sections)                                 */
 /* ------------------------------------------------------------------ */
 
-function BriefContent({ pov, personas, runId, session }: { pov: any; personas: any; runId?: string; session?: any }) {
+function BriefContent({ pov, personas, hooksData, runId, session }: { pov: any; personas: any; hooksData?: any; runId?: string; session?: any }) {
   const [showAllSources, setShowAllSources] = useState(false);
 
   const allSources = pov?.sources_used || [];
@@ -1474,7 +1523,7 @@ function BriefContent({ pov, personas, runId, session }: { pov: any; personas: a
       )}
 
       {/* 12. Contact Matrix */}
-      {personas && <ContactMatrix personas={personas} />}
+      {personas && <ContactMatrix personas={personas} hooksData={hooksData} />}
 
       {/* 13. Research Deep Dive */}
       {pov?.distilled_intel && <ResearchDeepDive intel={pov.distilled_intel} />}
@@ -1602,6 +1651,8 @@ export default function BriefView() {
   const [shareStatus, setShareStatus] = useState<'idle' | 'loading' | 'copied'>('idle');
   const [runningEnglish, setRunningEnglish] = useState(false);
   const [englishSubmitted, setEnglishSubmitted] = useState(false);
+  const [rerendering, setRerendering] = useState(false);
+  const [rerenderDone, setRerenderDone] = useState(false);
 
   const { theme, toggle: toggleTheme } = useTheme();
 
@@ -1654,6 +1705,25 @@ export default function BriefView() {
       setDeleting(false);
     }
   };
+  const handleRegeneratePdf = async () => {
+    if (!session || !run) return;
+    setRerendering(true);
+    try {
+      const res = await workerFetch(`/regenerate-pdf/${run.id}`, { method: 'POST' });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Re-render failed' }));
+        alert(err.error || 'Re-render failed');
+        return;
+      }
+      setRerenderDone(true);
+      setTimeout(() => setRerenderDone(false), 3000);
+    } catch (err: any) {
+      alert('Re-render failed: ' + err.message);
+    } finally {
+      setRerendering(false);
+    }
+  };
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -1680,7 +1750,7 @@ export default function BriefView() {
       if (runData.brief_id) {
         const { data: briefData } = await supabase
           .from('briefs')
-          .select('pov_json, personas_json, schema_version')
+          .select('pov_json, personas_json, hooks_json, schema_version')
           .eq('id', runData.brief_id)
           .single();
         if (!cancelled && briefData) {
@@ -1697,6 +1767,7 @@ export default function BriefView() {
 
   const pov = brief?.pov_json;
   const personas = brief?.personas_json;
+  const hooksData = brief?.hooks_json;
 
   const sendMessage = async (content: string) => {
     if (!content.trim() || streaming) return;
@@ -1916,6 +1987,26 @@ export default function BriefView() {
                 {'\u{1F1EC}\u{1F1E7}'} English run submitted
               </span>
             )}
+            {userProfile?.role === 'admin' && run.status === 'complete' && (
+              <button
+                onClick={handleRegeneratePdf}
+                disabled={rerendering || rerenderDone}
+                style={{
+                  background: 'transparent',
+                  border: '1px solid var(--border-strong)',
+                  color: rerenderDone ? 'var(--status-complete-text)' : 'var(--text-tertiary)',
+                  padding: '6px 12px', fontSize: 13, borderRadius: 6,
+                  cursor: rerendering || rerenderDone ? 'default' : 'pointer',
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  opacity: rerendering ? 0.6 : 1,
+                }}
+                onMouseEnter={e => { if (!rerendering && !rerenderDone) e.currentTarget.style.color = 'var(--accent)'; }}
+                onMouseLeave={e => { if (!rerenderDone) e.currentTarget.style.color = 'var(--text-tertiary)'; }}
+              >
+                <RefreshCw size={14} style={rerendering ? { animation: 'spin 1s linear infinite' } : undefined} />
+                {rerendering ? 'Re-rendering\u2026' : rerenderDone ? 'Dispatched!' : 'Re-render PDF'}
+              </button>
+            )}
             {userProfile?.role === 'admin' && (
               <>
                 {!deleteConfirm ? (
@@ -2013,7 +2104,7 @@ export default function BriefView() {
 
         {/* ============ Brief content sections ============ */}
         {pov && (
-          <BriefContent pov={pov} personas={personas} runId={run_id} session={session} />
+          <BriefContent pov={pov} personas={personas} hooksData={hooksData} runId={run_id} session={session} />
         )}
       </div>
 

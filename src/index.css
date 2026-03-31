@@ -111,3 +111,8 @@ a { color: inherit; text-decoration: none; }
   /* Show mobile nav */
   .mobile-nav { display: flex !important; }
 }
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
