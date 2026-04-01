@@ -73,6 +73,7 @@ const COLORS = {
   borderLight: '#f5f3ef',
   faint: '#a8a29e',
   body: '#44403c',
+  heading: '#1a1a1a',
   secondary: '#57534e',
   tertiary: '#78716c',
   purple: '#7c3aed',
@@ -191,8 +192,8 @@ function Section({
         }}
       >
         <span style={{
-          fontFamily: FONTS.serif, fontSize: 16, fontWeight: 500,
-          color: COLORS.body, flex: 1,
+          fontFamily: FONTS.serif, fontSize: 19, fontWeight: 500,
+          color: COLORS.heading, flex: 1,
         }}>
           {title}
         </span>
@@ -318,7 +319,7 @@ function DataRow({
       paddingLeft: 14,
     }}>
       <div style={{ width: 180, flexShrink: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.body, fontFamily: FONTS.sans }}>{title}</div>
+        <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.heading, fontFamily: FONTS.sans }}>{title}</div>
         {subtitle && <div style={{ fontSize: 12, color: COLORS.tertiary, fontFamily: FONTS.sans, marginTop: 2 }}>{subtitle}</div>}
       </div>
       <div style={{ flex: 1, fontSize: 14, color: COLORS.secondary, lineHeight: 1.65, fontFamily: FONTS.sans }}>
@@ -724,7 +725,7 @@ function MetricsBar({ pov, personas }: { pov: any; hooksData?: any; personas?: a
             {item.label}
           </div>
           <div style={{
-            fontSize: 22, fontWeight: 700, color: COLORS.body,
+            fontSize: 22, fontWeight: 700, color: COLORS.heading,
             fontFamily: FONTS.serif,
           }}>
             {item.value}
@@ -1539,7 +1540,7 @@ function ContactCard({ contact }: { contact: any }) {
         {/* Name, tier, title on one baseline */}
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 14, fontWeight: 600, color: COLORS.body, fontFamily: FONTS.sans }}>
+            <span style={{ fontSize: 14, fontWeight: 600, color: COLORS.heading, fontFamily: FONTS.sans }}>
               {contact?.name}
             </span>
             <TierBadge tier={tier} />
@@ -2304,7 +2305,7 @@ export default function BriefView() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 6, flexWrap: 'wrap' }}>
               <h1 style={{
                 fontFamily: FONTS.serif, fontSize: 30, fontWeight: 600,
-                margin: 0, letterSpacing: '-0.03em', color: COLORS.body,
+                margin: 0, letterSpacing: '-0.03em', color: COLORS.heading,
               }}>
                 {pov?.company_name || run.company}
               </h1>
