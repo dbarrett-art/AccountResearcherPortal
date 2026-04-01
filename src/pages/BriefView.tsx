@@ -319,10 +319,10 @@ function DataRow({
       paddingLeft: 14,
     }}>
       <div style={{ width: 180, flexShrink: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.heading, fontFamily: FONTS.sans }}>{title}</div>
-        {subtitle && <div style={{ fontSize: 12, color: COLORS.tertiary, fontFamily: FONTS.sans, marginTop: 2 }}>{subtitle}</div>}
+        <div style={{ fontSize: 15, fontWeight: 600, color: COLORS.heading, fontFamily: FONTS.sans }}>{title}</div>
+        {subtitle && <div style={{ fontSize: 13, color: COLORS.tertiary, fontFamily: FONTS.sans, marginTop: 2 }}>{subtitle}</div>}
       </div>
-      <div style={{ flex: 1, fontSize: 14, color: COLORS.secondary, lineHeight: 1.65, fontFamily: FONTS.sans }}>
+      <div style={{ flex: 1, fontSize: 16, color: COLORS.secondary, lineHeight: 1.65, fontFamily: FONTS.sans }}>
         {children}
       </div>
     </div>
@@ -401,7 +401,7 @@ function CitedProse({ text, sources }: { text: string | undefined | null; source
   });
   return (
     <p style={{
-      fontSize: 15, lineHeight: 1.75, color: COLORS.body,
+      fontSize: 17, lineHeight: 1.75, color: COLORS.body,
       fontFamily: FONTS.sans, margin: 0,
     }} dangerouslySetInnerHTML={{ __html: html }} />
   );
@@ -422,7 +422,7 @@ function IntelMarkdown({ text }: { text: string }) {
     if (line.startsWith('## ') && !line.startsWith('### ')) {
       elements.push(
         <div key={i} style={{
-          fontSize: 14, fontWeight: 700, color: COLORS.body,
+          fontSize: 16, fontWeight: 700, color: COLORS.body,
           textTransform: 'uppercase', letterSpacing: '0.04em',
           marginTop: elements.length > 0 ? 20 : 0, marginBottom: 8,
           fontFamily: FONTS.sans,
@@ -437,7 +437,7 @@ function IntelMarkdown({ text }: { text: string }) {
     if (line.startsWith('### ')) {
       elements.push(
         <div key={i} style={{
-          fontSize: 13, fontWeight: 600, color: COLORS.body,
+          fontSize: 15, fontWeight: 600, color: COLORS.body,
           textTransform: 'uppercase', letterSpacing: '0.03em',
           marginTop: elements.length > 0 ? 16 : 0, marginBottom: 6,
           fontFamily: FONTS.sans,
@@ -459,7 +459,7 @@ function IntelMarkdown({ text }: { text: string }) {
           padding: '10px 14px', margin: '8px 0',
           borderRadius: '0 6px 6px 0',
         }}>
-          <div style={{ fontStyle: 'italic', fontSize: 14, color: COLORS.body, lineHeight: 1.6, fontFamily: FONTS.serif }}>
+          <div style={{ fontStyle: 'italic', fontSize: 16, color: COLORS.body, lineHeight: 1.6, fontFamily: FONTS.serif }}>
             &ldquo;{quoteText}&rdquo;
           </div>
           {srcMatch && (
@@ -511,14 +511,14 @@ function IntelMarkdown({ text }: { text: string }) {
       elements.push(
         <ul key={`ul-${i}`} style={{ paddingLeft: 20, margin: '4px 0' }}>
           {bullets.map((b, j) => (
-            <li key={j} style={{ marginBottom: 2, fontSize: 14, color: COLORS.secondary }}><IntelInline text={b} /></li>
+            <li key={j} style={{ marginBottom: 2, fontSize: 16, color: COLORS.secondary }}><IntelInline text={b} /></li>
           ))}
         </ul>
       );
       continue;
     }
 
-    elements.push(<div key={i} style={{ marginBottom: 4, fontSize: 14, color: COLORS.secondary }}><IntelInline text={line} /></div>);
+    elements.push(<div key={i} style={{ marginBottom: 4, fontSize: 16, color: COLORS.secondary }}><IntelInline text={line} /></div>);
     i++;
   }
 
@@ -849,7 +849,7 @@ function AboutSection({ pov, sources }: { pov: any; sources: any[] }) {
 
       {/* Org narrative */}
       {pov?.org_structure?.structure_summary && (
-        <p style={{ fontSize: 15, lineHeight: 1.75, color: COLORS.body, fontFamily: FONTS.sans, margin: '12px 0' }}>
+        <p style={{ fontSize: 17, lineHeight: 1.75, color: COLORS.body, fontFamily: FONTS.sans, margin: '12px 0' }}>
           {pov.org_structure.structure_summary}
         </p>
       )}
@@ -871,7 +871,7 @@ function AboutSection({ pov, sources }: { pov: any; sources: any[] }) {
             textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6,
             fontFamily: FONTS.sans,
           }}>Revenue Model</div>
-          <p style={{ fontSize: 14, lineHeight: 1.7, color: COLORS.body, fontFamily: FONTS.sans, margin: 0 }}>
+          <p style={{ fontSize: 16, lineHeight: 1.7, color: COLORS.body, fontFamily: FONTS.sans, margin: 0 }}>
             {about.how_they_make_money}
           </p>
         </div>
@@ -898,7 +898,7 @@ function ExpandableObjective({ objective, index }: { objective: any; index: numb
         {detail && <ItemChevron open={open} onClick={() => setOpen(o => !o)} />}
         <div style={{ flex: 1, cursor: detail ? 'pointer' : 'default' }} onClick={() => detail && setOpen(o => !o)}>
           <div style={{
-            fontSize: 14, fontWeight: 500, color: COLORS.body,
+            fontSize: 16, fontWeight: 500, color: COLORS.body,
             fontFamily: FONTS.sans, lineHeight: 1.5,
           }}>
             {title}
@@ -908,7 +908,7 @@ function ExpandableObjective({ objective, index }: { objective: any; index: numb
       {open && detail && (
         <div style={{
           marginTop: 8, marginLeft: 32,
-          fontSize: 14, lineHeight: 1.65, color: COLORS.secondary,
+          fontSize: 16, lineHeight: 1.65, color: COLORS.secondary,
           fontFamily: FONTS.sans,
         }}>
           {detail}
@@ -1009,7 +1009,7 @@ function TriggerBlock({ trigger, sources }: { trigger: any; sources?: any[] }) {
       </div>
 
       <div style={{
-        fontSize: 14, color: COLORS.body, lineHeight: 1.5,
+        fontSize: 16, color: COLORS.body, lineHeight: 1.5,
         fontWeight: 500, fontFamily: FONTS.sans, marginBottom: 4,
       }}>
         {trigger?.trigger}
@@ -1017,7 +1017,7 @@ function TriggerBlock({ trigger, sources }: { trigger: any; sources?: any[] }) {
 
       {trigger?.evidence && (
         <Trunc lines={2} expanded={expanded} onToggle={() => setExpanded(e => !e)}>
-          <div style={{ fontSize: 14, color: COLORS.secondary, fontFamily: FONTS.sans }}>
+          <div style={{ fontSize: 16, color: COLORS.secondary, fontFamily: FONTS.sans }}>
             <CitedProse text={trigger.evidence} sources={sources} />
           </div>
         </Trunc>
@@ -1072,16 +1072,16 @@ function ExpandableProduct({ product }: { product: any }) {
         {hasMore && <ItemChevron open={open} onClick={() => setOpen(o => !o)} />}
         <div style={{ flex: 1 }}>
           <div style={{
-            fontSize: 14, fontWeight: 600, color: COLORS.purple,
+            fontSize: 16, fontWeight: 600, color: COLORS.purple,
             fontFamily: FONTS.sans, marginBottom: 4,
           }}>
             {name}
           </div>
-          <div style={{ fontSize: 13, color: COLORS.secondary, fontFamily: FONTS.sans, lineHeight: 1.6 }}>
+          <div style={{ fontSize: 15, color: COLORS.secondary, fontFamily: FONTS.sans, lineHeight: 1.6 }}>
             {firstSentence}
           </div>
           {open && hasMore && (
-            <div style={{ fontSize: 13, color: COLORS.secondary, fontFamily: FONTS.sans, lineHeight: 1.6, marginTop: 6 }}>
+            <div style={{ fontSize: 15, color: COLORS.secondary, fontFamily: FONTS.sans, lineHeight: 1.6, marginTop: 6 }}>
               {relevance}
             </div>
           )}
@@ -1112,7 +1112,7 @@ function WhyFigmaSection({ pov, sources }: { pov: any; sources: any[] }) {
             textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6,
             fontFamily: FONTS.sans,
           }}>Strongest Angle</div>
-          <p style={{ fontSize: 14, lineHeight: 1.7, color: COLORS.body, fontFamily: FONTS.sans, margin: 0 }}>
+          <p style={{ fontSize: 16, lineHeight: 1.7, color: COLORS.body, fontFamily: FONTS.sans, margin: 0 }}>
             {wf.strongest_angle}
           </p>
         </div>
@@ -1151,7 +1151,7 @@ function WhyFigmaSection({ pov, sources }: { pov: any; sources: any[] }) {
                 {di.named_systems?.length > 0 && (
                   <div style={{ marginBottom: 12 }}>
                     {di.named_systems.map((sys: any, i: number) => (
-                      <div key={i} style={{ fontSize: 13, color: COLORS.secondary, fontFamily: FONTS.sans, marginBottom: 4 }}>
+                      <div key={i} style={{ fontSize: 15, color: COLORS.secondary, fontFamily: FONTS.sans, marginBottom: 4 }}>
                         <strong style={{ color: COLORS.body }}>{sys.name}</strong>
                         {sys.scope && <span> — {sys.scope}</span>}
                         {sys.maturity && <span style={{ color: COLORS.tertiary }}> ({sys.maturity})</span>}
@@ -1173,12 +1173,12 @@ function WhyFigmaSection({ pov, sources }: { pov: any; sources: any[] }) {
                 )}
 
                 {di.design_team_size && (
-                  <div style={{ fontSize: 13, color: COLORS.secondary, fontFamily: FONTS.sans, marginBottom: 8 }}>
+                  <div style={{ fontSize: 15, color: COLORS.secondary, fontFamily: FONTS.sans, marginBottom: 8 }}>
                     <strong>Team size:</strong> {di.design_team_size}
                   </div>
                 )}
                 {di.handoff_approach && (
-                  <div style={{ fontSize: 13, color: COLORS.secondary, fontFamily: FONTS.sans, marginBottom: 8 }}>
+                  <div style={{ fontSize: 15, color: COLORS.secondary, fontFamily: FONTS.sans, marginBottom: 8 }}>
                     <strong>Handoff:</strong> {di.handoff_approach}
                   </div>
                 )}
@@ -1201,7 +1201,7 @@ function WhyFigmaSection({ pov, sources }: { pov: any; sources: any[] }) {
                   borderRadius: '0 6px 6px 0',
                 }}>
                   <div style={{
-                    fontStyle: 'italic', fontSize: 14,
+                    fontStyle: 'italic', fontSize: 16,
                     color: COLORS.body, lineHeight: 1.6,
                     fontFamily: FONTS.serif,
                   }}>
@@ -1213,7 +1213,7 @@ function WhyFigmaSection({ pov, sources }: { pov: any; sources: any[] }) {
                     </div>
                   )}
                   {ps.relevance && (
-                    <div style={{ fontSize: 12, color: COLORS.tertiary, marginTop: 2, fontFamily: FONTS.sans }}>{ps.relevance}</div>
+                    <div style={{ fontSize: 14, color: COLORS.tertiary, marginTop: 2, fontFamily: FONTS.sans }}>{ps.relevance}</div>
                   )}
                   {ps.source && (
                     <a href={ps.source} target="_blank" rel="noopener noreferrer"
@@ -1248,12 +1248,12 @@ function DeepDiveSubsection({ heading, body }: { heading: string; body: string }
         }}
       >
         <ItemChevron open={open} onClick={() => {}} />
-        <span style={{ fontSize: 14, fontWeight: 500, color: COLORS.body, fontFamily: FONTS.sans }}>
+        <span style={{ fontSize: 16, fontWeight: 500, color: COLORS.body, fontFamily: FONTS.sans }}>
           {heading}
         </span>
       </div>
       {open && (
-        <div style={{ padding: '12px 0 8px 32px', fontSize: 14, lineHeight: 1.7, color: COLORS.secondary }}>
+        <div style={{ padding: '12px 0 8px 32px', fontSize: 16, lineHeight: 1.7, color: COLORS.secondary }}>
           <IntelMarkdown text={body} />
         </div>
       )}
@@ -1288,7 +1288,7 @@ function ResearchDeepDiveSection({ pov }: { pov: any }) {
   return (
     <Section title="Research Deep Dive" accent={SECTION_ACCENTS.researchDeepDive}>
       <Trunc lines={10} expanded={expanded} onToggle={() => setExpanded(e => !e)}>
-        <div style={{ fontSize: 14, lineHeight: 1.7, color: COLORS.secondary, fontFamily: FONTS.sans }}>
+        <div style={{ fontSize: 16, lineHeight: 1.7, color: COLORS.secondary, fontFamily: FONTS.sans }}>
           <IntelMarkdown text={cleanIntel} />
         </div>
       </Trunc>
@@ -1332,11 +1332,11 @@ function ValuePyramidSection({ pyramid }: { pyramid: any }) {
               {layer.label}
             </div>
             {layer.items.map((item: any, i: number) => (
-              <div key={i} style={{ fontSize: 14, color: COLORS.body, fontFamily: FONTS.sans, marginBottom: 6, lineHeight: 1.6 }}>
+              <div key={i} style={{ fontSize: 16, color: COLORS.body, fontFamily: FONTS.sans, marginBottom: 6, lineHeight: 1.6 }}>
                 {item[layer.field] || item.objective || item.strategy || item.initiative}
                 {item.talk_track && (
                   <div style={{
-                    fontSize: 13, color: COLORS.secondary, fontStyle: 'italic',
+                    fontSize: 15, color: COLORS.secondary, fontStyle: 'italic',
                     borderLeft: `2px solid #a855f7`, paddingLeft: 8, marginTop: 4,
                     fontFamily: FONTS.sans,
                   }}>
@@ -1390,7 +1390,7 @@ function JobSignalsSection({ pov }: { pov: any }) {
                     {formatCategory(s.category)}
                   </span>
                 )}
-                <div style={{ fontSize: 14, color: COLORS.body, fontFamily: FONTS.sans, lineHeight: 1.5 }}>
+                <div style={{ fontSize: 16, color: COLORS.body, fontFamily: FONTS.sans, lineHeight: 1.5 }}>
                   {s.signal}
                 </div>
                 {s.jobs?.length > 0 && (
@@ -1425,7 +1425,7 @@ function JobSignalsSection({ pov }: { pov: any }) {
           padding: '10px 0',
           borderBottom: `1px solid ${COLORS.borderLight}`,
         }}>
-          <div style={{ fontSize: 14, fontWeight: 500, color: COLORS.body, fontFamily: FONTS.sans }}>
+          <div style={{ fontSize: 16, fontWeight: 500, color: COLORS.body, fontFamily: FONTS.sans }}>
             {s?.role_title}
             {s?.link && (
               <a href={s.link} target="_blank" rel="noopener noreferrer"
@@ -1437,7 +1437,7 @@ function JobSignalsSection({ pov }: { pov: any }) {
               </a>
             )}
           </div>
-          {s?.why_relevant && <div style={{ fontSize: 13, color: COLORS.secondary, marginTop: 4, fontFamily: FONTS.sans }}>{s.why_relevant}</div>}
+          {s?.why_relevant && <div style={{ fontSize: 15, color: COLORS.secondary, marginTop: 4, fontFamily: FONTS.sans }}>{s.why_relevant}</div>}
         </div>
       ))}
 
@@ -1447,7 +1447,7 @@ function JobSignalsSection({ pov }: { pov: any }) {
           padding: '10px 0',
           borderBottom: `1px solid ${COLORS.borderLight}`,
         }}>
-          <div style={{ fontSize: 14, fontWeight: 500, color: COLORS.body, fontFamily: FONTS.sans }}>
+          <div style={{ fontSize: 16, fontWeight: 500, color: COLORS.body, fontFamily: FONTS.sans }}>
             {s?.role_title}
             {s?.link && (
               <a href={s.link} target="_blank" rel="noopener noreferrer"
@@ -1459,7 +1459,7 @@ function JobSignalsSection({ pov }: { pov: any }) {
               </a>
             )}
           </div>
-          {s?.signal && <div style={{ fontSize: 13, color: COLORS.secondary, marginTop: 4, fontFamily: FONTS.sans }}>{s.signal}</div>}
+          {s?.signal && <div style={{ fontSize: 15, color: COLORS.secondary, marginTop: 4, fontFamily: FONTS.sans }}>{s.signal}</div>}
         </div>
       ))}
     </Section>
@@ -1549,18 +1549,18 @@ function ContactCard({ contact }: { contact: any }) {
         {/* Name, tier, title on one baseline */}
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 14, fontWeight: 600, color: COLORS.heading, fontFamily: FONTS.sans }}>
+            <span style={{ fontSize: 16, fontWeight: 600, color: COLORS.heading, fontFamily: FONTS.sans }}>
               {contact?.name}
             </span>
             <TierBadge tier={tier} />
-            <span style={{ fontSize: 13, color: COLORS.tertiary, fontFamily: FONTS.sans }}>
+            <span style={{ fontSize: 15, color: COLORS.tertiary, fontFamily: FONTS.sans }}>
               {contact?.title}
             </span>
           </div>
           {/* Summary text below */}
           {summary && (
             <div style={{
-              fontSize: 13, color: COLORS.secondary, fontFamily: FONTS.sans,
+              fontSize: 15, color: COLORS.secondary, fontFamily: FONTS.sans,
               marginTop: 4, lineHeight: 1.5,
             }}>
               {summary}
@@ -1582,7 +1582,7 @@ function ContactCard({ contact }: { contact: any }) {
               <Trunc lines={3} expanded={contextExpanded} onToggle={() => setContextExpanded(e => !e)}>
                 <div style={{
                   borderLeft: `3px solid ${COLORS.faint}`, paddingLeft: 12,
-                  fontStyle: 'italic', fontSize: 13, lineHeight: 1.65,
+                  fontStyle: 'italic', fontSize: 15, lineHeight: 1.65,
                   color: COLORS.body, fontFamily: FONTS.sans,
                 }}>
                   {contact.outreach_context}
@@ -1595,7 +1595,7 @@ function ContactCard({ contact }: { contact: any }) {
           {contact?.briefing_bullets?.length > 0 && (
             <ul style={{ paddingLeft: 20, margin: '0 0 12px 0' }}>
               {contact.briefing_bullets.map((b: string, i: number) => (
-                <li key={i} style={{ fontSize: 13, marginBottom: 4, color: COLORS.secondary, lineHeight: 1.5, fontFamily: FONTS.sans }}>{b}</li>
+                <li key={i} style={{ fontSize: 15, marginBottom: 4, color: COLORS.secondary, lineHeight: 1.5, fontFamily: FONTS.sans }}>{b}</li>
               ))}
             </ul>
           )}
@@ -1611,7 +1611,7 @@ function ContactCard({ contact }: { contact: any }) {
 
           {/* Recommended angle */}
           {contact?.recommended_angle && (
-            <div style={{ fontSize: 13, color: COLORS.secondary, marginBottom: 8, fontFamily: FONTS.sans }}>
+            <div style={{ fontSize: 15, color: COLORS.secondary, marginBottom: 8, fontFamily: FONTS.sans }}>
               <strong>Angle:</strong> {contact.recommended_angle}
             </div>
           )}
@@ -1693,10 +1693,10 @@ function ContactsSection({ personas, hooksData }: { personas: any; hooksData?: a
           <div style={{ fontSize: 11, fontWeight: 700, color: '#065f46', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6, fontFamily: FONTS.sans }}>
             Recommended First Move
           </div>
-          <div style={{ fontWeight: 500, fontSize: 14, color: COLORS.body, fontFamily: FONTS.sans }}>
+          <div style={{ fontWeight: 500, fontSize: 16, color: COLORS.body, fontFamily: FONTS.sans }}>
             {rfm.contact_name} {rfm.title ? `\u2014 ${rfm.title}` : ''}
           </div>
-          {rfm.angle && <div style={{ color: COLORS.secondary, marginTop: 4, fontSize: 13, fontFamily: FONTS.sans }}>{rfm.angle}</div>}
+          {rfm.angle && <div style={{ color: COLORS.secondary, marginTop: 4, fontSize: 15, fontFamily: FONTS.sans }}>{rfm.angle}</div>}
           {rfm.rationale && <div style={{ color: COLORS.tertiary, fontSize: 12, marginTop: 4, fontFamily: FONTS.sans }}>{rfm.rationale}</div>}
         </div>
       )}
@@ -1771,14 +1771,14 @@ function ProofPointsSection({ pov }: { pov: any }) {
           <div style={{ fontSize: 12, color: COLORS.tertiary, fontFamily: FONTS.sans }}>{pp?.reference}</div>
           {pp?.quote_or_stat && (
             <div style={{
-              fontSize: 15, fontStyle: 'italic', color: COLORS.body,
+              fontSize: 17, fontStyle: 'italic', color: COLORS.body,
               fontFamily: FONTS.serif, marginTop: 4, lineHeight: 1.5,
             }}>
               &ldquo;{pp.quote_or_stat}&rdquo;
             </div>
           )}
           {pp?.why_relevant && (
-            <div style={{ fontSize: 13, color: COLORS.secondary, marginTop: 4, fontFamily: FONTS.sans }}>{pp.why_relevant}</div>
+            <div style={{ fontSize: 15, color: COLORS.secondary, marginTop: 4, fontFamily: FONTS.sans }}>{pp.why_relevant}</div>
           )}
         </div>
       ))}
