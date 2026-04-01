@@ -6,7 +6,6 @@ import Layout from '../components/Layout';
 import TableSkeleton from '../components/TableSkeleton';
 import usePageTitle from '../hooks/usePageTitle';
 import { ArrowLeft, MessageSquare, FileText, Table, X, ChevronDown, ExternalLink, Send, Trash2, Activity, Share2, RefreshCw } from 'lucide-react';
-import { useTheme } from '../context/ThemeContext';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -563,7 +562,7 @@ function AgeBadge({ createdAt }: { createdAt: string | undefined }) {
 /*  Header metrics bar                                                 */
 /* ------------------------------------------------------------------ */
 
-function MetricsBar({ pov, hooksData, personas }: { pov: any; hooksData?: any; personas?: any }) {
+function MetricsBar({ pov, personas }: { pov: any; hooksData?: any; personas?: any }) {
   const revenue = pov?.overview?.revenue || pov?.about?.revenue;
   const employees = pov?.overview?.employees || pov?.about?.employees;
   const designOrg = pov?.overview?.design_org_size || pov?.org_structure?.design_team_size || pov?.why_figma?.design_infrastructure?.design_team_size;
@@ -901,7 +900,7 @@ function TriggerBlock({ trigger }: { trigger: any }) {
   );
 }
 
-function WhyNowSection({ pov, sources }: { pov: any; sources: any[] }) {
+function WhyNowSection({ pov }: { pov: any; sources?: any[] }) {
   const triggers = pov?.why_now?.triggers || [];
   if (triggers.length === 0) return null;
 
@@ -1886,7 +1885,6 @@ export default function BriefView() {
   const [rerendering, setRerendering] = useState(false);
   const [rerenderDone, setRerenderDone] = useState(false);
 
-  const { theme, toggle: toggleTheme } = useTheme();
 
   const handleRunInEnglish = async () => {
     if (!session || !run) return;
