@@ -640,17 +640,19 @@ function RunMonitorTab() {
                       <a href={`https://github.com/dbarrett-art/prospect-research/actions/runs/${r.gha_run_id}`} target="_blank" rel="noopener noreferrer">
                         <ExternalLink size={14} style={{ color: 'var(--text-secondary)' }} />
                       </a>
-                      {(r.status === 'failed' || r.status === 'running') && (
-                        <button onClick={() => fetchLogs(r.id)} style={{
-                          background: 'transparent',
-                          color: r.status === 'failed' ? 'var(--status-failed)' : 'var(--status-running-text)',
-                          border: `1px solid ${r.status === 'failed' ? 'var(--status-failed)' : 'var(--status-running-text)'}`,
-                          padding: '2px 8px', fontSize: 11, borderRadius: 4, cursor: 'pointer',
-                        }}>
-                          <FileText size={11} style={{ marginRight: 3, verticalAlign: 'middle' }} />
-                          Logs
-                        </button>
-                      )}
+                      <button
+                        onClick={() => fetchLogs(r.id)}
+                        title="View GHA logs"
+                        style={{
+                          background: 'transparent', border: 'none',
+                          color: 'var(--text-tertiary)', cursor: 'pointer',
+                          padding: 4, borderRadius: 4, transition: '80ms',
+                        }}
+                        onMouseEnter={e => (e.currentTarget.style.color = 'var(--accent)')}
+                        onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-tertiary)')}
+                      >
+                        <FileText size={13} />
+                      </button>
                     </div>
                   ) : '—'}
                 </td>
@@ -720,18 +722,18 @@ function RunMonitorTab() {
           display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200,
         }} onClick={() => setLogModal(null)}>
           <div onClick={(e) => e.stopPropagation()} style={{
-            background: 'var(--bg-surface)', border: '1px solid var(--border)',
+            background: '#0F1117', border: '1px solid #1F2937',
             borderRadius: 8, width: '80vw', maxWidth: 900, height: '70vh',
             display: 'flex', flexDirection: 'column',
           }}>
             <div style={{
-              padding: '14px 18px', borderBottom: '1px solid var(--border)',
+              padding: '14px 18px', borderBottom: '1px solid #1F2937',
               display: 'flex', justifyContent: 'space-between', alignItems: 'center',
             }}>
               <div>
-                <div style={{ fontWeight: 500 }}>GHA Logs — {logData?.company || 'Loading...'}</div>
+                <div style={{ fontWeight: 500, color: '#E5E7EB' }}>GHA Logs — {logData?.company || 'Loading...'}</div>
                 {logData?.gha_run_id && (
-                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
+                  <div style={{ fontSize: 12, color: '#9CA3AF', marginTop: 2 }}>
                     Run {logData.gha_run_id} ·{' '}
                     {logData.job_status === 'in_progress'
                       ? '\u{1F7E1} Running'
@@ -747,8 +749,8 @@ function RunMonitorTab() {
                 <button
                   onClick={() => fetchLogs(logModal!)}
                   style={{
-                    background: 'transparent', border: '1px solid var(--border-strong)',
-                    color: 'var(--text-secondary)', padding: '3px 10px',
+                    background: 'transparent', border: '1px solid #374151',
+                    color: '#9CA3AF', padding: '3px 10px',
                     fontSize: 11, borderRadius: 4, cursor: 'pointer',
                   }}
                 >
@@ -761,21 +763,61 @@ function RunMonitorTab() {
                   </a>
                 )}
                 <button onClick={() => setLogModal(null)} style={{
-                  background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer',
+                  background: 'transparent', border: 'none', color: '#9CA3AF', cursor: 'pointer',
                 }}>
                   <X size={16} />
                 </button>
               </div>
             </div>
-            <pre style={{
-              flex: 1, overflowY: 'auto', padding: '16px 18px',
-              fontSize: 12, fontFamily: 'var(--font-mono, monospace)',
-              color: 'var(--text-secondary)', lineHeight: 1.6,
-              whiteSpace: 'pre-wrap', wordBreak: 'break-all',
-              background: 'var(--bg-app)', margin: 0,
+            <div style={{
+              flex: 1, overflowY: 'auto', padding: '12px 16px',
+              background: '#0F1117', margin: 0,
             }}>
-              {logsLoading ? 'Loading logs...' : (logData?.error || logData?.logs || 'No logs available')}
-            </pre>
+              {logsLoading ? (
+                <div style={{ color: '#9CA3AF', fontSize: 12, fontFamily: 'monospace' }}>Loading logs...</div>
+              ) : logData?.error ? (
+                <div style={{ color: '#F87171', fontSize: 12, fontFamily: 'monospace' }}>{logData.error}</div>
+              ) : logData?.logs ? (
+                logData.logs.split('\n').map((line, i) => {
+                  const m = line.match(/^(\d{4}-\d{2}-\d{2}T[\d:.]+Z)\s+(.*)/s);
+                  const content = m ? m[2] : line;
+                  let color = '#E5E7EB';
+                  if (/\[Module|MODULE/.test(content)) color = '#60A5FA';
+                  else if (/error|Error|failed|Failed/.test(content)) color = '#F87171';
+                  else if (/✓|complete|Complete|success|Success/.test(content)) color = '#34D399';
+                  else if (/\[jobs\]|\[articles\]/.test(content)) color = '#A78BFA';
+                  if (m) {
+                    return (
+                      <div key={i} style={{ display: 'flex', gap: 12, lineHeight: 1.5 }}>
+                        <span style={{
+                          color: '#4B5563', fontSize: 10, fontFamily: 'monospace',
+                          whiteSpace: 'nowrap', flexShrink: 0, paddingTop: 1,
+                        }}>
+                          {m[1].slice(11, 23)}
+                        </span>
+                        <span style={{
+                          color, fontSize: 11, fontFamily: 'monospace',
+                          whiteSpace: 'pre-wrap', wordBreak: 'break-all',
+                        }}>
+                          {m[2]}
+                        </span>
+                      </div>
+                    );
+                  }
+                  return (
+                    <div key={i} style={{
+                      color: content.trim() ? color : 'transparent',
+                      fontSize: 11, fontFamily: 'monospace',
+                      whiteSpace: 'pre-wrap', lineHeight: 1.5,
+                    }}>
+                      {content || '\u00A0'}
+                    </div>
+                  );
+                })
+              ) : (
+                <div style={{ color: '#9CA3AF', fontSize: 12, fontFamily: 'monospace' }}>No logs available</div>
+              )}
+            </div>
           </div>
         </div>
       )}
