@@ -854,13 +854,9 @@ function AboutSection({ pov, sources }: { pov: any; sources: any[] }) {
         </p>
       )}
 
-      {/* what_they_do if separate from who_they_are — use IntelMarkdown for structured markdown */}
+      {/* what_they_do — always prose, no sub-headers */}
       {about.who_they_are && about.what_they_do && (
-        about.what_they_do.includes('## ') ? (
-          <IntelMarkdown text={about.what_they_do} />
-        ) : (
-          <CitedProse text={about.what_they_do} sources={sources} />
-        )
+        <CitedProse text={about.what_they_do} sources={sources} />
       )}
 
       {/* Revenue model callout */}
@@ -948,7 +944,7 @@ function WhyAnythingSection({ pov, sources }: { pov: any; sources: any[] }) {
             fontSize: 16, fontFamily: FONTS.serif, fontWeight: 500,
             color: COLORS.body, lineHeight: 1.6,
           }}>
-            {wa.corporate_strategy}
+            <CitedProse text={wa.corporate_strategy} sources={sources} />
           </div>
         </div>
       )}
@@ -977,9 +973,11 @@ function WhyAnythingSection({ pov, sources }: { pov: any; sources: any[] }) {
         </div>
       )}
 
-      {/* Narrative fallback */}
-      {wa.narrative && !wa.corporate_strategy && !objectives.length && (
-        <CitedProse text={wa.narrative} sources={sources} />
+      {/* Narrative */}
+      {wa.narrative && (
+        <div style={{ marginTop: 12 }}>
+          <CitedProse text={wa.narrative} sources={sources} />
+        </div>
       )}
     </Section>
   );
@@ -989,7 +987,7 @@ function WhyAnythingSection({ pov, sources }: { pov: any; sources: any[] }) {
 /*  Section: Why Now                                                   */
 /* ------------------------------------------------------------------ */
 
-function TriggerBlock({ trigger }: { trigger: any }) {
+function TriggerBlock({ trigger, sources }: { trigger: any; sources?: any[] }) {
   const [expanded, setExpanded] = useState(false);
   const cat = (trigger?.category || trigger?.type || 'BUSINESS').toUpperCase();
   const style = TRIGGER_COLORS[cat] || TRIGGER_COLORS.BUSINESS;
@@ -1020,7 +1018,7 @@ function TriggerBlock({ trigger }: { trigger: any }) {
       {trigger?.evidence && (
         <Trunc lines={2} expanded={expanded} onToggle={() => setExpanded(e => !e)}>
           <div style={{ fontSize: 14, color: COLORS.secondary, fontFamily: FONTS.sans }}>
-            <IntelInline text={trigger.evidence} />
+            <CitedProse text={trigger.evidence} sources={sources} />
           </div>
         </Trunc>
       )}
@@ -1039,19 +1037,19 @@ function TriggerBlock({ trigger }: { trigger: any }) {
   );
 }
 
-function WhyNowSection({ pov }: { pov: any; sources?: any[] }) {
+function WhyNowSection({ pov, sources }: { pov: any; sources?: any[] }) {
   const triggers = pov?.why_now?.triggers || [];
   if (triggers.length === 0) return null;
 
   return (
     <Section title="Why Now" accent={SECTION_ACCENTS.whyNow} count={`${triggers.length} triggers`}>
       {pov?.why_now?.urgency_rationale && (
-        <p style={{ fontSize: 14, lineHeight: 1.65, color: COLORS.secondary, fontFamily: FONTS.sans, marginBottom: 16 }}>
-          {pov.why_now.urgency_rationale}
-        </p>
+        <div style={{ marginBottom: 16 }}>
+          <CitedProse text={pov.why_now.urgency_rationale} sources={sources} />
+        </div>
       )}
       {triggers.map((t: any, i: number) => (
-        <TriggerBlock key={i} trigger={t} />
+        <TriggerBlock key={i} trigger={t} sources={sources} />
       ))}
     </Section>
   );
@@ -1492,8 +1490,8 @@ function DigitalProductsSection({ pov }: { pov: any }) {
             title={p?.product || p?.name || 'Product'}
           >
             <div style={{ fontFamily: FONTS.sans }}>{p?.description || '\u2014'}</div>
-            {p?.users && (
-              <div style={{ fontSize: 12, color: COLORS.tertiary, marginTop: 2, fontFamily: FONTS.sans }}>{p.users}</div>
+            {p?.significance && (
+              <div style={{ fontSize: 12, color: COLORS.tertiary, marginTop: 2, fontFamily: FONTS.sans }}>{p.significance}</div>
             )}
             {platforms.length > 0 && (
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
