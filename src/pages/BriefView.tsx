@@ -1519,113 +1519,199 @@ function DigitalProductsSection({ pov }: { pov: any }) {
 /*  Section: Who to Contact                                            */
 /* ------------------------------------------------------------------ */
 
+function LinkedInIcon({ url, onClick }: { url: string; onClick?: (e: React.MouseEvent) => void }) {
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer"
+      onClick={onClick}
+      style={{ opacity: 0.45, display: 'inline-flex', alignItems: 'center', flexShrink: 0 }}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="24" height="24" rx="4" fill="#0A66C2"/>
+        <path d="M7.5 9.5H5V18.5H7.5V9.5Z" fill="white"/>
+        <circle cx="6.25" cy="6.75" r="1.5" fill="white"/>
+        <path d="M18.5 18.5H16V13.75C16 12.5 15.25 11.75 14.25 11.75C13.25 11.75 12.5 12.5 12.5 13.75V18.5H10V9.5H12.5V10.75C13 9.75 14 9.25 15 9.25C16.75 9.25 18.5 10.5 18.5 13.25V18.5Z" fill="white"/>
+      </svg>
+    </a>
+  );
+}
+
+function PresenceDot({ level }: { level: string }) {
+  const bg = level === 'high' ? '#059669'
+    : level === 'medium' ? '#ca8a04'
+    : 'var(--color-border-secondary, #d6d3d1)';
+  return <span style={{ width: 6, height: 6, borderRadius: '50%', background: bg, display: 'inline-block', flexShrink: 0 }} />;
+}
+
 function ContactCard({ contact }: { contact: any }) {
   const [open, setOpen] = useState(false);
-  const [contextExpanded, setContextExpanded] = useState(false);
   const tier = contact?.tier || 'coach';
-  const summary = contact?.outreach_context
-    ? contact.outreach_context.split(/\.\s/)[0] + '.'
-    : contact?.hook || '';
+  const isEB = tier === 'eb' || tier === 'EB';
+  const isDeparted = !!contact?.departure_signal;
+  const presenceLevel = contact?.public_presence?.presence_level || contact?.presence_level || 'none';
+  const fnLabel = (contact?.function || '').replace(/^./, (c: string) => c.toUpperCase());
+
+  // Derive personal signals: signals not already captured in outreach_context
+  const oc = contact?.outreach_context || '';
+  const signals: Array<{ type: string; description: string; source?: string }> = contact?.public_presence?.signals || contact?.signals || [];
+  const distinctSignals = signals.filter(s =>
+    s?.description && !oc.toLowerCase().includes(s.description.slice(0, 40).toLowerCase())
+  ).slice(0, 2);
+
+  // Signal source labels for footer (e.g. "NRF 2026 · LinkedIn active")
+  const sourceLabels: string[] = [];
+  for (const s of signals.slice(0, 3)) {
+    if (s?.type === 'talk' || s?.type === 'conference') {
+      const label = s.description?.match(/\b(?:NRF|CES|MWC|SXSW|Shoptalk|Config|Web Summit|re:Invent)\s*\d{4}/i)?.[0];
+      if (label) sourceLabels.push(label);
+    }
+  }
+  if (presenceLevel === 'high' || presenceLevel === 'medium') sourceLabels.push('LinkedIn active');
+  const footerSources = [...new Set(sourceLabels)].slice(0, 3);
 
   return (
     <div style={{
-      padding: '12px 0',
-      borderBottom: `1px solid ${COLORS.borderLight}`,
+      border: '0.5px solid var(--color-border-tertiary, #e7e5e4)',
+      borderRadius: 'var(--border-radius-lg, 10px)',
+      background: 'var(--color-background-primary, #fff)',
+      marginBottom: 8,
+      overflow: 'hidden',
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <ItemChevron open={open} onClick={() => setOpen(o => !o)} />
-
-        {/* Avatar circle */}
+      {/* Header — always visible, clickable to expand */}
+      <div
+        onClick={() => setOpen(o => !o)}
+        style={{
+          padding: '12px 16px',
+          cursor: 'pointer',
+          display: 'flex', alignItems: 'flex-start', gap: 10,
+        }}
+      >
+        {/* Avatar */}
         <div style={{
-          width: 32, height: 32, borderRadius: '50%',
-          background: SECTION_ACCENTS.contacts + '18',
+          width: 36, height: 36, borderRadius: '50%',
+          background: isDeparted ? '#e7e5e4' : isEB ? 'var(--color-background-info, #dbeafe)' : '#EEF2FF',
+          color: isDeparted ? '#a8a29e' : isEB ? 'var(--color-text-info, #1e40af)' : '#3730a3',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 13, fontWeight: 600, color: SECTION_ACCENTS.contacts,
-          fontFamily: FONTS.sans, flexShrink: 0,
+          fontSize: 14, fontWeight: 600, fontFamily: FONTS.sans, flexShrink: 0,
+          marginTop: 2,
         }}>
-          {(contact?.name || '?')[0]}
+          {(contact?.name || '?').split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()}
         </div>
 
-        {/* Name, tier, title on one baseline */}
+        {/* Name + meta */}
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 16, fontWeight: 600, color: COLORS.heading, fontFamily: FONTS.sans }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 15, fontWeight: 600, color: COLORS.heading, fontFamily: FONTS.sans }}>
               {contact?.name}
             </span>
             <TierBadge tier={tier} />
-            <span style={{ fontSize: 15, color: COLORS.tertiary, fontFamily: FONTS.sans }}>
-              {contact?.title}
+            {isDeparted && (
+              <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 3, background: '#fef2f2', color: '#dc2626', fontWeight: 600, fontFamily: FONTS.sans }}>
+                ⚠ Departed
+              </span>
+            )}
+            {contact?.url && (
+              <LinkedInIcon url={contact.url} onClick={e => e.stopPropagation()} />
+            )}
+          </div>
+          <div style={{ fontSize: 13, color: COLORS.tertiary, fontFamily: FONTS.sans, marginTop: 2 }}>
+            {contact?.title}{fnLabel ? ` · ${fnLabel}` : ''}
+          </div>
+          {/* Meta row: presence + email */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+            <PresenceDot level={presenceLevel} />
+            <span style={{ fontSize: 12, color: COLORS.tertiary, fontFamily: FONTS.sans }}>
+              {presenceLevel.replace(/^./, (c: string) => c.toUpperCase())}
+            </span>
+            <span style={{ fontSize: 12, color: COLORS.faint }}>·</span>
+            <span style={{ fontSize: 12, color: contact?.email ? COLORS.secondary : COLORS.faint, fontFamily: FONTS.sans }}>
+              {contact?.email || 'No verified email'}
             </span>
           </div>
-          {/* Summary text below */}
-          {summary && (
-            <div style={{
-              fontSize: 15, color: COLORS.secondary, fontFamily: FONTS.sans,
-              marginTop: 4, lineHeight: 1.5,
-            }}>
-              {summary}
-            </div>
-          )}
         </div>
 
-        {contact?.departure_signal && (
-          <span style={{ fontSize: 11, padding: '2px 6px', borderRadius: 4, background: '#fef2f2', color: '#dc2626', fontWeight: 500, fontFamily: FONTS.sans }}>Departed</span>
-        )}
+        {/* Chevron */}
+        <div style={{
+          width: 22, height: 22, borderRadius: 5,
+          background: open ? '#eef2ff' : '#f5f5f0',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          flexShrink: 0, marginTop: 6,
+          transition: 'background 0.15s',
+        }}>
+          <svg width="10" height="10" viewBox="0 0 10 10" style={{
+            transform: open ? 'rotate(180deg)' : 'rotate(-90deg)',
+            transition: 'transform 0.18s',
+          }}>
+            <path d="M2 3.5L5 6.5L8 3.5" stroke={open ? '#4361ee' : '#78716c'} strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </div>
       </div>
 
-      {/* Expanded state */}
+      {/* Body — expanded only */}
       {open && (
-        <div style={{ marginTop: 0, marginLeft: 64, paddingTop: 12, borderTop: `1px solid ${COLORS.borderLight}` }}>
-          {/* Full outreach context */}
-          {contact?.outreach_context && (
-            <div style={{ marginBottom: 12 }}>
-              <Trunc lines={3} expanded={contextExpanded} onToggle={() => setContextExpanded(e => !e)}>
-                <div style={{
-                  borderLeft: `3px solid ${COLORS.faint}`, paddingLeft: 12,
-                  fontStyle: 'italic', fontSize: 15, lineHeight: 1.65,
-                  color: COLORS.body, fontFamily: FONTS.sans,
-                }}>
-                  {contact.outreach_context}
-                </div>
-              </Trunc>
+        <div style={{ padding: '0 16px 16px 62px', borderTop: `1px solid var(--color-border-tertiary, #e7e5e4)` }}>
+          {/* Outreach context — rendered ONCE */}
+          {oc && (
+            <div style={{ marginTop: 12, marginBottom: 12 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: COLORS.faint, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4, fontFamily: FONTS.sans }}>
+                Outreach context
+              </div>
+              <div style={{ fontSize: 14, lineHeight: 1.65, color: COLORS.body, fontFamily: FONTS.sans }}>
+                {oc}
+              </div>
             </div>
           )}
 
           {/* Briefing bullets */}
           {contact?.briefing_bullets?.length > 0 && (
-            <ul style={{ paddingLeft: 20, margin: '0 0 12px 0' }}>
+            <ul style={{ paddingLeft: 18, margin: '0 0 12px 0' }}>
               {contact.briefing_bullets.map((b: string, i: number) => (
-                <li key={i} style={{ fontSize: 15, marginBottom: 4, color: COLORS.secondary, lineHeight: 1.5, fontFamily: FONTS.sans }}>{b}</li>
+                <li key={i} style={{ fontSize: 13, marginBottom: 4, color: COLORS.secondary, lineHeight: 1.55, fontFamily: FONTS.sans }}>{b}</li>
               ))}
             </ul>
           )}
 
-          {/* Urgency triggers */}
-          {contact?.urgency_triggers?.length > 0 && (
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
-              {contact.urgency_triggers.map((t: string, i: number) => (
-                <span key={i} style={{ fontSize: 12, padding: '3px 8px', borderRadius: 4, background: '#fefce8', color: '#854d0e', fontFamily: FONTS.sans }}>{t}</span>
+          {/* Personal signal block — only if distinct signals exist */}
+          {distinctSignals.length > 0 && (
+            <div style={{
+              borderLeft: '3px solid #059669', paddingLeft: 12,
+              marginBottom: 12, padding: '8px 12px',
+            }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: '#059669', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4, fontFamily: FONTS.sans }}>
+                Personal signal
+              </div>
+              {distinctSignals.map((s, i) => (
+                <div key={i} style={{ fontSize: 13, color: COLORS.body, lineHeight: 1.55, fontFamily: FONTS.sans }}>
+                  {s.description}
+                </div>
               ))}
             </div>
           )}
 
-          {/* Recommended angle */}
+          {/* Angle block */}
           {contact?.recommended_angle && (
-            <div style={{ fontSize: 15, color: COLORS.secondary, marginBottom: 8, fontFamily: FONTS.sans }}>
-              <strong>Angle:</strong> {contact.recommended_angle}
+            <div style={{
+              borderLeft: '3px solid #7c3aed', paddingLeft: 12,
+              marginBottom: 12, padding: '8px 12px',
+            }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: '#7c3aed', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4, fontFamily: FONTS.sans }}>
+                Angle
+              </div>
+              <div style={{ fontSize: 13, color: COLORS.body, lineHeight: 1.55, fontFamily: FONTS.sans }}>
+                {contact.recommended_angle}
+              </div>
             </div>
           )}
 
-          {/* Footer links */}
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 8 }}>
-            {contact?.email && (
-              <span style={{ fontSize: 12, padding: '3px 8px', borderRadius: 4, background: '#ecfdf5', color: '#065f46', fontFamily: FONTS.sans }}>{contact.email}</span>
-            )}
-            {contact?.url && (
-              <a href={contact.url} target="_blank" rel="noopener noreferrer"
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: COLORS.purple, textDecoration: 'none', fontFamily: FONTS.sans }}>
-                LinkedIn <ExternalLink size={11} />
-              </a>
+          {/* Footer — email + signal sources */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, flexWrap: 'wrap', gap: 8 }}>
+            <div>
+              {contact?.email && (
+                <span style={{ fontSize: 12, padding: '3px 8px', borderRadius: 4, background: '#ecfdf5', color: '#065f46', fontFamily: FONTS.sans }}>{contact.email}</span>
+              )}
+            </div>
+            {footerSources.length > 0 && (
+              <span style={{ fontSize: 12, color: COLORS.faint, fontFamily: FONTS.sans }}>
+                {footerSources.join(' · ')}
+              </span>
             )}
           </div>
         </div>
@@ -1686,11 +1772,11 @@ function ContactsSection({ personas, hooksData }: { personas: any; hooksData?: a
     >
       {rfm && (
         <div style={{
-          borderLeft: `3px solid ${SECTION_ACCENTS.contacts}`,
+          borderLeft: '3px solid #7c3aed',
           padding: '12px 16px', marginBottom: 16,
-          background: '#f0fdf4', borderRadius: '0 6px 6px 0',
+          background: '#f5f3ff', borderRadius: '0 6px 6px 0',
         }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: '#065f46', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6, fontFamily: FONTS.sans }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#7c3aed', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6, fontFamily: FONTS.sans }}>
             Recommended First Move
           </div>
           <div style={{ fontWeight: 500, fontSize: 16, color: COLORS.body, fontFamily: FONTS.sans }}>
