@@ -2288,7 +2288,6 @@ export default function BriefView() {
           background: '#fff',
           borderBottom: `1px solid ${COLORS.border}`,
           margin: '-32px -40px 24px',
-          padding: 0,
         }}>
           <div style={{ padding: '32px 40px 0' }}>
             {/* Back link */}
@@ -2302,7 +2301,7 @@ export default function BriefView() {
             </button>
 
             {/* Company name + badges on ONE LINE */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 6 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 6, flexWrap: 'wrap' }}>
               <h1 style={{
                 fontFamily: FONTS.serif, fontSize: 30, fontWeight: 600,
                 margin: 0, letterSpacing: '-0.03em', color: COLORS.body,
@@ -2323,13 +2322,13 @@ export default function BriefView() {
               <a href={run.url} target="_blank" rel="noopener noreferrer"
                 style={{
                   fontSize: 13, color: COLORS.faint, display: 'inline-flex',
-                  alignItems: 'center', gap: 4, margin: '0 0 16px',
+                  alignItems: 'center', gap: 4, margin: '0 0 12px',
                   fontFamily: FONTS.sans, textDecoration: 'none',
                 }}>
                 {run.url} <ExternalLink size={12} />
               </a>
             )}
-            {!run.url && <div style={{ marginBottom: 16 }} />}
+            {!run.url && <div style={{ marginBottom: 12 }} />}
 
             {/* Action buttons row */}
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
