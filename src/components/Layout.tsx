@@ -4,7 +4,7 @@ import Sidebar from './Sidebar';
 import MobileNav from './MobileNav';
 import Banner from './Banner';
 
-export default function Layout({ children }: { children: React.ReactNode }) {
+export default function Layout({ children, bgColor }: { children: React.ReactNode; bgColor?: string }) {
   const { authError, signOut } = useAuth();
   const navigate = useNavigate();
 
@@ -18,7 +18,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           flex: 1,
           padding: '32px 40px',
           maxWidth: 960 + 80,
-          background: 'var(--bg-app)',
+          background: bgColor || 'var(--bg-app)',
           minHeight: '100vh',
         }}
       >

@@ -102,6 +102,37 @@ const TRIGGER_COLORS: Record<string, { border: string; text: string }> = {
   PRODUCT:     { border: '#059669', text: '#065f46' },
 };
 
+const SIGNAL_CATEGORY_COLOURS: Record<string, string> = {
+  // Title case
+  'Design Infrastructure': '#8b5cf6',
+  'Design Hiring':         '#0ea5e9',
+  'Product Velocity':      '#10b981',
+  'Design Maturity':       '#ca8a04',
+  'AI/Automation':         '#ef4444',
+  'AI / Automation':       '#ef4444',
+  'Platform/Systems':      '#6366f1',
+  'Platform / Systems':    '#6366f1',
+  // Snake case (as produced by current pipeline)
+  'figma':                 '#7c3aed',
+  'design_system':         '#8b5cf6',
+  'design_infrastructure': '#8b5cf6',
+  'design_hiring':         '#0ea5e9',
+  'product_velocity':      '#10b981',
+  'design_maturity':       '#ca8a04',
+  'ai_automation':         '#ef4444',
+  'platform_systems':      '#6366f1',
+  'hiring':                '#0ea5e9',
+  'tooling':               '#7c3aed',
+  'ai':                    '#ef4444',
+  'product':               '#10b981',
+};
+
+function formatCategory(cat: string): string {
+  return cat
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, c => c.toUpperCase());
+}
+
 const TIER_COLORS: Record<string, { bg: string; text: string }> = {
   eb: { bg: '#ecfdf5', text: '#065f46' },
   EB: { bg: '#ecfdf5', text: '#065f46' },
@@ -150,17 +181,17 @@ function Section({
         onClick={() => setOpen(o => !o)}
         style={{
           display: 'flex', alignItems: 'center', gap: 12,
-          padding: '14px 18px', cursor: 'pointer', userSelect: 'none',
-          background: '#fff',
-          borderRadius: 8,
+          padding: '12px 0', cursor: 'pointer', userSelect: 'none',
+          background: 'transparent',
+          borderRadius: 0,
+          border: 'none',
+          borderBottom: `1px solid ${COLORS.border}`,
           borderLeft: `4px solid ${accent}`,
-          border: `1px solid ${COLORS.border}`,
-          borderLeftWidth: 4,
-          borderLeftColor: accent,
+          paddingLeft: 14,
         }}
       >
         <span style={{
-          fontFamily: FONTS.serif, fontSize: 19, fontWeight: 500,
+          fontFamily: FONTS.serif, fontSize: 16, fontWeight: 500,
           color: COLORS.body, flex: 1,
         }}>
           {title}
@@ -182,7 +213,7 @@ function Section({
         }} />
       </div>
       {open && (
-        <div style={{ padding: '16px 18px 12px', background: '#fff', borderRadius: '0 0 8px 8px' }}>
+        <div style={{ padding: '12px 18px 16px', background: 'transparent' }}>
           {children}
         </div>
       )}
@@ -603,13 +634,37 @@ function extractEmployeesFromProse(...texts: (string | undefined | null)[]): str
   return null;
 }
 
+function extractDesignOrgFromProse(...texts: (string | undefined | null)[]): string | null {
+  for (const text of texts) {
+    if (!text) continue;
+    const m = text.match(/(?:design\s+(?:team|org|organisation|organization|department|function))[^.]*?(?:of\s+)?(?:~|approximately |about |over |nearly |around )?([\d,]+\+?)/i)
+      || text.match(/([\d,]+\+?)\s*(?:designers?|UX\s+(?:designers?|researchers?))/i);
+    if (m) return m[1].trim();
+  }
+  return null;
+}
+
 function MetricsBar({ pov, personas }: { pov: any; hooksData?: any; personas?: any }) {
   // Try structured fields first, then extract from prose
   const revenue = pov?.overview?.revenue || pov?.about?.revenue
     || extractMetricFromProse(pov?.about?.how_they_make_money, pov?.about?.what_they_do);
-  const employees = pov?.overview?.employees || pov?.about?.employees || pov?.overview?.headcount
-    || extractEmployeesFromProse(pov?.about?.what_they_do, pov?.about?.who_they_are, pov?.org_structure?.structure_summary);
-  const designOrg = pov?.overview?.design_org_size || pov?.org_structure?.design_team_size || pov?.why_figma?.design_infrastructure?.design_team_size;
+  const employees = pov?.overview?.employees
+    || pov?.about?.employees
+    || pov?.about?.headcount
+    || pov?.overview?.headcount
+    || pov?.org_structure?.total_headcount
+    || extractEmployeesFromProse(pov?.about?.what_they_do, pov?.about?.who_they_are, pov?.org_structure?.structure_summary, pov?.about?.how_they_make_money);
+  const designOrg = pov?.overview?.design_org_size
+    || pov?.org_structure?.design_team_size
+    || pov?.why_figma?.design_org?.estimated_size
+    || pov?.why_figma?.design_org?.team_size
+    || pov?.why_figma?.design_infrastructure?.design_team_size
+    || pov?.why_figma?.design_infrastructure?.team_size
+    || extractDesignOrgFromProse(
+        pov?.why_figma?.design_org?.notes,
+        pov?.why_figma?.primary_products?.[0]?.relevance,
+        pov?.about?.what_they_do,
+      );
   const triggers = pov?.why_now?.triggers || [];
   const triggerBreakdown = triggers.reduce((acc: Record<string, number>, t: any) => {
     const cat = (t?.category || t?.type || 'other').toUpperCase();
@@ -650,20 +705,21 @@ function MetricsBar({ pov, personas }: { pov: any; hooksData?: any; personas?: a
 
   return (
     <div style={{
-      display: 'grid', gridTemplateColumns: `repeat(${items.length}, 1fr)`,
-      gap: 0, borderTop: `1px solid ${COLORS.border}`,
-      borderBottom: `1px solid ${COLORS.border}`,
-      padding: '16px 0', marginBottom: 24,
+      display: 'grid',
+      gridTemplateColumns: `repeat(${items.length}, 1fr)`,
+      gap: 1,
+      background: COLORS.border,
+      borderTop: `1px solid ${COLORS.border}`,
     }}>
       {items.map((item, i) => (
         <div key={i} style={{
-          padding: '0 16px',
-          borderRight: i < items.length - 1 ? `1px solid ${COLORS.border}` : 'none',
+          background: '#fff',
+          padding: '14px 16px',
         }}>
           <div style={{
-            fontSize: 9, fontWeight: 600, letterSpacing: '0.08em',
+            fontSize: 9, fontWeight: 600, letterSpacing: '0.07em',
             textTransform: 'uppercase', color: COLORS.faint,
-            fontFamily: FONTS.sans, marginBottom: 4,
+            fontFamily: FONTS.sans, marginBottom: 3,
           }}>
             {item.label}
           </div>
@@ -674,7 +730,7 @@ function MetricsBar({ pov, personas }: { pov: any; hooksData?: any; personas?: a
             {item.value}
           </div>
           {item.sub && (
-            <div style={{ fontSize: 11, color: COLORS.tertiary, fontFamily: FONTS.sans, marginTop: 2 }}>
+            <div style={{ fontSize: 10, color: COLORS.faint, fontFamily: FONTS.sans, marginTop: 1 }}>
               {item.sub}
             </div>
           )}
@@ -711,13 +767,47 @@ function PulledNumbers({ pov }: { pov: any }) {
   // Try to extract key numbers from the POV data
   const nums: { value: string; label: string }[] = [];
 
-  const overview = pov?.overview || pov?.about || {};
-  if (overview.customer_count) nums.push({ value: overview.customer_count, label: 'Customers' });
-  if (overview.business_customers) nums.push({ value: overview.business_customers, label: 'Business customers' });
-  if (overview.deposits) nums.push({ value: overview.deposits, label: 'Deposits' });
-  if (overview.profit) nums.push({ value: overview.profit, label: 'Profit' });
-  if (overview.revenue) nums.push({ value: typeof overview.revenue === 'number' ? `$${overview.revenue.toLocaleString()}` : overview.revenue, label: 'Revenue' });
-  if (overview.employees) nums.push({ value: typeof overview.employees === 'number' ? overview.employees.toLocaleString() : overview.employees, label: 'Employees' });
+  const about = pov?.about || {};
+  const overview = pov?.overview || {};
+
+  // Structured fields first
+  const rev = about.revenue || overview.revenue;
+  if (rev) nums.push({ value: typeof rev === 'number' ? `$${rev.toLocaleString()}` : rev, label: 'Revenue' });
+
+  const emp = about.employees || overview.employees || overview.headcount || about.headcount;
+  if (emp) nums.push({ value: typeof emp === 'number' ? emp.toLocaleString() : emp, label: 'Employees' });
+
+  if (about.customer_count || overview.customer_count)
+    nums.push({ value: about.customer_count || overview.customer_count, label: 'Customers' });
+
+  if (about.business_customers || overview.business_customers)
+    nums.push({ value: about.business_customers || overview.business_customers, label: 'Business customers' });
+
+  if (about.deposits || overview.deposits)
+    nums.push({ value: about.deposits || overview.deposits, label: 'Deposits' });
+
+  if (about.profit || overview.profit)
+    nums.push({ value: about.profit || overview.profit, label: 'Profit' });
+
+  if (about.founded || overview.founded)
+    nums.push({ value: String(about.founded || overview.founded), label: 'Founded' });
+
+  // Prose extraction fallback — runs when structured fields are empty
+  if (nums.filter(n => n.label === 'Revenue').length === 0) {
+    const about = pov?.about || {};
+    const revExtracted = extractMetricFromProse(
+      about.how_they_make_money, about.what_they_do, about.who_they_are
+    );
+    if (revExtracted) nums.push({ value: revExtracted, label: 'Revenue' });
+  }
+
+  if (nums.filter(n => n.label === 'Employees').length === 0) {
+    const about = pov?.about || {};
+    const empExtracted = extractEmployeesFromProse(
+      about.what_they_do, about.who_they_are, pov?.org_structure?.structure_summary, about.how_they_make_money
+    );
+    if (empExtracted) nums.push({ value: empExtracted, label: 'Employees' });
+  }
 
   if (nums.length === 0) return null;
   const display = nums.slice(0, 4);
@@ -1282,35 +1372,51 @@ function JobSignalsSection({ pov }: { pov: any }) {
       {/* Extracted signals */}
       {hasExtracted && extracted.signals?.length > 0 && (
         <div style={{ marginBottom: 16 }}>
-          {extracted.signals.map((s: any, i: number) => (
-            <div key={i} style={{
-              padding: '10px 0',
-              borderBottom: `1px solid ${COLORS.borderLight}`,
-            }}>
-              <div style={{
-                fontSize: 12, color: COLORS.tertiary, fontFamily: FONTS.sans,
+          {extracted.signals.map((s: any, i: number) => {
+            const catColor = SIGNAL_CATEGORY_COLOURS[s.category] || SECTION_ACCENTS.jobSignals;
+            return (
+              <div key={i} style={{
+                padding: '10px 0 10px 12px',
+                borderBottom: `1px solid ${COLORS.borderLight}`,
+                borderLeft: `3px solid ${catColor}`,
                 marginBottom: 4,
               }}>
-                {s.category || 'Signal'}
-              </div>
-              <div style={{ fontSize: 14, color: COLORS.body, fontFamily: FONTS.sans, lineHeight: 1.5 }}>
-                {s.signal}
-              </div>
-              {s.jobs?.length > 0 && (
-                <div style={{ marginTop: 4 }}>
-                  {s.jobs.slice(0, 3).map((job: string, j: number) => (
-                    <span key={j} style={{
-                      fontSize: 12, color: COLORS.purple,
-                      textDecoration: 'underline dashed',
-                      fontFamily: FONTS.sans, marginRight: 8,
-                    }}>
-                      {job}
-                    </span>
-                  ))}
+                {s.category && (
+                  <span style={{
+                    display: 'inline-block', fontSize: 10, padding: '2px 8px',
+                    borderRadius: 10, marginBottom: 6,
+                    background: catColor + '18', color: catColor,
+                    fontWeight: 600, letterSpacing: '0.04em', fontFamily: FONTS.sans,
+                  }}>
+                    {formatCategory(s.category)}
+                  </span>
+                )}
+                <div style={{ fontSize: 14, color: COLORS.body, fontFamily: FONTS.sans, lineHeight: 1.5 }}>
+                  {s.signal}
                 </div>
-              )}
-            </div>
-          ))}
+                {s.jobs?.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+                    {s.jobs.slice(0, 3).map((job: any, j: number) => {
+                      const title = typeof job === 'string' ? job : (job?.title || String(job));
+                      const url = typeof job === 'object' ? (job?.url || job?.link) : null;
+                      return url ? (
+                        <a key={j} href={url} target="_blank" rel="noopener noreferrer" style={{
+                          fontSize: 11, color: COLORS.purple, fontFamily: FONTS.sans,
+                          textDecoration: 'underline', textDecorationStyle: 'dashed' as const,
+                        }}>
+                          {title} {'\u2197'}
+                        </a>
+                      ) : (
+                        <span key={j} style={{ fontSize: 11, color: COLORS.tertiary, fontFamily: FONTS.sans }}>
+                          {title}
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -1360,17 +1466,41 @@ function DigitalProductsSection({ pov }: { pov: any }) {
 
   return (
     <Section title="Digital Products" accent={SECTION_ACCENTS.digitalProducts} count={`${products.length} products`}>
-      {products.map((p: any, i: number) => (
-        <DataRow
-          key={i}
-          accent={SECTION_ACCENTS.digitalProducts}
-          title={p?.product || p?.name || 'Product'}
-          subtitle={p?.platform || undefined}
-        >
-          <div>{p?.description || '\u2014'}</div>
-          {p?.users && <div style={{ fontSize: 12, color: COLORS.tertiary, marginTop: 2 }}>{p.users}</div>}
-        </DataRow>
-      ))}
+      {products.map((p: any, i: number) => {
+        const platforms: string[] = Array.isArray(p?.platforms)
+          ? p.platforms
+          : p?.platform
+            ? p.platform.split(/[,/·•]+/).map((s: string) => s.trim()).filter(Boolean)
+            : p?.type ? [p.type] : [];
+
+        return (
+          <DataRow
+            key={i}
+            accent={SECTION_ACCENTS.digitalProducts}
+            title={p?.product || p?.name || 'Product'}
+          >
+            <div style={{ fontFamily: FONTS.sans }}>{p?.description || '\u2014'}</div>
+            {p?.users && (
+              <div style={{ fontSize: 12, color: COLORS.tertiary, marginTop: 2, fontFamily: FONTS.sans }}>{p.users}</div>
+            )}
+            {platforms.length > 0 && (
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+                {platforms.map((plat: string, pi: number) => (
+                  <span key={pi} style={{
+                    fontSize: 11, padding: '2px 8px', borderRadius: 10,
+                    background: SECTION_ACCENTS.digitalProducts + '18',
+                    color: SECTION_ACCENTS.digitalProducts,
+                    border: `1px solid ${SECTION_ACCENTS.digitalProducts}30`,
+                    fontWeight: 500, fontFamily: FONTS.sans,
+                  }}>
+                    {plat}
+                  </span>
+                ))}
+              </div>
+            )}
+          </DataRow>
+        );
+      })}
     </Section>
   );
 }
@@ -1381,6 +1511,7 @@ function DigitalProductsSection({ pov }: { pov: any }) {
 
 function ContactCard({ contact }: { contact: any }) {
   const [open, setOpen] = useState(false);
+  const [contextExpanded, setContextExpanded] = useState(false);
   const tier = contact?.tier || 'coach';
   const summary = contact?.outreach_context
     ? contact.outreach_context.split(/\.\s/)[0] + '.'
@@ -1434,15 +1565,19 @@ function ContactCard({ contact }: { contact: any }) {
 
       {/* Expanded state */}
       {open && (
-        <div style={{ marginTop: 12, marginLeft: 64 }}>
+        <div style={{ marginTop: 0, marginLeft: 64, paddingTop: 12, borderTop: `1px solid ${COLORS.borderLight}` }}>
           {/* Full outreach context */}
           {contact?.outreach_context && (
-            <div style={{
-              borderLeft: `3px solid ${COLORS.faint}`, paddingLeft: 12,
-              fontStyle: 'italic', fontSize: 13, lineHeight: 1.65,
-              color: COLORS.body, marginBottom: 12, fontFamily: FONTS.sans,
-            }}>
-              {contact.outreach_context}
+            <div style={{ marginBottom: 12 }}>
+              <Trunc lines={3} expanded={contextExpanded} onToggle={() => setContextExpanded(e => !e)}>
+                <div style={{
+                  borderLeft: `3px solid ${COLORS.faint}`, paddingLeft: 12,
+                  fontStyle: 'italic', fontSize: 13, lineHeight: 1.65,
+                  color: COLORS.body, fontFamily: FONTS.sans,
+                }}>
+                  {contact.outreach_context}
+                </div>
+              </Trunc>
             </div>
           )}
 
@@ -2121,153 +2256,161 @@ export default function BriefView() {
 
   if (loading) {
     return (
-      <Layout>
-        <div style={{ padding: '32px 0' }}>
-          <TableSkeleton rows={8} cols={1} />
-        </div>
+      <Layout bgColor={COLORS.bg}>
+          <div style={{ padding: '32px 0' }}>
+            <TableSkeleton rows={8} cols={1} />
+          </div>
       </Layout>
     );
   }
 
   if (error || !run) {
     return (
-      <Layout>
-        <div style={{ padding: '32px 0', color: COLORS.secondary, fontSize: 13, fontFamily: FONTS.sans }}>
-          {error || 'Run not found.'}
-          <button onClick={() => navigate('/my-briefs')} style={{
-            marginLeft: 12, background: 'none', border: 'none', color: COLORS.purple,
-            cursor: 'pointer', fontSize: 13, fontFamily: FONTS.sans,
-          }}>
-            Back to My Briefs
-          </button>
-        </div>
+      <Layout bgColor={COLORS.bg}>
+          <div style={{ padding: '32px 0', color: COLORS.secondary, fontSize: 13, fontFamily: FONTS.sans }}>
+            {error || 'Run not found.'}
+            <button onClick={() => navigate('/my-briefs')} style={{
+              marginLeft: 12, background: 'none', border: 'none', color: COLORS.purple,
+              cursor: 'pointer', fontSize: 13, fontFamily: FONTS.sans,
+            }}>
+              Back to My Briefs
+            </button>
+          </div>
       </Layout>
     );
   }
 
   return (
-    <Layout>
+    <Layout bgColor={COLORS.bg}>
       <div style={mainStyle}>
-        {/* Back link */}
-        <button onClick={() => navigate('/my-briefs')} style={{
-          display: 'inline-flex', alignItems: 'center', gap: 6,
-          background: 'none', border: 'none', color: COLORS.secondary,
-          cursor: 'pointer', fontSize: 13, padding: 0, marginBottom: 20,
-          fontFamily: FONTS.sans,
-        }}>
-          <ArrowLeft size={14} /> My Briefs
-        </button>
-
         {/* ============ HEADER ============ */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-          <div>
-            <h1 style={{
-              fontSize: 30, fontWeight: 600, margin: 0,
-              fontFamily: FONTS.serif, color: COLORS.body,
-              letterSpacing: '-0.01em',
+        <div style={{
+          background: '#fff',
+          borderBottom: `1px solid ${COLORS.border}`,
+          margin: '-32px -40px 24px',
+          padding: 0,
+        }}>
+          <div style={{ padding: '32px 40px 0' }}>
+            {/* Back link */}
+            <button onClick={() => navigate('/my-briefs')} style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              background: 'none', border: 'none', color: COLORS.secondary,
+              cursor: 'pointer', fontSize: 13, padding: 0, marginBottom: 20,
+              fontFamily: FONTS.sans,
             }}>
-              {pov?.company_name || run.company}
-            </h1>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
-              <IcpBadge score={pov?.icp_fit?.score || pov?.icp_assessment?.score} />
+              <ArrowLeft size={14} /> My Briefs
+            </button>
+
+            {/* Company name + badges on ONE LINE */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 6 }}>
+              <h1 style={{
+                fontFamily: FONTS.serif, fontSize: 30, fontWeight: 600,
+                margin: 0, letterSpacing: '-0.03em', color: COLORS.body,
+              }}>
+                {pov?.company_name || run.company}
+              </h1>
+              <IcpBadge score={pov?.icp_fit?.score || pov?.icp_assessment?.score} size="small" />
               <AgeBadge createdAt={run.created_at} />
+              {run.market && run.market !== 'en' && run.market !== 'auto' && LANGUAGE_FLAGS[run.market] && (
+                <span style={{ fontSize: 12, color: COLORS.tertiary, fontFamily: FONTS.sans }}>
+                  {LANGUAGE_FLAGS[run.market]} {LANGUAGE_NAMES[run.market] || run.market}
+                </span>
+              )}
             </div>
+
+            {/* URL */}
             {run.url && (
               <a href={run.url} target="_blank" rel="noopener noreferrer"
                 style={{
-                  fontSize: 13, color: COLORS.tertiary, display: 'inline-flex',
-                  alignItems: 'center', gap: 4, marginTop: 6, fontFamily: FONTS.sans,
-                  textDecoration: 'none',
+                  fontSize: 13, color: COLORS.faint, display: 'inline-flex',
+                  alignItems: 'center', gap: 4, margin: '0 0 16px',
+                  fontFamily: FONTS.sans, textDecoration: 'none',
                 }}>
                 {run.url} <ExternalLink size={12} />
               </a>
             )}
-            {run.market && run.market !== 'en' && run.market !== 'auto' && LANGUAGE_FLAGS[run.market] && (
-              <div style={{ fontSize: 12, color: COLORS.tertiary, marginTop: 2, fontFamily: FONTS.sans }}>
-                {LANGUAGE_FLAGS[run.market]} {LANGUAGE_NAMES[run.market] || run.market} brief
-              </div>
-            )}
+            {!run.url && <div style={{ marginBottom: 16 }} />}
+
+            {/* Action buttons row */}
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+              <button onClick={handleShare} disabled={shareStatus === 'loading'} style={{
+                ...btnStyle('secondary'),
+                color: shareStatus === 'copied' ? '#065f46' : COLORS.secondary,
+              }}>
+                <Share2 size={14} /> {shareStatus === 'copied' ? 'Link copied!' : 'Share'}
+              </button>
+              <button onClick={() => setChatOpen(true)} style={btnStyle('primary')}>
+                <MessageSquare size={14} /> Chat
+              </button>
+              {run.pdf_url && (
+                <a href={run.pdf_url} target="_blank" rel="noopener noreferrer" style={btnStyle('secondary')}>
+                  <FileText size={14} /> {run.market && run.market !== 'en' && run.market !== 'auto' && LANGUAGE_FLAGS[run.market]
+                    ? `${LANGUAGE_FLAGS[run.market]} PDF` : 'PDF'}
+                </a>
+              )}
+              {run.excel_url && (
+                <a href={run.excel_url} target="_blank" rel="noopener noreferrer" style={btnStyle('secondary')}>
+                  <Table size={14} /> Excel
+                </a>
+              )}
+              {run.debug_events_url && (
+                <a href={`/AccountResearcherPortal/debug/${run.id}`} style={btnStyle('secondary')}>
+                  <Activity size={14} /> Debug
+                </a>
+              )}
+              {run.market && run.market !== 'en' && run.market !== 'auto' && !englishSubmitted && (
+                <button onClick={handleRunInEnglish} disabled={runningEnglish} style={btnStyle('ghost')}>
+                  {'\u{1F1EC}\u{1F1E7}'} {runningEnglish ? 'Submitting\u2026' : 'Also run in English'}
+                </button>
+              )}
+              {englishSubmitted && (
+                <span style={{ fontSize: 12, color: '#065f46', display: 'flex', alignItems: 'center', gap: 4, fontFamily: FONTS.sans }}>
+                  {'\u{1F1EC}\u{1F1E7}'} English run submitted
+                </span>
+              )}
+              {userProfile?.role === 'admin' && run.status === 'complete' && (
+                <button
+                  onClick={handleRegeneratePdf}
+                  disabled={rerendering || rerenderDone}
+                  style={{
+                    ...btnStyle('ghost'),
+                    color: rerenderDone ? '#065f46' : COLORS.tertiary,
+                    opacity: rerendering ? 0.6 : 1,
+                  }}
+                >
+                  <RefreshCw size={14} style={rerendering ? { animation: 'spin 1s linear infinite' } : undefined} />
+                  {rerendering ? 'Re-rendering\u2026' : rerenderDone ? 'Dispatched!' : 'Re-render PDF'}
+                </button>
+              )}
+              {userProfile?.role === 'admin' && (
+                <>
+                  {!deleteConfirm ? (
+                    <button onClick={() => setDeleteConfirm(true)} style={btnStyle('ghost')}>
+                      <Trash2 size={14} /> Delete
+                    </button>
+                  ) : (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 12, color: '#854d0e', fontFamily: FONTS.sans }}>Delete permanently?</span>
+                      <button onClick={handleDelete} disabled={deleting} style={{
+                        background: '#dc2626', border: 'none', color: '#fff',
+                        padding: '4px 12px', fontSize: 12, borderRadius: 4, cursor: 'pointer',
+                        fontWeight: 500, opacity: deleting ? 0.6 : 1, fontFamily: FONTS.sans,
+                      }}>{deleting ? 'Deleting...' : 'Yes, delete'}</button>
+                      <button onClick={() => setDeleteConfirm(false)} style={{
+                        background: 'transparent', border: `1px solid ${COLORS.border}`,
+                        color: COLORS.secondary, padding: '4px 10px',
+                        fontSize: 12, borderRadius: 4, cursor: 'pointer', fontFamily: FONTS.sans,
+                      }}>Cancel</button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
           </div>
 
-          {/* Action buttons */}
-          <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-            <button onClick={handleShare} disabled={shareStatus === 'loading'} style={{
-              ...btnStyle('secondary'),
-              color: shareStatus === 'copied' ? '#065f46' : COLORS.secondary,
-            }}>
-              <Share2 size={14} /> {shareStatus === 'copied' ? 'Link copied!' : 'Share'}
-            </button>
-            <button onClick={() => setChatOpen(true)} style={btnStyle('primary')}>
-              <MessageSquare size={14} /> Chat
-            </button>
-            {run.pdf_url && (
-              <a href={run.pdf_url} target="_blank" rel="noopener noreferrer" style={btnStyle('secondary')}>
-                <FileText size={14} /> {run.market && run.market !== 'en' && run.market !== 'auto' && LANGUAGE_FLAGS[run.market]
-                  ? `${LANGUAGE_FLAGS[run.market]} PDF` : 'PDF'}
-              </a>
-            )}
-            {run.excel_url && (
-              <a href={run.excel_url} target="_blank" rel="noopener noreferrer" style={btnStyle('secondary')}>
-                <Table size={14} /> Excel
-              </a>
-            )}
-            {run.debug_events_url && (
-              <a href={`/AccountResearcherPortal/debug/${run.id}`} style={btnStyle('secondary')}>
-                <Activity size={14} /> Debug
-              </a>
-            )}
-            {run.market && run.market !== 'en' && run.market !== 'auto' && !englishSubmitted && (
-              <button onClick={handleRunInEnglish} disabled={runningEnglish} style={btnStyle('ghost')}>
-                {'\u{1F1EC}\u{1F1E7}'} {runningEnglish ? 'Submitting\u2026' : 'Also run in English'}
-              </button>
-            )}
-            {englishSubmitted && (
-              <span style={{ fontSize: 12, color: '#065f46', display: 'flex', alignItems: 'center', gap: 4, fontFamily: FONTS.sans }}>
-                {'\u{1F1EC}\u{1F1E7}'} English run submitted
-              </span>
-            )}
-            {userProfile?.role === 'admin' && run.status === 'complete' && (
-              <button
-                onClick={handleRegeneratePdf}
-                disabled={rerendering || rerenderDone}
-                style={{
-                  ...btnStyle('ghost'),
-                  color: rerenderDone ? '#065f46' : COLORS.tertiary,
-                  opacity: rerendering ? 0.6 : 1,
-                }}
-              >
-                <RefreshCw size={14} style={rerendering ? { animation: 'spin 1s linear infinite' } : undefined} />
-                {rerendering ? 'Re-rendering\u2026' : rerenderDone ? 'Dispatched!' : 'Re-render PDF'}
-              </button>
-            )}
-            {userProfile?.role === 'admin' && (
-              <>
-                {!deleteConfirm ? (
-                  <button onClick={() => setDeleteConfirm(true)} style={btnStyle('ghost')}>
-                    <Trash2 size={14} /> Delete
-                  </button>
-                ) : (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontSize: 12, color: '#854d0e', fontFamily: FONTS.sans }}>Delete permanently?</span>
-                    <button onClick={handleDelete} disabled={deleting} style={{
-                      background: '#dc2626', border: 'none', color: '#fff',
-                      padding: '4px 12px', fontSize: 12, borderRadius: 4, cursor: 'pointer',
-                      fontWeight: 500, opacity: deleting ? 0.6 : 1, fontFamily: FONTS.sans,
-                    }}>{deleting ? 'Deleting...' : 'Yes, delete'}</button>
-                    <button onClick={() => setDeleteConfirm(false)} style={{
-                      background: 'transparent', border: `1px solid ${COLORS.border}`,
-                      color: COLORS.secondary, padding: '4px 10px',
-                      fontSize: 12, borderRadius: 4, cursor: 'pointer', fontFamily: FONTS.sans,
-                    }}>Cancel</button>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
+          {/* MetricsBar — full bleed, inside header */}
+          {pov && <MetricsBar pov={pov} hooksData={hooksData} personas={personas} />}
         </div>
-
-        {/* Metrics bar */}
-        {pov && <MetricsBar pov={pov} hooksData={hooksData} personas={personas} />}
 
         {/* Run history */}
         <RunHistory currentRunId={run_id || ''} company={run.company} />
