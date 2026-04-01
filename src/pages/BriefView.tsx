@@ -41,6 +41,7 @@ interface Brief {
   pov_json: Record<string, any> | null;
   personas_json: Record<string, any> | null;
   hooks_json: Record<string, any> | null;
+  value_pyramid: Record<string, any> | null;
   schema_version: number | null;
 }
 
@@ -1363,7 +1364,7 @@ function IntelInline({ text }: { text: string }) {
 /*  Brief content (reordered sections)                                 */
 /* ------------------------------------------------------------------ */
 
-function BriefContent({ pov, personas, hooksData, runId, session }: { pov: any; personas: any; hooksData?: any; runId?: string; session?: any }) {
+function BriefContent({ pov, personas, hooksData, runId, session, valuePyramid }: { pov: any; personas: any; hooksData?: any; runId?: string; session?: any; valuePyramid?: any }) {
   const [showAllSources, setShowAllSources] = useState(false);
 
   const allSources = pov?.sources_used || [];
@@ -1603,7 +1604,7 @@ function BriefContent({ pov, personas, hooksData, runId, session }: { pov: any; 
       )}
 
       {/* 9. Value Pyramid */}
-      {pov?.value_pyramid && <ValuePyramid pyramid={pov.value_pyramid} />}
+      {valuePyramid && <ValuePyramid pyramid={valuePyramid} />}
 
       {/* 10. Job Signals */}
       <JobSignalsSection signals={pov?.job_signals} extracted={pov?.job_signals_extracted} />
@@ -1846,7 +1847,7 @@ export default function BriefView() {
       if (runData.brief_id) {
         const { data: briefData } = await supabase
           .from('briefs')
-          .select('pov_json, personas_json, hooks_json, schema_version')
+          .select('pov_json, personas_json, hooks_json, value_pyramid, schema_version')
           .eq('id', runData.brief_id)
           .single();
         if (!cancelled && briefData) {
@@ -2200,7 +2201,7 @@ export default function BriefView() {
 
         {/* ============ Brief content sections ============ */}
         {pov && (
-          <BriefContent pov={pov} personas={personas} hooksData={hooksData} runId={run_id} session={session} />
+          <BriefContent pov={pov} personas={personas} hooksData={hooksData} runId={run_id} session={session} valuePyramid={brief?.value_pyramid || pov?.value_pyramid} />
         )}
       </div>
 
