@@ -387,6 +387,21 @@ function IntelMarkdown({ text }: { text: string }) {
   while (i < lines.length) {
     const line = lines[i];
 
+    if (line.startsWith('## ') && !line.startsWith('### ')) {
+      elements.push(
+        <div key={i} style={{
+          fontSize: 14, fontWeight: 700, color: COLORS.body,
+          textTransform: 'uppercase', letterSpacing: '0.04em',
+          marginTop: elements.length > 0 ? 20 : 0, marginBottom: 8,
+          fontFamily: FONTS.sans,
+        }}>
+          {line.replace(/^## /, '')}
+        </div>
+      );
+      i++;
+      continue;
+    }
+
     if (line.startsWith('### ')) {
       elements.push(
         <div key={i} style={{
@@ -562,9 +577,38 @@ function AgeBadge({ createdAt }: { createdAt: string | undefined }) {
 /*  Header metrics bar                                                 */
 /* ------------------------------------------------------------------ */
 
+function extractMetricFromProse(...texts: (string | undefined | null)[]): string | null {
+  for (const text of texts) {
+    if (!text) continue;
+    // Revenue patterns: "$X billion", "€X billion", "£X million", "USD X.X billion", "revenue of $X"
+    const revMatch = text.match(/(?:revenue[^.]*?)?[\$€£][\s]?[\d,.]+\s*(?:billion|million|trillion|bn|mn|B|M|T)/i)
+      || text.match(/(?:USD|EUR|GBP|CHF)\s?[\d,.]+\s*(?:billion|million|trillion|bn|mn|B|M|T)/i);
+    if (revMatch) return revMatch[0].replace(/^revenue[^$€£]*/i, '').trim();
+  }
+  return null;
+}
+
+function extractEmployeesFromProse(...texts: (string | undefined | null)[]): string | null {
+  for (const text of texts) {
+    if (!text) continue;
+    // "~52,000 employees", "over 200,000 staff", "10,000+ employees", "workforce of 50,000"
+    const empMatch = text.match(/(?:~|approximately |about |over |nearly |around )?[\d,]+\+?\s*(?:employees|staff|people|team members|workforce)/i)
+      || text.match(/(?:workforce|headcount|team)\s+(?:of\s+)?(?:~|approximately |about |over |nearly |around )?[\d,]+/i);
+    if (empMatch) {
+      // Extract just the number portion
+      const numMatch = empMatch[0].match(/((?:~|approximately |about |over |nearly |around )?[\d,]+\+?)/i);
+      return numMatch ? numMatch[1].trim() : empMatch[0].trim();
+    }
+  }
+  return null;
+}
+
 function MetricsBar({ pov, personas }: { pov: any; hooksData?: any; personas?: any }) {
-  const revenue = pov?.overview?.revenue || pov?.about?.revenue;
-  const employees = pov?.overview?.employees || pov?.about?.employees;
+  // Try structured fields first, then extract from prose
+  const revenue = pov?.overview?.revenue || pov?.about?.revenue
+    || extractMetricFromProse(pov?.about?.how_they_make_money, pov?.about?.what_they_do);
+  const employees = pov?.overview?.employees || pov?.about?.employees || pov?.overview?.headcount
+    || extractEmployeesFromProse(pov?.about?.what_they_do, pov?.about?.who_they_are, pov?.org_structure?.structure_summary);
   const designOrg = pov?.overview?.design_org_size || pov?.org_structure?.design_team_size || pov?.why_figma?.design_infrastructure?.design_team_size;
   const triggers = pov?.why_now?.triggers || [];
   const triggerBreakdown = triggers.reduce((acc: Record<string, number>, t: any) => {
@@ -719,9 +763,13 @@ function AboutSection({ pov, sources }: { pov: any; sources: any[] }) {
         </p>
       )}
 
-      {/* what_they_do if separate from who_they_are */}
+      {/* what_they_do if separate from who_they_are — use IntelMarkdown for structured markdown */}
       {about.who_they_are && about.what_they_do && (
-        <CitedProse text={about.what_they_do} sources={sources} />
+        about.what_they_do.includes('## ') ? (
+          <IntelMarkdown text={about.what_they_do} />
+        ) : (
+          <CitedProse text={about.what_they_do} sources={sources} />
+        )
       )}
 
       {/* Revenue model callout */}
