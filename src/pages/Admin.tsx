@@ -17,7 +17,7 @@ interface UserRow {
 }
 
 interface RunRow {
-  id: string; company: string; url: string | null; created_at: string; completed_at: string | null;
+  id: string; company: string; url: string | null; created_at: string; started_at: string | null; completed_at: string | null;
   status: 'queued' | 'running' | 'complete' | 'failed';
   error_message: string | null; pdf_url: string | null; gha_run_id: string | null;
   user_id: string; users?: { name: string; email: string }; market: string | null;
@@ -30,9 +30,11 @@ const LANGUAGE_FLAGS: Record<string, string> = {
   no: '\u{1F1F3}\u{1F1F4}', da: '\u{1F1E9}\u{1F1F0}', fi: '\u{1F1EB}\u{1F1EE}',
 };
 
-function formatDuration(created: string, completed: string | null): string {
+function formatDuration(started: string | null, created: string, completed: string | null): string {
   if (!completed) return '—';
-  const ms = new Date(completed).getTime() - new Date(created).getTime();
+  const start = started || created;
+  const ms = new Date(completed).getTime() - new Date(start).getTime();
+  if (ms < 0) return '—';
   const secs = Math.floor(ms / 1000);
   const mins = Math.floor(secs / 60);
   return mins > 0 ? `${mins}m ${secs % 60}s` : `${secs}s`;
@@ -533,7 +535,7 @@ function RunMonitorTab() {
     (async () => {
       const { data } = await supabase
         .from('runs')
-        .select('id, company, url, created_at, completed_at, status, error_message, pdf_url, gha_run_id, user_id, market, users(name, email)')
+        .select('id, company, url, created_at, started_at, completed_at, status, error_message, pdf_url, gha_run_id, user_id, market, users(name, email)')
         .order('created_at', { ascending: false })
         .limit(200);
       if (data) setRuns(data as unknown as RunRow[]);
@@ -654,7 +656,7 @@ function RunMonitorTab() {
                   <FreshnessBadge createdAt={r.created_at} status={r.status} />
                 </td>
                 <td style={{ padding: '11px 16px', fontSize: 13, color: 'var(--text-secondary)' }}>
-                  {formatDuration(r.created_at, r.completed_at)}
+                  {formatDuration(r.started_at, r.created_at, r.completed_at)}
                 </td>
                 <td style={{ padding: '11px 16px' }}>
                   {r.pdf_url ? <a href={r.pdf_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>PDF</a> : '—'}
