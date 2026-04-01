@@ -492,6 +492,10 @@ function RunMonitorTab() {
     try {
       const res = await workerFetch(`/gha-logs?run_id=${runId}`);
       const data = await res.json();
+      if (!res.ok) {
+        setLogData({ logs: `Error ${res.status}: ${data.error || 'Unknown error'}` });
+        return;
+      }
       setLogData(data);
     } catch (err: any) {
       setLogData({ logs: `Error loading logs: ${err.message}` });

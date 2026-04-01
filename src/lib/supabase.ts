@@ -9,14 +9,21 @@ const WORKER_BASE = 'https://go.accountresearch.workers.dev';
 
 /**
  * Fetch wrapper for Worker API calls that always uses a fresh Supabase JWT.
- * Calls supabase.auth.getSession() before each request to ensure the token
- * is refreshed if expired, avoiding stale-token 401s.
+ * Checks token expiry and refreshes if needed before each request.
  */
 export async function workerFetch(
   path: string,
   init?: RequestInit & { signal?: AbortSignal },
 ): Promise<Response> {
-  const { data: { session } } = await supabase.auth.getSession();
+  let { data: { session } } = await supabase.auth.getSession();
+
+  // getSession() returns from memory — token may be expired.
+  // Refresh if expired or expiring within 60 seconds.
+  if (session?.expires_at && session.expires_at - Math.floor(Date.now() / 1000) < 60) {
+    const { data: { session: refreshed } } = await supabase.auth.refreshSession();
+    session = refreshed;
+  }
+
   if (!session?.access_token) {
     throw new Error('Not authenticated');
   }
