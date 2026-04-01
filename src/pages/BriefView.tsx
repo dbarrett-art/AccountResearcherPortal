@@ -1449,7 +1449,18 @@ function JobSignalsSection({ pov }: { pov: any }) {
           padding: '10px 0',
           borderBottom: `1px solid ${COLORS.borderLight}`,
         }}>
-          <div style={{ fontSize: 14, fontWeight: 500, color: COLORS.body, fontFamily: FONTS.sans }}>{s?.role_title}</div>
+          <div style={{ fontSize: 14, fontWeight: 500, color: COLORS.body, fontFamily: FONTS.sans }}>
+            {s?.role_title}
+            {s?.link && (
+              <a href={s.link} target="_blank" rel="noopener noreferrer"
+                style={{
+                  marginLeft: 8, color: COLORS.purple, fontSize: 12,
+                  textDecoration: 'underline dashed',
+                }}>
+                View <span style={{ fontSize: 10 }}>{'\u2197'}</span>
+              </a>
+            )}
+          </div>
           {s?.signal && <div style={{ fontSize: 13, color: COLORS.secondary, marginTop: 4, fontFamily: FONTS.sans }}>{s.signal}</div>}
         </div>
       ))}
