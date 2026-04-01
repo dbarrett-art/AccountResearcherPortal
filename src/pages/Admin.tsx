@@ -412,6 +412,31 @@ interface LogData {
   error?: string;
 }
 
+function CopyLogsButton({ logs }: { logs: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      onClick={() => {
+        navigator.clipboard.writeText(logs);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      }}
+      title="Copy logs to clipboard"
+      style={{
+        background: 'transparent',
+        border: '1px solid #374151',
+        color: copied ? '#34D399' : '#9CA3AF',
+        padding: '3px 10px',
+        fontSize: 11,
+        borderRadius: 4,
+        cursor: 'pointer',
+      }}
+    >
+      {copied ? '✓ Copied' : 'Copy'}
+    </button>
+  );
+}
+
 function RunMonitorTab() {
   const { session, userProfile } = useAuth();
   const [runs, setRuns] = useState<RunRow[]>([]);
@@ -756,6 +781,7 @@ function RunMonitorTab() {
                 >
                   ↻ Refresh
                 </button>
+                <CopyLogsButton logs={logData?.logs || ''} />
                 {logData?.gha_url && (
                   <a href={logData.gha_url} target="_blank" rel="noopener noreferrer"
                     style={{ fontSize: 12, color: 'var(--accent)' }}>
