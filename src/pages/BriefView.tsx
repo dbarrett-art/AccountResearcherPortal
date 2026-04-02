@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import Layout from '../components/Layout';
 import TableSkeleton from '../components/TableSkeleton';
 import usePageTitle from '../hooks/usePageTitle';
-import { ArrowLeft, FileText, Table, X, ChevronDown, ExternalLink, Send, Trash2, Activity, Share2, RefreshCw, Star } from 'lucide-react';
+import { ArrowLeft, FileText, Table, X, ChevronDown, ExternalLink, Send, Trash2, Activity, Share2, RefreshCw } from 'lucide-react';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -2380,7 +2380,7 @@ export default function BriefView() {
                     ...btnStyle('secondary'),
                     color: rateSubmitted ? '#065f46' : COLORS.secondary,
                   }}>
-                    <Star size={14} fill={rateSubmitted ? '#065f46' : 'none'} /> {rateSubmitted ? 'Rated!' : 'Rate'}
+                    <span style={{ fontSize: 14 }}>{rateSubmitted ? '★' : '☆'}</span> {rateSubmitted ? 'Rated!' : 'Rate'}
                   </button>
                   {rateOpen && !rateSubmitted && (
                     <div style={{
