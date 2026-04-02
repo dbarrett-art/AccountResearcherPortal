@@ -833,15 +833,31 @@ function PulledNumbers({ pov }: { pov: any }) {
   );
 }
 
+function stripMarkdownHeaders(text: string): string {
+  return text
+    .split('\n')
+    .map(line => {
+      if (/^#{1,3}\s/.test(line)) return '';
+      if (/^\s*[-•]\s/.test(line)) return line.replace(/^\s*[-•]\s*/, '');
+      return line;
+    })
+    .filter(line => line.trim() !== '')
+    .join(' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
 function AboutSection({ pov, sources }: { pov: any; sources: any[] }) {
   const about = pov?.about;
   if (!about) return null;
 
+  const cleanWhatTheyDo = about.what_they_do ? stripMarkdownHeaders(about.what_they_do) : null;
+
   return (
     <Section title="About" accent={SECTION_ACCENTS.about}>
       {/* Narrative intro */}
-      {(about.who_they_are || about.what_they_do) && (
-        <CitedProse text={about.who_they_are || about.what_they_do} sources={sources} />
+      {(about.who_they_are || cleanWhatTheyDo) && (
+        <CitedProse text={about.who_they_are || cleanWhatTheyDo} sources={sources} />
       )}
 
       {/* Pulled numbers */}
@@ -855,8 +871,8 @@ function AboutSection({ pov, sources }: { pov: any; sources: any[] }) {
       )}
 
       {/* what_they_do — always prose, no sub-headers */}
-      {about.who_they_are && about.what_they_do && (
-        <CitedProse text={about.what_they_do} sources={sources} />
+      {about.who_they_are && cleanWhatTheyDo && (
+        <CitedProse text={cleanWhatTheyDo} sources={sources} />
       )}
 
       {/* Revenue model callout */}
@@ -949,12 +965,10 @@ function WhyAnythingSection({ pov, sources }: { pov: any; sources: any[] }) {
         </div>
       )}
 
-      {/* Strategic objectives — expandable rows */}
-      {objectives.length > 0 && (
+      {/* Narrative */}
+      {wa.narrative && (
         <div style={{ marginBottom: 16 }}>
-          {objectives.map((obj: any, i: number) => (
-            <ExpandableObjective key={i} objective={obj} index={i} />
-          ))}
+          <CitedProse text={wa.narrative} sources={sources} />
         </div>
       )}
 
@@ -962,7 +976,7 @@ function WhyAnythingSection({ pov, sources }: { pov: any; sources: any[] }) {
       {wa.macro_forces && (
         <div style={{
           background: '#fef2f2', borderRadius: 6,
-          padding: '14px 16px', marginTop: 12,
+          padding: '14px 16px', marginBottom: 16,
         }}>
           <div style={{
             fontSize: 11, fontWeight: 700, color: '#991b1b',
@@ -973,10 +987,12 @@ function WhyAnythingSection({ pov, sources }: { pov: any; sources: any[] }) {
         </div>
       )}
 
-      {/* Narrative */}
-      {wa.narrative && (
-        <div style={{ marginTop: 12 }}>
-          <CitedProse text={wa.narrative} sources={sources} />
+      {/* Strategic objectives — expandable rows */}
+      {objectives.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          {objectives.map((obj: any, i: number) => (
+            <ExpandableObjective key={i} objective={obj} index={i} />
+          ))}
         </div>
       )}
     </Section>
@@ -1100,6 +1116,46 @@ function WhyFigmaSection({ pov, sources }: { pov: any; sources: any[] }) {
 
   return (
     <Section title="Why Figma" accent={SECTION_ACCENTS.whyFigma} count={products.length > 0 ? `${products.length} products` : undefined}>
+      {/* What They're Saying — exec quotes before strongest angle */}
+      {painSignals.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{
+            fontSize: 12, fontWeight: 700, color: COLORS.purple,
+            textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10,
+            fontFamily: FONTS.sans,
+          }}>What They're Saying</div>
+          {painSignals.map((ps: any, i: number) => (
+            <div key={i} style={{
+              borderLeft: `3px solid ${COLORS.purple}`,
+              padding: '10px 14px', marginBottom: 8,
+              borderRadius: '0 6px 6px 0',
+            }}>
+              <div style={{
+                fontStyle: 'italic', fontSize: 16,
+                color: COLORS.body, lineHeight: 1.6,
+                fontFamily: FONTS.serif,
+              }}>
+                &ldquo;{ps.quote}&rdquo;
+              </div>
+              {ps.speaker && (
+                <div style={{ fontSize: 12, fontWeight: 500, color: COLORS.purple, marginTop: 4, fontFamily: FONTS.sans }}>
+                  {ps.speaker}
+                </div>
+              )}
+              {ps.relevance && (
+                <div style={{ fontSize: 14, color: COLORS.tertiary, marginTop: 2, fontFamily: FONTS.sans }}>{ps.relevance}</div>
+              )}
+              {ps.source && (
+                <a href={ps.source} target="_blank" rel="noopener noreferrer"
+                  style={{ fontSize: 11, color: COLORS.purple, marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 3, textDecoration: 'none' }}>
+                  Source <span style={{ fontSize: 10 }}>{'\u2197'}</span>
+                </a>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Strongest angle */}
       {wf.strongest_angle && (
         <div style={{
@@ -1134,10 +1190,10 @@ function WhyFigmaSection({ pov, sources }: { pov: any; sources: any[] }) {
         </div>
       )}
 
-      {/* Design infrastructure + What they're saying */}
-      {(di || painSignals.length > 0) && (
+      {/* Design infrastructure */}
+      {di && (
         <div style={{ marginTop: 8 }}>
-          {di && (() => {
+          {(() => {
             const hasContent = (di.named_systems?.length > 0) || (di.confirmed_tools?.length > 0) || di.design_team_size;
             if (!hasContent) return null;
             return (
@@ -1185,46 +1241,6 @@ function WhyFigmaSection({ pov, sources }: { pov: any; sources: any[] }) {
               </>
             );
           })()}
-
-          {/* Pain signals as quotes */}
-          {painSignals.length > 0 && (
-            <div style={{ marginTop: 16 }}>
-              <div style={{
-                fontSize: 12, fontWeight: 700, color: COLORS.purple,
-                textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10,
-                fontFamily: FONTS.sans,
-              }}>What They're Saying</div>
-              {painSignals.map((ps: any, i: number) => (
-                <div key={i} style={{
-                  borderLeft: `3px solid ${COLORS.purple}`,
-                  padding: '10px 14px', marginBottom: 8,
-                  borderRadius: '0 6px 6px 0',
-                }}>
-                  <div style={{
-                    fontStyle: 'italic', fontSize: 16,
-                    color: COLORS.body, lineHeight: 1.6,
-                    fontFamily: FONTS.serif,
-                  }}>
-                    &ldquo;{ps.quote}&rdquo;
-                  </div>
-                  {ps.speaker && (
-                    <div style={{ fontSize: 12, fontWeight: 500, color: COLORS.purple, marginTop: 4, fontFamily: FONTS.sans }}>
-                      {ps.speaker}
-                    </div>
-                  )}
-                  {ps.relevance && (
-                    <div style={{ fontSize: 14, color: COLORS.tertiary, marginTop: 2, fontFamily: FONTS.sans }}>{ps.relevance}</div>
-                  )}
-                  {ps.source && (
-                    <a href={ps.source} target="_blank" rel="noopener noreferrer"
-                      style={{ fontSize: 11, color: COLORS.purple, marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 3, textDecoration: 'none' }}>
-                      Source <span style={{ fontSize: 10 }}>{'\u2197'}</span>
-                    </a>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       )}
     </Section>
@@ -2059,6 +2075,7 @@ function BriefContent({ pov, personas, hooksData, runId, session, valuePyramid }
   pov: any; personas: any; hooksData?: any; runId?: string; session?: any; valuePyramid?: any;
 }) {
   const allSources = pov?.sources_used || [];
+  void ProofPointsSection; // Retained but removed from render tree (2026-04-01 reframe)
 
   return (
     <>
@@ -2111,14 +2128,14 @@ function BriefContent({ pov, personas, hooksData, runId, session, valuePyramid }
       {/* 7. Value Pyramid */}
       <ValuePyramidSection pyramid={valuePyramid} />
 
-      {/* 8. Job Signals */}
-      <JobSignalsSection pov={pov} />
-
-      {/* 9. Digital Products */}
+      {/* 8. Digital Products */}
       <DigitalProductsSection pov={pov} />
 
-      {/* 10. Who to Contact */}
+      {/* 9. Who to Contact */}
       <ContactsSection personas={personas} hooksData={hooksData} />
+
+      {/* 10. Job Signals */}
+      <JobSignalsSection pov={pov} />
 
       {/* 11. Key Executives */}
       <KeyExecutivesSection pov={pov} />
@@ -2126,8 +2143,7 @@ function BriefContent({ pov, personas, hooksData, runId, session, valuePyramid }
       {/* 12. Technology Partnerships */}
       <TechPartnersSection pov={pov} />
 
-      {/* 13. Proof Points */}
-      <ProofPointsSection pov={pov} />
+      {/* Proof Points — removed from spec (2026-04-01 reframe) */}
 
       {/* 14. Sources */}
       <SourcesSection pov={pov} />
