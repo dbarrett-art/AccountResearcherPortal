@@ -43,11 +43,6 @@ const LANGUAGE_FLAGS: Record<string, string> = {
   ja: '\u{1F1EF}\u{1F1F5}', ko: '\u{1F1F0}\u{1F1F7}', sv: '\u{1F1F8}\u{1F1EA}',
   no: '\u{1F1F3}\u{1F1F4}', da: '\u{1F1E9}\u{1F1F0}', fi: '\u{1F1EB}\u{1F1EE}',
 };
-const LANGUAGE_NAMES: Record<string, string> = {
-  de: 'German', fr: 'French', es: 'Spanish', it: 'Italian', nl: 'Dutch',
-  pt: 'Portuguese', ja: 'Japanese', ko: 'Korean', sv: 'Swedish', no: 'Norwegian',
-  da: 'Danish', fi: 'Finnish',
-};
 
 const SUGGESTED_PROMPTS = [
   "What's the strongest angle for this account?",
