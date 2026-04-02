@@ -567,7 +567,7 @@ function AgeBadge({ createdAt }: { createdAt: string | undefined }) {
         display: 'inline-flex', alignItems: 'center', padding: '2px 8px',
         borderRadius: 4, fontSize: 11, fontWeight: 500, fontFamily: FONTS.sans,
         background: '#ecfdf5', color: '#065f46',
-      }}>Today</span>
+      }}>Last run · Today</span>
     );
   }
   if (days > 90) {
@@ -576,7 +576,7 @@ function AgeBadge({ createdAt }: { createdAt: string | undefined }) {
         display: 'inline-flex', alignItems: 'center', padding: '2px 8px',
         borderRadius: 4, fontSize: 11, fontWeight: 500, fontFamily: FONTS.sans,
         background: '#fef2f2', color: '#991b1b',
-      }}>Stale — {days}d old</span>
+      }}>Last run · Stale — {days}d old</span>
     );
   }
   if (days > 30) {
@@ -585,7 +585,7 @@ function AgeBadge({ createdAt }: { createdAt: string | undefined }) {
         display: 'inline-flex', alignItems: 'center', padding: '2px 8px',
         borderRadius: 4, fontSize: 11, fontWeight: 500, fontFamily: FONTS.sans,
         background: '#fefce8', color: '#854d0e',
-      }}>Review — {days}d old</span>
+      }}>Last run · {days}d ago</span>
     );
   }
   if (days >= 7) {
@@ -594,7 +594,7 @@ function AgeBadge({ createdAt }: { createdAt: string | undefined }) {
         display: 'inline-flex', alignItems: 'center', padding: '2px 8px',
         borderRadius: 4, fontSize: 11, fontWeight: 500, fontFamily: FONTS.sans,
         background: '#f5f5f0', color: COLORS.tertiary,
-      }}>{days}d ago</span>
+      }}>Last run · {days}d ago</span>
     );
   }
   return null;
@@ -707,13 +707,13 @@ function MetricsBar({ pov, personas }: { pov: any; hooksData?: any; personas?: a
           <div style={{
             fontSize: 9, fontWeight: 600, letterSpacing: '0.07em',
             textTransform: 'uppercase', color: COLORS.faint,
-            fontFamily: FONTS.sans, marginBottom: 3,
+            fontFamily: FONTS.sans, marginBottom: 3, textAlign: 'center',
           }}>
             {item.label}
           </div>
           <div style={{
             fontSize: 22, fontWeight: 700, color: COLORS.heading,
-            fontFamily: FONTS.serif,
+            fontFamily: FONTS.serif, textAlign: 'center',
           }}>
             {item.value}
           </div>
@@ -2199,6 +2199,19 @@ export default function BriefView() {
   }, [overflowOpen]);
 
   useEffect(() => {
+    if (document.getElementById('sparkle-keyframes')) return;
+    const style = document.createElement('style');
+    style.id = 'sparkle-keyframes';
+    style.textContent = `
+      @keyframes pulse-sparkle {
+        0%, 100% { opacity: 1; transform: scale(1) rotate(0deg); }
+        50% { opacity: 0.75; transform: scale(1.12) rotate(8deg); }
+      }
+    `;
+    document.head.appendChild(style);
+  }, []);
+
+  useEffect(() => {
     if (!run_id) return;
     let cancelled = false;
 
@@ -2304,11 +2317,9 @@ export default function BriefView() {
   };
 
   const mainStyle: React.CSSProperties = {
-    maxWidth: 960,
+    maxWidth: 1200,
     margin: '0 auto',
     paddingBottom: 64,
-    transition: 'margin-right 200ms ease',
-    ...(chatOpen ? { marginRight: 380 } : {}),
   };
 
   // Button style helper
@@ -2352,10 +2363,6 @@ export default function BriefView() {
     <Layout bgColor={COLORS.bg}>
       <div style={mainStyle}>
         {/* ============ HEADER ============ */}
-        <style>{`@keyframes pulse-sparkle {
-  0%, 100% { opacity: 1; transform: scale(1) rotate(0deg); }
-  50%       { opacity: 0.8; transform: scale(1.08) rotate(6deg); }
-}`}</style>
         <div style={{
           background: '#fff',
           borderBottom: `1px solid ${COLORS.border}`,
@@ -2380,7 +2387,6 @@ export default function BriefView() {
               }}>
                 {pov?.company_name || run.company}
               </h1>
-              <IcpBadge score={pov?.icp_fit?.score || pov?.icp_assessment?.score} size="small" />
               <AgeBadge createdAt={run.created_at} />
 
               {/* Spacer */}
@@ -2389,7 +2395,7 @@ export default function BriefView() {
               {/* Action buttons */}
               {run.pdf_url && (
                 <a href={run.pdf_url} target="_blank" rel="noopener noreferrer" style={{
-                  ...btnStyle('primary'), textDecoration: 'none',
+                  ...btnStyle('secondary'), textDecoration: 'none',
                 }}>
                   <FileText size={14} /> {run.market && run.market !== 'en' && run.market !== 'auto' && LANGUAGE_FLAGS[run.market]
                     ? `${LANGUAGE_FLAGS[run.market]} PDF` : 'PDF'}
@@ -2397,7 +2403,7 @@ export default function BriefView() {
               )}
               <button onClick={() => setChatOpen(true)} style={btnStyle('secondary')}>
                 <svg width="18" height="18" viewBox="0 0 20 20" fill="none"
-                  style={{ animation: 'pulse-sparkle 2.8s ease-in-out infinite', transformOrigin: 'center' }}>
+                  style={{ animation: 'pulse-sparkle 2.4s ease-in-out infinite', transformOrigin: 'center', display: 'block' }}>
                   <path d="M10 2 L11.5 7.5 L17 9 L11.5 10.5 L10 16 L8.5 10.5 L3 9 L8.5 7.5 Z" fill="#7F77DD"/>
                   <path d="M16.5 2 L17.1 4 L19 4.5 L17.1 5 L16.5 7 L15.9 5 L14 4.5 L15.9 4 Z" fill="#AFA9EC"/>
                   <path d="M4 14 L4.4 15.4 L6 15.8 L4.4 16.2 L4 17.5 L3.6 16.2 L2 15.8 L3.6 15.4 Z" fill="#CECBF6"/>
@@ -2530,7 +2536,7 @@ export default function BriefView() {
         {pov?.research_gaps && (
           <details style={{
             background: '#fefce8', border: `1px solid #fde68a`,
-            borderRadius: 6, marginTop: 10, cursor: 'pointer',
+            borderRadius: 6, marginTop: 10, marginBottom: 16, cursor: 'pointer',
           }}>
             <summary style={{
               padding: '10px 14px', fontSize: 13, color: '#854d0e',
