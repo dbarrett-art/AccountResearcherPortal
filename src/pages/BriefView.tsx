@@ -1102,7 +1102,7 @@ function WhyFigmaSection({ pov, sources }: { pov: any; sources: any[] }) {
   if (!wf) return null;
   const products = wf.primary_products || [];
   const di = wf.design_infrastructure;
-  const painSignals = wf.pain_signals || [];
+  const painSignals = wf.pain_signals || wf.what_they_say || [];
 
   return (
     <Section title="Why Figma" accent={SECTION_ACCENTS.whyFigma} count={products.length > 0 ? `${products.length} products` : undefined}>
@@ -2112,10 +2112,7 @@ function BriefContent({ pov, personas, hooksData, runId, session, valuePyramid }
       {/* 5. Why Figma */}
       <WhyFigmaSection pov={pov} sources={allSources} />
 
-      {/* 6. Research Deep Dive */}
-      <ResearchDeepDiveSection pov={pov} />
-
-      {/* 7. Value Pyramid */}
+      {/* 6. Value Pyramid */}
       <ValuePyramidSection pyramid={valuePyramid} />
 
       {/* 8. Digital Products */}
@@ -2132,6 +2129,9 @@ function BriefContent({ pov, personas, hooksData, runId, session, valuePyramid }
 
       {/* 12. Technology Partnerships */}
       <TechPartnersSection pov={pov} />
+
+      {/* 13. Research Deep Dive */}
+      <ResearchDeepDiveSection pov={pov} />
 
       {/* Proof Points — removed from spec (2026-04-01 reframe) */}
 
