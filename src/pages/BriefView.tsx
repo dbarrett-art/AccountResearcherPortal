@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import Layout from '../components/Layout';
 import TableSkeleton from '../components/TableSkeleton';
 import usePageTitle from '../hooks/usePageTitle';
-import { ArrowLeft, FileText, Table, X, ChevronDown, ExternalLink, Send, Trash2, Activity, Share2, RefreshCw } from 'lucide-react';
+import { ArrowLeft, FileText, Table, X, ChevronDown, ExternalLink, Send, Trash2, Activity, Share2, RefreshCw, Star } from 'lucide-react';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -843,7 +843,7 @@ function AboutSection({ pov, sources }: { pov: any; sources: any[] }) {
   const cleanWhatTheyDo = about.what_they_do ? stripMarkdownHeaders(about.what_they_do) : null;
 
   return (
-    <Section title="About" accent={SECTION_ACCENTS.about} defaultOpen>
+    <Section title="About" accent={SECTION_ACCENTS.about}>
       {/* Narrative intro */}
       {(about.who_they_are || cleanWhatTheyDo) && (
         <CitedProse text={about.who_they_are || cleanWhatTheyDo} sources={sources} />
@@ -2090,8 +2090,7 @@ function BriefContent({ pov, personas, hooksData, runId, session, valuePyramid }
       {/* 14. Sources */}
       <SourcesSection pov={pov} />
 
-      {/* 15. Feedback */}
-      {runId && session && <FeedbackPanel runId={runId} />}
+      {/* Feedback moved to header toolbar Rate button */}
     </>
   );
 }
@@ -2123,6 +2122,14 @@ export default function BriefView() {
   const [rerenderDone, setRerenderDone] = useState(false);
   const [overflowOpen, setOverflowOpen] = useState(false);
   const overflowRef = useRef<HTMLDivElement>(null);
+  const [rateOpen, setRateOpen] = useState(false);
+  const [rating, setRating] = useState<number | null>(null);
+  const [accuracy, setAccuracy] = useState<number | null>(null);
+  const [usefulness, setUsefulness] = useState<number | null>(null);
+  const [rateComment, setRateComment] = useState('');
+  const [rateSubmitted, setRateSubmitted] = useState(false);
+  const [rateSubmitting, setRateSubmitting] = useState(false);
+  const rateRef = useRef<HTMLDivElement>(null);
 
 
   const handleRunInEnglish = async () => {
@@ -2195,6 +2202,30 @@ export default function BriefView() {
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [overflowOpen]);
+
+  // Close rate popover on outside click
+  useEffect(() => {
+    if (!rateOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (rateRef.current && !rateRef.current.contains(e.target as Node)) setRateOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [rateOpen]);
+
+  const handleRateSubmit = async () => {
+    if (!rating || !run_id) return;
+    setRateSubmitting(true);
+    try {
+      await workerFetch(`/feedback/${run_id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rating, accuracy_rating: accuracy, usefulness_rating: usefulness, comment: rateComment || null }),
+      });
+      setRateSubmitted(true);
+    } catch { /* silent */ }
+    setRateSubmitting(false);
+  };
 
   // sparkle keyframes moved to inline <style> tag in JSX
 
@@ -2366,7 +2397,7 @@ export default function BriefView() {
         .sparkle-dot3 { animation: sparkle-dot 1.4s ease-in-out infinite 0.9s; }
       `}</style>
       <div style={{
-        paddingRight: chatOpen ? 396 : 0,
+        paddingRight: chatOpen ? 300 : 0,
         transition: 'padding-right 200ms ease',
         minHeight: '100vh',
       }}>
@@ -2429,6 +2460,63 @@ export default function BriefView() {
               }}>
                 <Share2 size={14} /> {shareStatus === 'copied' ? 'Link copied!' : 'Share'}
               </button>
+
+              {/* Rate button + popover */}
+              {session && (
+                <div ref={rateRef} style={{ position: 'relative' }}>
+                  <button onClick={() => setRateOpen(o => !o)} style={{
+                    ...btnStyle('secondary'),
+                    color: rateSubmitted ? '#065f46' : COLORS.secondary,
+                  }}>
+                    <Star size={14} fill={rateSubmitted ? '#065f46' : 'none'} /> {rateSubmitted ? 'Rated!' : 'Rate'}
+                  </button>
+                  {rateOpen && !rateSubmitted && (
+                    <div style={{
+                      position: 'absolute', right: 0, top: '100%', marginTop: 4,
+                      background: '#fff', border: `1px solid ${COLORS.border}`,
+                      borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+                      padding: 16, minWidth: 260, zIndex: 50,
+                    }}>
+                      {[
+                        { label: 'Overall', value: rating, onChange: setRating },
+                        { label: 'Accuracy', value: accuracy, onChange: setAccuracy },
+                        { label: 'Usefulness', value: usefulness, onChange: setUsefulness },
+                      ].map(row => (
+                        <div key={row.label} style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+                          <div style={{ fontSize: 12, color: COLORS.secondary, width: 90, fontFamily: FONTS.sans }}>{row.label}</div>
+                          <div style={{ display: 'flex', gap: 4 }}>
+                            {[1, 2, 3, 4, 5].map(n => (
+                              <button key={n} onClick={() => row.onChange(n)} style={{
+                                background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, padding: 2,
+                                color: row.value && n <= row.value ? '#ca8a04' : COLORS.faint,
+                              }}>{row.value && n <= row.value ? '\u2605' : '\u2606'}</button>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                      <textarea
+                        value={rateComment} onChange={e => setRateComment(e.target.value)}
+                        placeholder="Optional comment..."
+                        style={{
+                          width: '100%', minHeight: 50, marginTop: 4, padding: 8, fontSize: 12,
+                          background: '#fdfcfa', border: `1px solid ${COLORS.border}`,
+                          borderRadius: 6, color: COLORS.body, resize: 'vertical',
+                          fontFamily: FONTS.sans,
+                        }}
+                      />
+                      <button onClick={handleRateSubmit} disabled={!rating || rateSubmitting} style={{
+                        marginTop: 8, background: rating ? COLORS.purple : '#f5f5f0',
+                        color: rating ? '#fff' : COLORS.faint,
+                        border: 'none', borderRadius: 6, padding: '6px 14px', fontSize: 12,
+                        fontWeight: 500, cursor: rating ? 'pointer' : 'default',
+                        fontFamily: FONTS.sans, width: '100%',
+                      }}>
+                        {rateSubmitting ? 'Sending...' : 'Submit'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Overflow menu */}
               <div ref={overflowRef} style={{ position: 'relative' }}>

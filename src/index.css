@@ -27,7 +27,8 @@
   --status-running-text: #fbbf24;
   --status-complete-text: #4ade80;
   --status-failed-text: #f87171;
-  --font: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+  --font: 'DM Sans', system-ui, -apple-system, sans-serif;
+  --font-serif: 'Newsreader', Georgia, serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', 'Menlo', monospace;
 }
 
