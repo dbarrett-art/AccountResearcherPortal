@@ -535,7 +535,7 @@ function RunMonitorTab() {
     (async () => {
       const { data } = await supabase
         .from('runs')
-        .select('id, company, url, created_at, started_at, completed_at, status, error_message, pdf_url, gha_run_id, user_id, market, users(name, email)')
+        .select('id, company, url, created_at, started_at, completed_at, status, error_message, pdf_url, gha_run_id, user_id, market, users!runs_user_id_fkey(name, email)')
         .order('created_at', { ascending: false })
         .limit(200);
       if (data) setRuns(data as unknown as RunRow[]);

@@ -68,7 +68,7 @@ export default function Submit() {
     try {
       const { data } = await supabase
         .from('runs')
-        .select('company, created_at, user_id, users!inner(name)')
+        .select('company, created_at, user_id, users!runs_user_id_fkey!inner(name)')
         .eq('status', 'complete')
         .ilike('company', name)
         .gte('created_at', cutoff)
