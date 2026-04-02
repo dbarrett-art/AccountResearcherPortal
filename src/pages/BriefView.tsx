@@ -735,7 +735,6 @@ function IcpSection({ pov, sources }: { pov: any; sources: any[] }) {
       title="ICP Fit"
       accent={SECTION_ACCENTS.icp}
       badge={<IcpBadge score={icp.score} size="small" />}
-      defaultOpen
     >
       <CitedProse text={icp.rationale} sources={sources} />
     </Section>
@@ -844,7 +843,7 @@ function AboutSection({ pov, sources }: { pov: any; sources: any[] }) {
   const cleanWhatTheyDo = about.what_they_do ? stripMarkdownHeaders(about.what_they_do) : null;
 
   return (
-    <Section title="About" accent={SECTION_ACCENTS.about}>
+    <Section title="About" accent={SECTION_ACCENTS.about} defaultOpen>
       {/* Narrative intro */}
       {(about.who_they_are || cleanWhatTheyDo) && (
         <CitedProse text={about.who_they_are || cleanWhatTheyDo} sources={sources} />
@@ -1756,7 +1755,6 @@ function ContactsSection({ personas, hooksData }: { personas: any; hooksData?: a
       title="Who to Contact"
       accent={SECTION_ACCENTS.contacts}
       count={`${unique.length} contacts`}
-      defaultOpen
     >
       {rfm && (
         <div style={{
@@ -2198,18 +2196,7 @@ export default function BriefView() {
     return () => document.removeEventListener('mousedown', handler);
   }, [overflowOpen]);
 
-  useEffect(() => {
-    if (document.getElementById('sparkle-keyframes')) return;
-    const style = document.createElement('style');
-    style.id = 'sparkle-keyframes';
-    style.textContent = `
-      @keyframes pulse-sparkle {
-        0%, 100% { opacity: 1; transform: scale(1) rotate(0deg); }
-        50% { opacity: 0.75; transform: scale(1.12) rotate(8deg); }
-      }
-    `;
-    document.head.appendChild(style);
-  }, []);
+  // sparkle keyframes moved to inline <style> tag in JSX
 
   useEffect(() => {
     if (!run_id) return;
@@ -2361,6 +2348,28 @@ export default function BriefView() {
 
   return (
     <Layout bgColor={COLORS.bg}>
+      <style>{`
+        @keyframes sparkle-spin {
+          0%   { transform: rotate(0deg) scale(1);    opacity: 1; }
+          25%  { transform: rotate(15deg) scale(1.15); opacity: 0.8; }
+          50%  { transform: rotate(0deg) scale(0.95);  opacity: 1; }
+          75%  { transform: rotate(-10deg) scale(1.1); opacity: 0.85; }
+          100% { transform: rotate(0deg) scale(1);    opacity: 1; }
+        }
+        @keyframes sparkle-dot {
+          0%, 100% { opacity: 0.3; transform: scale(0.8); }
+          50%       { opacity: 1;   transform: scale(1.2); }
+        }
+        .sparkle-main { animation: sparkle-spin 2.2s ease-in-out infinite; transform-origin: center; }
+        .sparkle-dot1 { animation: sparkle-dot 1.4s ease-in-out infinite; }
+        .sparkle-dot2 { animation: sparkle-dot 1.4s ease-in-out infinite 0.5s; }
+        .sparkle-dot3 { animation: sparkle-dot 1.4s ease-in-out infinite 0.9s; }
+      `}</style>
+      <div style={{
+        paddingRight: chatOpen ? 396 : 0,
+        transition: 'padding-right 200ms ease',
+        minHeight: '100vh',
+      }}>
       <div style={mainStyle}>
         {/* ============ HEADER ============ */}
         <div style={{
@@ -2402,11 +2411,15 @@ export default function BriefView() {
                 </a>
               )}
               <button onClick={() => setChatOpen(true)} style={btnStyle('secondary')}>
-                <svg width="18" height="18" viewBox="0 0 20 20" fill="none"
-                  style={{ animation: 'pulse-sparkle 2.4s ease-in-out infinite', transformOrigin: 'center', display: 'block' }}>
-                  <path d="M10 2 L11.5 7.5 L17 9 L11.5 10.5 L10 16 L8.5 10.5 L3 9 L8.5 7.5 Z" fill="#7F77DD"/>
-                  <path d="M16.5 2 L17.1 4 L19 4.5 L17.1 5 L16.5 7 L15.9 5 L14 4.5 L15.9 4 Z" fill="#AFA9EC"/>
-                  <path d="M4 14 L4.4 15.4 L6 15.8 L4.4 16.2 L4 17.5 L3.6 16.2 L2 15.8 L3.6 15.4 Z" fill="#CECBF6"/>
+                <svg width="18" height="18" viewBox="0 0 20 20" fill="none" style={{ display: 'block', flexShrink: 0 }}>
+                  {/* main star */}
+                  <path className="sparkle-main" d="M10 2.5 L11.3 7.2 L16.5 8.5 L11.3 9.8 L10 14.5 L8.7 9.8 L3.5 8.5 L8.7 7.2 Z" fill="#7F77DD"/>
+                  {/* top right dot */}
+                  <circle className="sparkle-dot1" cx="16" cy="3" r="1.5" fill="#AFA9EC"/>
+                  {/* bottom left dot */}
+                  <circle className="sparkle-dot2" cx="4" cy="15.5" r="1" fill="#CECBF6"/>
+                  {/* mid right dot */}
+                  <circle className="sparkle-dot3" cx="17.5" cy="12" r="1" fill="#AFA9EC"/>
                 </svg>
                 {' '}Chat
               </button>
@@ -2609,6 +2622,7 @@ export default function BriefView() {
             valuePyramid={brief?.value_pyramid || pov?.value_pyramid}
           />
         )}
+      </div>
       </div>
 
       {/* ============ Chat panel ============ */}
