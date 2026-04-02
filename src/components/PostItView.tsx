@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { ChevronRight, ChevronDown, X, ExternalLink, Search } from 'lucide-react';
+import { ChevronRight, ChevronDown, X, ExternalLink, Search, FileText } from 'lucide-react';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -511,6 +511,32 @@ function statusOrder(s: PostItStatus): number {
   return s === 'survived' ? 0 : s === 'unused' ? 1 : 2;
 }
 
+/* ------------------------------------------------------------------ */
+/*  Article content map from m1:source_fetched events                  */
+/* ------------------------------------------------------------------ */
+
+interface ArticleContent {
+  title: string;
+  contentPreview: string;
+  contentLength: number;
+  fetchStatus: string;
+}
+
+function extractArticleContentMap(data: DebugData): Map<string, ArticleContent> {
+  const map = new Map<string, ArticleContent>();
+  for (const ev of (data.events || [])) {
+    if (ev.event === 'm1:source_fetched' && ev.url && ev.fetch_status === 'ok' && ev.content_preview) {
+      map.set(ev.url, {
+        title: ev.title || '',
+        contentPreview: ev.content_preview,
+        contentLength: ev.content_length || 0,
+        fetchStatus: ev.fetch_status,
+      });
+    }
+  }
+  return map;
+}
+
 function truncate(s: string, max: number): string {
   return s.length > max ? s.slice(0, max - 1) + '\u2026' : s;
 }
@@ -570,7 +596,7 @@ function sourceStatusColor(url: string, usedUrls: Set<string>, gatheredUrls: Set
 /*  Level 1: Compact Query Category Card                               */
 /* ------------------------------------------------------------------ */
 
-function QueryCategoryCard({ group, isExpanded, onToggle, usedUrls, gatheredUrls, hasSourceUsage, onClickSource, sonnetDecisions, opusDecisions }: {
+function QueryCategoryCard({ group, isExpanded, onToggle, usedUrls, gatheredUrls, hasSourceUsage, onClickSource, sonnetDecisions, opusDecisions, articleContentMap }: {
   group: QueryGroup;
   isExpanded: boolean;
   onToggle: () => void;
@@ -580,7 +606,9 @@ function QueryCategoryCard({ group, isExpanded, onToggle, usedUrls, gatheredUrls
   onClickSource: (postIt: PostIt) => void;
   sonnetDecisions: Map<string, { decision: string; reasoning: string; droppedBy?: string }>;
   opusDecisions: Map<string, { decision: string; reasoning: string; used_in_sections?: string[] }>;
+  articleContentMap: Map<string, ArticleContent>;
 }) {
+  const [expandedContent, setExpandedContent] = useState<string | null>(null);
   const total = group.results.length;
   const barTotal = Math.max(1, total);
   const citedPct = (group.keptCount / barTotal) * 100;
@@ -710,11 +738,13 @@ function QueryCategoryCard({ group, isExpanded, onToggle, usedUrls, gatheredUrls
             const tiltR = (seededRandom(`${group.category}-${i}`) - 0.5) * 3;
             const sonnetD = sonnetDecisions.get(r.url);
             const opusD = opusDecisions.get(r.url);
+            const articleContent = articleContentMap.get(r.url);
             // Pick the most relevant reasoning for this source's status
             const reasoning = st === 'discarded' ? sonnetD?.reasoning
               : st === 'unused' ? opusD?.reasoning
               : undefined;
             const usedInSections = st === 'survived' ? opusD?.used_in_sections : undefined;
+            const isContentExpanded = expandedContent === r.url;
             return (
               <div
                 key={r.url}
@@ -765,8 +795,16 @@ function QueryCategoryCard({ group, isExpanded, onToggle, usedUrls, gatheredUrls
                   }}>
                     {r.title}
                   </div>
-                  <div style={{ color: 'var(--text-tertiary)', fontSize: 9 }}>
+                  <div style={{ color: 'var(--text-tertiary)', fontSize: 9, display: 'flex', alignItems: 'center', gap: 3 }}>
                     {getDomain(r.url)}
+                    {articleContent && (
+                      <FileText size={9} style={{ color: 'var(--text-tertiary)', opacity: 0.7, flexShrink: 0 }} />
+                    )}
+                    {articleContent && (
+                      <span style={{ opacity: 0.6 }}>
+                        {articleContent.contentLength.toLocaleString()} chars
+                      </span>
+                    )}
                   </div>
                   {reasoning && (
                     <div style={{
@@ -791,6 +829,36 @@ function QueryCategoryCard({ group, isExpanded, onToggle, usedUrls, gatheredUrls
                       ))}
                     </div>
                   )}
+                  {articleContent && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setExpandedContent(isContentExpanded ? null : r.url);
+                      }}
+                      style={{
+                        marginTop: 3, padding: '1px 4px', borderRadius: 3, fontSize: 8,
+                        background: 'var(--bg-input)', border: '1px solid var(--border)',
+                        color: 'var(--text-tertiary)', cursor: 'pointer', fontWeight: 500,
+                        display: 'inline-flex', alignItems: 'center', gap: 2,
+                      }}
+                    >
+                      <FileText size={8} />
+                      {isContentExpanded ? 'Hide content' : 'Show content'}
+                      {isContentExpanded ? ' \u25B4' : ' \u25BE'}
+                    </button>
+                  )}
+                  {isContentExpanded && articleContent && (
+                    <div style={{
+                      marginTop: 4, padding: 6, borderRadius: 4,
+                      background: 'var(--bg-input)',
+                      maxHeight: 120, overflowY: 'auto',
+                      fontFamily: 'var(--font-mono)', fontSize: 11,
+                      color: 'var(--text-secondary)', lineHeight: 1.4,
+                      whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                    }}>
+                      {articleContent.contentPreview}
+                    </div>
+                  )}
                 </div>
               </div>
             );
@@ -805,9 +873,10 @@ function QueryCategoryCard({ group, isExpanded, onToggle, usedUrls, gatheredUrls
 /*  Sources Grid — compact overview with accordion                     */
 /* ------------------------------------------------------------------ */
 
-function SourcesGrid({ data, onClickSource }: {
+function SourcesGrid({ data, onClickSource, articleContentMap }: {
   data: DebugData;
   onClickSource: (postIt: PostIt) => void;
+  articleContentMap: Map<string, ArticleContent>;
 }) {
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
   const events = data.events || [];
@@ -920,6 +989,7 @@ function SourcesGrid({ data, onClickSource }: {
             onClickSource={onClickSource}
             sonnetDecisions={sonnetDecisions}
             opusDecisions={opusDecisions}
+            articleContentMap={articleContentMap}
           />
         ))}
       </div>
@@ -1190,7 +1260,9 @@ function PostItCard({ postIt, onClick }: { postIt: PostIt; onClick: () => void }
 /*  Detail Panel (Level 3: click-to-expand)                            */
 /* ------------------------------------------------------------------ */
 
-function DetailPanel({ postIt, onClose, sourceUsageEvent }: { postIt: PostIt; onClose: () => void; sourceUsageEvent?: any }) {
+function DetailPanel({ postIt, onClose, sourceUsageEvent, articleContentMap }: { postIt: PostIt; onClose: () => void; sourceUsageEvent?: any; articleContentMap?: Map<string, ArticleContent> }) {
+  const [showContent, setShowContent] = useState(false);
+  const articleContent = articleContentMap?.get(postIt.detail?.url || '');
   // Find which POV section cited this source
   const citedInSections: string[] = [];
   if (postIt.detail?.url && sourceUsageEvent?.usedSources) {
@@ -1328,6 +1400,35 @@ function DetailPanel({ postIt, onClose, sourceUsageEvent }: { postIt: PostIt; on
           }}>
             {postIt.detail.snippet}
           </div>
+        </div>
+      )}
+
+      {articleContent && (
+        <div style={{ marginBottom: 12 }}>
+          <button
+            onClick={() => setShowContent(!showContent)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)',
+              textTransform: 'uppercase', marginBottom: 4,
+              background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+            }}
+          >
+            <FileText size={12} />
+            Fetched Content ({articleContent.contentLength.toLocaleString()} chars)
+            {showContent ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+          </button>
+          {showContent && (
+            <div style={{
+              fontSize: 11, padding: 8, background: 'var(--bg-input)',
+              borderRadius: 4, fontFamily: 'var(--font-mono)',
+              color: 'var(--text-secondary)', whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word', maxHeight: 300, overflowY: 'auto',
+              lineHeight: 1.4,
+            }}>
+              {articleContent.contentPreview}
+            </div>
+          )}
         </div>
       )}
 
@@ -1576,6 +1677,9 @@ export default function PostItView({ data }: { data: DebugData }) {
     return (data.events || []).find(e => e.event === 'm1:source_usage');
   }, [data]);
 
+  // Article content map from m1:source_fetched events
+  const articleContentMap = useMemo(() => extractArticleContentMap(data), [data]);
+
   // Check if there's any data at all
   const hasLegacySources = columns.some(c => c.id === 'sources' || c.id === 'distillation');
   if (!hasWebSearch && !hasLegacySources && columns.length === 0) return <EmptyState />;
@@ -1593,7 +1697,7 @@ export default function PostItView({ data }: { data: DebugData }) {
         {/* Sources grid — new grouped layout for runs with web_search events */}
         {hasWebSearch && (
           <>
-            <SourcesGrid data={data} onClickSource={setSelectedPostIt} />
+            <SourcesGrid data={data} onClickSource={setSelectedPostIt} articleContentMap={articleContentMap} />
             <ColumnArrow />
             <DistillationFunnel data={data} />
           </>
@@ -1630,7 +1734,7 @@ export default function PostItView({ data }: { data: DebugData }) {
               background: 'rgba(0,0,0,0.2)', zIndex: 99,
             }}
           />
-          <DetailPanel postIt={selectedPostIt} onClose={() => setSelectedPostIt(null)} sourceUsageEvent={sourceUsageEvent} />
+          <DetailPanel postIt={selectedPostIt} onClose={() => setSelectedPostIt(null)} sourceUsageEvent={sourceUsageEvent} articleContentMap={articleContentMap} />
         </>
       )}
     </div>

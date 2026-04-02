@@ -6,7 +6,7 @@ import usePageTitle from '../hooks/usePageTitle';
 import {
   ChevronDown, ChevronRight, Search, Upload, Clock, DollarSign,
   Cpu, Globe, Users, Zap, FileText, Layers, AlertTriangle, CheckCircle,
-  XCircle, ArrowRight, Filter, Activity, LayoutGrid, StickyNote
+  XCircle, ArrowRight, Filter, Activity, LayoutGrid, StickyNote, Code, Copy, Check
 } from 'lucide-react';
 import PostItView from '../components/PostItView';
 
@@ -744,6 +744,195 @@ function FileDropZone({ onData }: { onData: (data: DebugData) => void }) {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Raw JSON Viewer                                                    */
+/* ------------------------------------------------------------------ */
+
+interface BriefData {
+  pov_json: Record<string, any> | null;
+  personas_json: Record<string, any> | null;
+  hooks_json: Record<string, any> | null;
+  value_pyramid: Record<string, any> | null;
+  schema_version: number | null;
+}
+
+function RawJsonViewer({ briefData, runMeta }: { briefData: BriefData | null; runMeta: { company?: string; run_id?: string } | null }) {
+  const [jsonSearch, setJsonSearch] = useState('');
+  const [copied, setCopied] = useState(false);
+
+  const fullJson = useMemo(() => {
+    if (!briefData) return null;
+    const obj: Record<string, any> = {};
+    if (runMeta?.company) obj.company = runMeta.company;
+    if (runMeta?.run_id) obj.run_id = runMeta.run_id;
+    if (briefData.schema_version != null) obj.schema_version = briefData.schema_version;
+    if (briefData.pov_json) obj.pov_json = briefData.pov_json;
+    if (briefData.personas_json) obj.personas_json = briefData.personas_json;
+    if (briefData.hooks_json) obj.hooks_json = briefData.hooks_json;
+    if (briefData.value_pyramid) obj.value_pyramid = briefData.value_pyramid;
+    return obj;
+  }, [briefData, runMeta]);
+
+  const jsonString = useMemo(() => fullJson ? JSON.stringify(fullJson, null, 2) : '', [fullJson]);
+
+  const lines = useMemo(() => jsonString.split('\n'), [jsonString]);
+
+  const filteredLines = useMemo(() => {
+    if (!jsonSearch.trim()) return lines.map((line, i) => ({ line, index: i, match: false }));
+    const q = jsonSearch.toLowerCase();
+    return lines.map((line, i) => ({
+      line,
+      index: i,
+      match: line.toLowerCase().includes(q),
+    })).filter(l => l.match);
+  }, [lines, jsonSearch]);
+
+  const handleCopy = useCallback(() => {
+    navigator.clipboard.writeText(jsonString).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }, [jsonString]);
+
+  if (!briefData) {
+    return (
+      <div style={{ textAlign: 'center', padding: 60, color: 'var(--text-tertiary)' }}>
+        No brief data available for this run.
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      {/* Toolbar */}
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
+        <div style={{ position: 'relative', flex: 1 }}>
+          <Search size={14} style={{ position: 'absolute', left: 10, top: 9, color: 'var(--text-tertiary)' }} />
+          <input
+            type="text"
+            placeholder="Filter JSON lines..."
+            value={jsonSearch}
+            onChange={(e) => setJsonSearch(e.target.value)}
+            style={{
+              width: '100%', padding: '8px 8px 8px 30px', borderRadius: 6,
+              border: '1px solid var(--border)', background: 'var(--bg-input)',
+              color: 'var(--text-primary)', fontSize: 12, outline: 'none',
+              fontFamily: 'var(--font-mono)',
+            }}
+          />
+        </div>
+        <button
+          onClick={handleCopy}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 4,
+            padding: '7px 12px', borderRadius: 6, fontSize: 12, fontWeight: 500,
+            background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+            color: copied ? 'var(--status-complete)' : 'var(--text-secondary)',
+            cursor: 'pointer', whiteSpace: 'nowrap',
+          }}
+        >
+          {copied ? <Check size={13} /> : <Copy size={13} />}
+          {copied ? 'Copied' : 'Copy all'}
+        </button>
+        <span style={{ fontSize: 11, color: 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>
+          {jsonSearch.trim() ? `${filteredLines.length} / ${lines.length} lines` : `${lines.length} lines`}
+        </span>
+      </div>
+
+      {/* JSON content */}
+      <div style={{
+        flex: 1, overflow: 'auto', background: 'var(--bg-input)',
+        borderRadius: 8, border: '1px solid var(--border)',
+        fontFamily: 'var(--font-mono)', fontSize: 12, lineHeight: 1.5,
+      }}>
+        <pre style={{ margin: 0, padding: 12, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+          {filteredLines.map(({ line, index }) => (
+            <JsonLine key={index} line={line} lineNo={index + 1} highlight={jsonSearch.trim() ? jsonSearch : undefined} />
+          ))}
+        </pre>
+      </div>
+    </div>
+  );
+}
+
+function JsonLine({ line, lineNo, highlight }: { line: string; lineNo: number; highlight?: string }) {
+  // Syntax colouring: keys, strings, numbers, booleans, null
+  const coloured = useMemo(() => syntaxHighlight(line), [line]);
+
+  return (
+    <div style={{ display: 'flex' }}>
+      <span style={{
+        color: 'var(--text-tertiary)', userSelect: 'none', minWidth: 45,
+        textAlign: 'right', paddingRight: 12, opacity: 0.5,
+      }}>{lineNo}</span>
+      <span>
+        {highlight ? highlightMatches(coloured) : coloured}
+      </span>
+    </div>
+  );
+}
+
+function syntaxHighlight(line: string): React.ReactNode {
+  // Simple regex-based JSON syntax highlighting
+  const parts: React.ReactNode[] = [];
+  let remaining = line;
+  let key = 0;
+
+  while (remaining.length > 0) {
+    // Key (quoted string followed by colon)
+    let m = remaining.match(/^(\s*)"([^"\\]*(?:\\.[^"\\]*)*)"(\s*:)/);
+    if (m) {
+      parts.push(<span key={key++}>{m[1]}</span>);
+      parts.push(<span key={key++} style={{ color: '#7c9cff' }}>"{m[2]}"</span>);
+      parts.push(<span key={key++}>{m[3]}</span>);
+      remaining = remaining.slice(m[0].length);
+      continue;
+    }
+
+    // String value
+    m = remaining.match(/^"([^"\\]*(?:\\.[^"\\]*)*)"/);
+    if (m) {
+      parts.push(<span key={key++} style={{ color: '#a8db8e' }}>"{m[1]}"</span>);
+      remaining = remaining.slice(m[0].length);
+      continue;
+    }
+
+    // Number
+    m = remaining.match(/^-?\d+\.?\d*(?:[eE][+-]?\d+)?/);
+    if (m) {
+      parts.push(<span key={key++} style={{ color: '#d4a76a' }}>{m[0]}</span>);
+      remaining = remaining.slice(m[0].length);
+      continue;
+    }
+
+    // Boolean / null
+    m = remaining.match(/^(true|false|null)/);
+    if (m) {
+      parts.push(<span key={key++} style={{ color: '#c586c0' }}>{m[0]}</span>);
+      remaining = remaining.slice(m[0].length);
+      continue;
+    }
+
+    // Anything else (whitespace, brackets, commas)
+    m = remaining.match(/^[^"tfn0-9-]+/) || remaining.match(/^./);
+    if (m) {
+      parts.push(<span key={key++} style={{ color: 'var(--text-secondary)' }}>{m[0]}</span>);
+      remaining = remaining.slice(m[0].length);
+    }
+  }
+
+  return <>{parts}</>;
+}
+
+function highlightMatches(content: React.ReactNode): React.ReactNode {
+  // Wrap the content in a span with a subtle background highlight for matched lines
+  return (
+    <span style={{ background: 'rgba(94,106,210,0.15)', borderRadius: 2, display: 'inline' }}>
+      {content}
+    </span>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /*  Main Component                                                     */
 /* ------------------------------------------------------------------ */
 
@@ -756,6 +945,8 @@ export default function PipelineDebug() {
   const [searchQuery, setSearchQuery] = useState('');
   const [runCompany, setRunCompany] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'modules' | 'postit'>('modules');
+  const [debugTab, setDebugTab] = useState<'pipeline' | 'rawjson'>('pipeline');
+  const [briefData, setBriefData] = useState<BriefData | null>(null);
 
   usePageTitle(rawData ? `Debug: ${rawData.company}` : 'Pipeline Debug');
 
@@ -768,10 +959,10 @@ export default function PipelineDebug() {
       setLoading(true);
       setError(null);
 
-      // First get the debug_events_url from the run
+      // First get the debug_events_url and brief_id from the run
       const { data: runData, error: runErr } = await supabase
         .from('runs')
-        .select('company, debug_events_url')
+        .select('company, debug_events_url, brief_id')
         .eq('id', run_id)
         .single();
 
@@ -784,6 +975,16 @@ export default function PipelineDebug() {
       }
 
       setRunCompany(runData.company);
+
+      // Load brief data if available
+      if (runData.brief_id) {
+        const { data: bd } = await supabase
+          .from('briefs')
+          .select('pov_json, personas_json, hooks_json, value_pyramid, schema_version')
+          .eq('id', runData.brief_id)
+          .single();
+        if (!cancelled && bd) setBriefData(bd as BriefData);
+      }
 
       if (!runData.debug_events_url) {
         setError('No debug data available for this run. Try dropping a local debug JSON file.');
@@ -891,37 +1092,71 @@ export default function PipelineDebug() {
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            {/* View toggle */}
+            {/* Top-level tab toggle: Pipeline vs Raw JSON */}
             <div style={{
               display: 'flex', borderRadius: 6, overflow: 'hidden',
               border: '1px solid var(--border)',
             }}>
               <button
-                onClick={() => setViewMode('modules')}
+                onClick={() => setDebugTab('pipeline')}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 4,
                   padding: '6px 12px', fontSize: 12, fontWeight: 500,
-                  background: viewMode === 'modules' ? 'var(--accent-subtle)' : 'var(--bg-elevated)',
-                  color: viewMode === 'modules' ? 'var(--accent)' : 'var(--text-secondary)',
+                  background: debugTab === 'pipeline' ? 'var(--accent-subtle)' : 'var(--bg-elevated)',
+                  color: debugTab === 'pipeline' ? 'var(--accent)' : 'var(--text-secondary)',
                   border: 'none', borderRight: '1px solid var(--border)',
                   cursor: 'pointer',
                 }}
               >
-                <LayoutGrid size={13} /> Modules
+                <Activity size={13} /> Pipeline
               </button>
               <button
-                onClick={() => setViewMode('postit')}
+                onClick={() => setDebugTab('rawjson')}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 4,
                   padding: '6px 12px', fontSize: 12, fontWeight: 500,
-                  background: viewMode === 'postit' ? 'var(--accent-subtle)' : 'var(--bg-elevated)',
-                  color: viewMode === 'postit' ? 'var(--accent)' : 'var(--text-secondary)',
+                  background: debugTab === 'rawjson' ? 'var(--accent-subtle)' : 'var(--bg-elevated)',
+                  color: debugTab === 'rawjson' ? 'var(--accent)' : 'var(--text-secondary)',
                   border: 'none', cursor: 'pointer',
                 }}
               >
-                <StickyNote size={13} /> Pipeline Flow
+                <Code size={13} /> Raw JSON
               </button>
             </div>
+
+            {/* Pipeline sub-view toggle (only when Pipeline tab is active) */}
+            {debugTab === 'pipeline' && (
+              <div style={{
+                display: 'flex', borderRadius: 6, overflow: 'hidden',
+                border: '1px solid var(--border)',
+              }}>
+                <button
+                  onClick={() => setViewMode('modules')}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 4,
+                    padding: '6px 12px', fontSize: 12, fontWeight: 500,
+                    background: viewMode === 'modules' ? 'var(--accent-subtle)' : 'var(--bg-elevated)',
+                    color: viewMode === 'modules' ? 'var(--accent)' : 'var(--text-secondary)',
+                    border: 'none', borderRight: '1px solid var(--border)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <LayoutGrid size={13} /> Modules
+                </button>
+                <button
+                  onClick={() => setViewMode('postit')}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 4,
+                    padding: '6px 12px', fontSize: 12, fontWeight: 500,
+                    background: viewMode === 'postit' ? 'var(--accent-subtle)' : 'var(--bg-elevated)',
+                    color: viewMode === 'postit' ? 'var(--accent)' : 'var(--text-secondary)',
+                    border: 'none', cursor: 'pointer',
+                  }}
+                >
+                  <StickyNote size={13} /> Pipeline Flow
+                </button>
+              </div>
+            )}
 
             <button
               onClick={() => { setRawData(null); setSelectedModule(null); setSearchQuery(''); setError(null); }}
@@ -962,7 +1197,11 @@ export default function PipelineDebug() {
         {/* Data flow */}
         {parsed && <DataFlowBar modules={parsed.modules} />}
 
-        {viewMode === 'postit' && rawData ? (
+        {debugTab === 'rawjson' ? (
+          <div style={{ height: 'calc(100vh - 280px)' }}>
+            <RawJsonViewer briefData={briefData} runMeta={{ company: parsed?.company || runCompany || undefined, run_id }} />
+          </div>
+        ) : viewMode === 'postit' && rawData ? (
           <PostItView data={rawData} />
         ) : (
           <>
