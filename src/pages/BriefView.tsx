@@ -834,6 +834,14 @@ function PulledNumbers({ pov }: { pov: any }) {
 }
 
 function stripMarkdownHeaders(text: string): string {
+  // If the text contains ## headers, only keep the prose before the first one
+  // (the structured markdown under ## Overview / ## Organisation / ## Strategy
+  // is redundant with the prose paragraphs and renders as an unreadable blob)
+  const firstHeader = text.indexOf('##');
+  if (firstHeader >= 0) {
+    text = text.substring(0, firstHeader).trim();
+    if (!text) return '';
+  }
   return text
     .split('\n')
     .map(line => {
@@ -870,27 +878,9 @@ function AboutSection({ pov, sources }: { pov: any; sources: any[] }) {
         </p>
       )}
 
-      {/* what_they_do — always prose, no sub-headers */}
+      {/* what_they_do prose (only content before ## headers, if who_they_are already shown) */}
       {about.who_they_are && cleanWhatTheyDo && (
         <CitedProse text={cleanWhatTheyDo} sources={sources} />
-      )}
-
-      {/* Revenue model callout */}
-      {about.how_they_make_money && (
-        <div style={{
-          borderLeft: `3px solid ${SECTION_ACCENTS.about}`,
-          padding: '12px 16px', marginTop: 16,
-          background: '#f8f7ff', borderRadius: '0 6px 6px 0',
-        }}>
-          <div style={{
-            fontSize: 11, fontWeight: 600, color: SECTION_ACCENTS.about,
-            textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6,
-            fontFamily: FONTS.sans,
-          }}>Revenue Model</div>
-          <p style={{ fontSize: 16, lineHeight: 1.7, color: COLORS.body, fontFamily: FONTS.sans, margin: 0 }}>
-            {about.how_they_make_money}
-          </p>
-        </div>
       )}
     </Section>
   );
@@ -1251,8 +1241,8 @@ function WhyFigmaSection({ pov, sources }: { pov: any; sources: any[] }) {
 /*  Section: Research Deep Dive                                        */
 /* ------------------------------------------------------------------ */
 
-function DeepDiveSubsection({ heading, body }: { heading: string; body: string }) {
-  const [open, setOpen] = useState(false);
+function DeepDiveSubsection({ heading, body, defaultOpen = false }: { heading: string; body: string; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
   return (
     <div style={{ marginBottom: 4 }}>
       <div
@@ -1294,7 +1284,7 @@ function ResearchDeepDiveSection({ pov }: { pov: any }) {
           const lines = section.split('\n');
           const heading = lines[0].trim();
           const body = lines.slice(1).join('\n').trim();
-          return <DeepDiveSubsection key={i} heading={heading} body={body} />;
+          return <DeepDiveSubsection key={i} heading={heading} body={body} defaultOpen={i === 0} />;
         })}
       </Section>
     );
