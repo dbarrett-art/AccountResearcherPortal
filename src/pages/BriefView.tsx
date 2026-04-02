@@ -1950,99 +1950,11 @@ function RunHistory({ currentRunId, company }: { currentRunId: string; company: 
 }
 
 /* ------------------------------------------------------------------ */
-/*  Feedback Panel                                                     */
-/* ------------------------------------------------------------------ */
-
-function FeedbackPanel({ runId }: { runId: string }) {
-  const [open, setOpen] = useState(false);
-  const [rating, setRating] = useState<number | null>(null);
-  const [accuracy, setAccuracy] = useState<number | null>(null);
-  const [usefulness, setUsefulness] = useState<number | null>(null);
-  const [comment, setComment] = useState('');
-  const [submitted, setSubmitted] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-
-  const handleSubmit = async () => {
-    if (!rating) return;
-    setSubmitting(true);
-    try {
-      await workerFetch(`/feedback/${runId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rating, accuracy_rating: accuracy, usefulness_rating: usefulness, comment: comment || null }),
-      });
-      setSubmitted(true);
-    } catch { /* silent */ }
-    setSubmitting(false);
-  };
-
-  if (submitted) {
-    return (
-      <div style={{ background: '#ecfdf5', border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: '14px 18px', marginBottom: 32 }}>
-        <div style={{ fontSize: 13, color: '#065f46', fontWeight: 500, fontFamily: FONTS.sans }}>Thanks for your feedback!</div>
-      </div>
-    );
-  }
-
-  const StarRow = ({ label, value, onChange }: { label: string; value: number | null; onChange: (v: number) => void }) => (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
-      <div style={{ fontSize: 12, color: COLORS.secondary, width: 90, fontFamily: FONTS.sans }}>{label}</div>
-      <div style={{ display: 'flex', gap: 4 }}>
-        {[1, 2, 3, 4, 5].map(n => (
-          <button key={n} onClick={() => onChange(n)} style={{
-            background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, padding: 2,
-            color: value && n <= value ? '#ca8a04' : COLORS.faint,
-          }}>{value && n <= value ? '\u2605' : '\u2606'}</button>
-        ))}
-      </div>
-    </div>
-  );
-
-  return (
-    <div style={{ marginBottom: 32 }}>
-      <button onClick={() => setOpen(o => !o)} style={{
-        background: 'none', border: `1px solid ${COLORS.border}`, borderRadius: 6,
-        padding: '8px 14px', fontSize: 12, color: COLORS.secondary,
-        cursor: 'pointer', fontFamily: FONTS.sans,
-      }}>
-        {open ? '\u25B2' : '\u25BC'} Rate this brief
-      </button>
-      {open && (
-        <div style={{ marginTop: 12, background: '#fff', border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: 16 }}>
-          <StarRow label="Overall" value={rating} onChange={setRating} />
-          <StarRow label="Accuracy" value={accuracy} onChange={setAccuracy} />
-          <StarRow label="Usefulness" value={usefulness} onChange={setUsefulness} />
-          <textarea
-            value={comment} onChange={e => setComment(e.target.value)}
-            placeholder="Optional comment..."
-            style={{
-              width: '100%', minHeight: 60, marginTop: 8, padding: 10, fontSize: 13,
-              background: '#fdfcfa', border: `1px solid ${COLORS.border}`,
-              borderRadius: 6, color: COLORS.body, resize: 'vertical',
-              fontFamily: FONTS.sans,
-            }}
-          />
-          <button onClick={handleSubmit} disabled={!rating || submitting} style={{
-            marginTop: 8, background: rating ? COLORS.purple : '#f5f5f0',
-            color: rating ? '#fff' : COLORS.faint,
-            border: 'none', borderRadius: 6, padding: '6px 14px', fontSize: 13,
-            fontWeight: 500, cursor: rating ? 'pointer' : 'default',
-            fontFamily: FONTS.sans,
-          }}>
-            {submitting ? 'Sending...' : 'Submit feedback'}
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
 /*  Brief content (all sections assembled)                             */
 /* ------------------------------------------------------------------ */
 
-function BriefContent({ pov, personas, hooksData, runId, session, valuePyramid }: {
-  pov: any; personas: any; hooksData?: any; runId?: string; session?: any; valuePyramid?: any;
+function BriefContent({ pov, personas, hooksData, valuePyramid }: {
+  pov: any; personas: any; hooksData?: any; valuePyramid?: any;
 }) {
   const allSources = pov?.sources_used || [];
   void ProofPointsSection; // Retained but removed from render tree (2026-04-01 reframe)
@@ -2706,7 +2618,6 @@ export default function BriefView() {
         {pov && (
           <BriefContent
             pov={pov} personas={personas} hooksData={hooksData}
-            runId={run_id} session={session}
             valuePyramid={brief?.value_pyramid || pov?.value_pyramid}
           />
         )}
