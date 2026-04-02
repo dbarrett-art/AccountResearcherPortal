@@ -89,7 +89,7 @@ export default function MyBriefs() {
     const { data } = await supabase
       .from('runs')
       .select('id, company, url, created_at, status, summary, pdf_url, excel_url, error_message, brief_id, market')
-      .eq('user_id', userProfile.id)
+      .or(`user_id.eq.${userProfile.id},assigned_to.eq.${userProfile.id}`)
       .order('created_at', { ascending: false });
     if (data) setRuns(data as Run[]);
     setLoading(false);

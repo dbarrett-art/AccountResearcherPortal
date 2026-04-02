@@ -6,10 +6,10 @@ import StatusBadge from '../components/StatusBadge';
 import ProgressBar from '../components/ProgressBar';
 import TableSkeleton from '../components/TableSkeleton';
 import usePageTitle from '../hooks/usePageTitle';
-import { Users, Activity, Heart, BarChart3, ExternalLink, Cpu, FileText, X, RefreshCw, Trash2, UserPlus, Check, RotateCcw } from 'lucide-react';
+import { Users, Activity, Heart, BarChart3, ExternalLink, Cpu, FileText, X, RefreshCw, Trash2, UserPlus, Check, RotateCcw, Link } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
-type Tab = 'users' | 'runs' | 'health' | 'credits' | 'api-credits';
+type Tab = 'users' | 'runs' | 'health' | 'credits' | 'api-credits' | 'assign';
 
 interface UserRow {
   id: string; name: string; email: string; role: string;
@@ -1328,6 +1328,168 @@ function ApiCreditsTab() {
   );
 }
 
+// --- Tab: Assign Briefs ---
+interface AssignRun {
+  id: string;
+  company: string;
+  created_at: string;
+  assigned_to: string | null;
+  assigned_user_name: string | null;
+}
+
+function AssignBriefsTab() {
+  const { userProfile } = useAuth();
+  const [users, setUsers] = useState<{ id: string; name: string; email: string }[]>([]);
+  const [selectedUser, setSelectedUser] = useState('');
+  const [runs, setRuns] = useState<AssignRun[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [updating, setUpdating] = useState<string | null>(null);
+
+  if (userProfile?.role !== 'admin') return null;
+
+  // Load users on mount
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.from('users').select('id, name, email').order('name');
+      if (data) setUsers(data as { id: string; name: string; email: string }[]);
+    })();
+  }, []);
+
+  // Load completed runs when a user is selected
+  useEffect(() => {
+    if (!selectedUser) { setRuns([]); return; }
+    (async () => {
+      setLoading(true);
+      const { data } = await supabase
+        .from('runs')
+        .select('id, company, created_at, assigned_to')
+        .eq('status', 'complete')
+        .order('created_at', { ascending: false });
+
+      if (data) {
+        // Build a map of user names for assigned_to
+        const userMap = new Map(users.map(u => [u.id, u.name]));
+        setRuns((data as any[]).map(r => ({
+          ...r,
+          assigned_user_name: r.assigned_to ? (userMap.get(r.assigned_to) || 'Unknown') : null,
+        })));
+      }
+      setLoading(false);
+    })();
+  }, [selectedUser, users]);
+
+  const handleAssign = async (runId: string) => {
+    setUpdating(runId);
+    await supabase.from('runs').update({ assigned_to: selectedUser }).eq('id', runId);
+    setRuns(prev => prev.map(r => r.id === runId ? {
+      ...r,
+      assigned_to: selectedUser,
+      assigned_user_name: users.find(u => u.id === selectedUser)?.name || 'Unknown',
+    } : r));
+    setUpdating(null);
+  };
+
+  const handleUnassign = async (runId: string) => {
+    setUpdating(runId);
+    await supabase.from('runs').update({ assigned_to: null }).eq('id', runId);
+    setRuns(prev => prev.map(r => r.id === runId ? { ...r, assigned_to: null, assigned_user_name: null } : r));
+    setUpdating(null);
+  };
+
+  const selectStyle: React.CSSProperties = {
+    background: 'var(--bg-input)', border: '1px solid var(--border-strong)', borderRadius: 6,
+    padding: '6px 10px', fontSize: 13, color: 'var(--text-primary)', outline: 'none',
+  };
+
+  return (
+    <>
+      <div style={{ marginBottom: 20 }}>
+        <label style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>
+          Select user to assign briefs to
+        </label>
+        <select value={selectedUser} onChange={e => setSelectedUser(e.target.value)} style={{ ...selectStyle, minWidth: 280 }}>
+          <option value="">Select a user</option>
+          {users.map(u => (
+            <option key={u.id} value={u.id}>{u.name} ({u.email})</option>
+          ))}
+        </select>
+      </div>
+
+      {selectedUser && loading && <TableSkeleton rows={4} cols={4} />}
+
+      {selectedUser && !loading && runs.length === 0 && (
+        <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-tertiary)', fontSize: 13 }}>
+          No completed runs found.
+        </div>
+      )}
+
+      {selectedUser && !loading && runs.length > 0 && (
+        <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ background: 'var(--bg-surface)', borderBottom: '1px solid var(--border)' }}>
+                {['Company', 'Run date', 'Assigned to', 'Action'].map(h => (
+                  <th key={h} style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', padding: '10px 16px', textAlign: 'left' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {runs.map(r => {
+                const isAssignedToSelected = r.assigned_to === selectedUser;
+                return (
+                  <tr key={r.id} style={{ borderBottom: '1px solid var(--border)' }}
+                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-elevated)')}
+                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                  >
+                    <td style={{ padding: '11px 16px', fontSize: 13, fontWeight: 500 }}>{r.company}</td>
+                    <td style={{ padding: '11px 16px', fontSize: 13, color: 'var(--text-secondary)' }}>
+                      {new Date(r.created_at).toLocaleDateString()}
+                    </td>
+                    <td style={{ padding: '11px 16px', fontSize: 13, color: 'var(--text-secondary)' }}>
+                      {r.assigned_user_name || '\u2014'}
+                    </td>
+                    <td style={{ padding: '11px 16px' }}>
+                      {isAssignedToSelected ? (
+                        <button
+                          onClick={() => handleUnassign(r.id)}
+                          disabled={updating === r.id}
+                          style={{
+                            background: 'transparent', border: '1px solid var(--border-strong)',
+                            color: 'var(--text-secondary)', padding: '4px 12px',
+                            fontSize: 12, borderRadius: 6, cursor: 'pointer',
+                            opacity: updating === r.id ? 0.4 : 1,
+                          }}
+                          onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-elevated)'; e.currentTarget.style.color = 'var(--status-failed)'; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
+                        >
+                          Unassign
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleAssign(r.id)}
+                          disabled={updating === r.id}
+                          style={{
+                            background: 'var(--accent)', border: 'none',
+                            color: '#fff', padding: '4px 12px',
+                            fontSize: 12, fontWeight: 500, borderRadius: 6, cursor: 'pointer',
+                            opacity: updating === r.id ? 0.4 : 1,
+                          }}
+                        >
+                          Assign
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
+  );
+}
+
 // --- Main Admin Page ---
 const tabs: { id: Tab; label: string; icon: any }[] = [
   { id: 'users', label: 'Users', icon: Users },
@@ -1335,6 +1497,7 @@ const tabs: { id: Tab; label: string; icon: any }[] = [
   { id: 'health', label: 'Service Health', icon: Heart },
   { id: 'credits', label: 'Credit Analytics', icon: BarChart3 },
   { id: 'api-credits', label: 'API Credits', icon: Cpu },
+  { id: 'assign', label: 'Assign Briefs', icon: Link },
 ];
 
 export default function Admin() {
@@ -1374,6 +1537,7 @@ export default function Admin() {
       {activeTab === 'health' && <HealthTab />}
       {activeTab === 'credits' && <CreditAnalyticsTab />}
       {activeTab === 'api-credits' && <ApiCreditsTab />}
+      {activeTab === 'assign' && <AssignBriefsTab />}
     </Layout>
   );
 }

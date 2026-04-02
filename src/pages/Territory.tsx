@@ -112,7 +112,7 @@ export default function Territory() {
         .order('created_at', { ascending: false });
 
       if (!teamView && userProfile) {
-        query = query.eq('user_id', userProfile.id);
+        query = query.or(`user_id.eq.${userProfile.id},assigned_to.eq.${userProfile.id}`);
       }
 
       const { data } = await query;
