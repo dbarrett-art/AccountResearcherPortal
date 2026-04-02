@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import Layout from '../components/Layout';
 import TableSkeleton from '../components/TableSkeleton';
 import usePageTitle from '../hooks/usePageTitle';
-import { ArrowLeft, MessageSquare, FileText, Table, X, ChevronDown, ExternalLink, Send, Trash2, Activity, Share2, RefreshCw } from 'lucide-react';
+import { ArrowLeft, FileText, Table, X, ChevronDown, ExternalLink, Send, Trash2, Activity, Share2, RefreshCw } from 'lucide-react';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -667,12 +667,6 @@ function MetricsBar({ pov, personas }: { pov: any; hooksData?: any; personas?: a
         pov?.about?.what_they_do,
       );
   const triggers = pov?.why_now?.triggers || [];
-  const triggerBreakdown = triggers.reduce((acc: Record<string, number>, t: any) => {
-    const cat = (t?.category || t?.type || 'other').toUpperCase();
-    acc[cat] = (acc[cat] || 0) + 1;
-    return acc;
-  }, {});
-
   // Count contacts
   const matrix = personas?.matrix;
   let totalContacts = 0;
@@ -689,17 +683,15 @@ function MetricsBar({ pov, personas }: { pov: any; hooksData?: any; personas?: a
     }
   }
 
-  const items: { label: string; value: string; sub?: string }[] = [];
+  const items: { label: string; value: string }[] = [];
   if (revenue) items.push({ label: 'REVENUE', value: typeof revenue === 'string' ? revenue : `$${revenue}` });
   if (employees) items.push({ label: 'EMPLOYEES', value: typeof employees === 'number' ? employees.toLocaleString() : employees });
   if (designOrg) items.push({ label: 'DESIGN ORG', value: typeof designOrg === 'number' ? `~${designOrg}` : designOrg });
   if (triggers.length > 0) {
-    const breakdown = Object.entries(triggerBreakdown).map(([k, v]) => `${v} ${k.toLowerCase()}`).join(', ');
-    items.push({ label: 'TRIGGERS', value: `${triggers.length}`, sub: breakdown });
+    items.push({ label: 'TRIGGERS', value: `${triggers.length}` });
   }
   if (totalContacts > 0) {
-    const split = [ebCount && `${ebCount} EB`, champCount && `${champCount} Champion`].filter(Boolean).join(', ');
-    items.push({ label: 'CONTACTS', value: `${totalContacts}`, sub: split });
+    items.push({ label: 'CONTACTS', value: `${totalContacts}` });
   }
 
   if (items.length === 0) return null;
@@ -730,11 +722,6 @@ function MetricsBar({ pov, personas }: { pov: any; hooksData?: any; personas?: a
           }}>
             {item.value}
           </div>
-          {item.sub && (
-            <div style={{ fontSize: 10, color: COLORS.faint, fontFamily: FONTS.sans, marginTop: 1 }}>
-              {item.sub}
-            </div>
-          )}
         </div>
       ))}
     </div>
@@ -2069,34 +2056,6 @@ function BriefContent({ pov, personas, hooksData, runId, session, valuePyramid }
 
   return (
     <>
-      {/* Research Gaps warning */}
-      {pov?.research_gaps && (
-        <details style={{
-          background: '#fefce8', border: `1px solid #fde68a`,
-          borderRadius: 6, marginBottom: 12, cursor: 'pointer',
-        }}>
-          <summary style={{
-            padding: '10px 14px', fontSize: 13, color: '#854d0e',
-            fontWeight: 500, listStyle: 'none', display: 'flex',
-            alignItems: 'center', gap: 8, userSelect: 'none',
-            fontFamily: FONTS.sans,
-          }}>
-            <span>{'\u26A0'}</span>
-            <span>Research gaps — review before your call</span>
-            <span style={{ marginLeft: 'auto', fontSize: 11, color: COLORS.faint }}>click to expand</span>
-          </summary>
-          <div style={{ padding: '0 14px 12px', fontSize: 13, color: COLORS.secondary, lineHeight: 1.6, fontFamily: FONTS.sans }}>
-            {Array.isArray(pov.research_gaps) ? (
-              <ul style={{ paddingLeft: 20, margin: 0 }}>
-                {pov.research_gaps.map((gap: string, i: number) => <li key={i} style={{ marginBottom: 4 }}>{gap}</li>)}
-              </ul>
-            ) : (
-              <p style={{ margin: 0 }}>{pov.research_gaps}</p>
-            )}
-          </div>
-        </details>
-      )}
-
       {/* 1. ICP Fit */}
       <IcpSection pov={pov} sources={allSources} />
 
@@ -2169,6 +2128,8 @@ export default function BriefView() {
   const [englishSubmitted, setEnglishSubmitted] = useState(false);
   const [rerendering, setRerendering] = useState(false);
   const [rerenderDone, setRerenderDone] = useState(false);
+  const [overflowOpen, setOverflowOpen] = useState(false);
+  const overflowRef = useRef<HTMLDivElement>(null);
 
 
   const handleRunInEnglish = async () => {
@@ -2231,6 +2192,16 @@ export default function BriefView() {
   };
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Close overflow menu on outside click
+  useEffect(() => {
+    if (!overflowOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (overflowRef.current && !overflowRef.current.contains(e.target as Node)) setOverflowOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [overflowOpen]);
 
   useEffect(() => {
     if (!run_id) return;
@@ -2386,6 +2357,10 @@ export default function BriefView() {
     <Layout bgColor={COLORS.bg}>
       <div style={mainStyle}>
         {/* ============ HEADER ============ */}
+        <style>{`@keyframes pulse-sparkle {
+  0%, 100% { opacity: 1; transform: scale(1) rotate(0deg); }
+  50%       { opacity: 0.8; transform: scale(1.08) rotate(6deg); }
+}`}</style>
         <div style={{
           background: '#fff',
           borderBottom: `1px solid ${COLORS.border}`,
@@ -2402,8 +2377,8 @@ export default function BriefView() {
               <ArrowLeft size={14} /> My Briefs
             </button>
 
-            {/* Company name + badges on ONE LINE */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 6, flexWrap: 'wrap' }}>
+            {/* Title + badges + action buttons — single row */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16, flexWrap: 'wrap' }}>
               <h1 style={{
                 fontFamily: FONTS.serif, fontSize: 30, fontWeight: 600,
                 margin: 0, letterSpacing: '-0.03em', color: COLORS.heading,
@@ -2412,106 +2387,177 @@ export default function BriefView() {
               </h1>
               <IcpBadge score={pov?.icp_fit?.score || pov?.icp_assessment?.score} size="small" />
               <AgeBadge createdAt={run.created_at} />
-              {run.market && run.market !== 'en' && run.market !== 'auto' && LANGUAGE_FLAGS[run.market] && (
-                <span style={{ fontSize: 12, color: COLORS.tertiary, fontFamily: FONTS.sans }}>
-                  {LANGUAGE_FLAGS[run.market]} {LANGUAGE_NAMES[run.market] || run.market}
-                </span>
-              )}
-            </div>
 
-            {/* URL */}
-            {run.url && (
-              <a href={run.url} target="_blank" rel="noopener noreferrer"
-                style={{
-                  fontSize: 13, color: COLORS.faint, display: 'inline-flex',
-                  alignItems: 'center', gap: 4, margin: '0 0 12px',
-                  fontFamily: FONTS.sans, textDecoration: 'none',
+              {/* Spacer */}
+              <div style={{ flex: 1 }} />
+
+              {/* Action buttons */}
+              {run.pdf_url && (
+                <a href={run.pdf_url} target="_blank" rel="noopener noreferrer" style={{
+                  ...btnStyle('primary'), textDecoration: 'none',
                 }}>
-                {run.url} <ExternalLink size={12} />
-              </a>
-            )}
-            {!run.url && <div style={{ marginBottom: 12 }} />}
-
-            {/* Action buttons row */}
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+                  <FileText size={14} /> {run.market && run.market !== 'en' && run.market !== 'auto' && LANGUAGE_FLAGS[run.market]
+                    ? `${LANGUAGE_FLAGS[run.market]} PDF` : 'PDF'}
+                </a>
+              )}
+              <button onClick={() => setChatOpen(true)} style={btnStyle('secondary')}>
+                <svg width="18" height="18" viewBox="0 0 20 20" fill="none"
+                  style={{ animation: 'pulse-sparkle 2.8s ease-in-out infinite', transformOrigin: 'center' }}>
+                  <path d="M10 2 L11.5 7.5 L17 9 L11.5 10.5 L10 16 L8.5 10.5 L3 9 L8.5 7.5 Z" fill="#7F77DD"/>
+                  <path d="M16.5 2 L17.1 4 L19 4.5 L17.1 5 L16.5 7 L15.9 5 L14 4.5 L15.9 4 Z" fill="#AFA9EC"/>
+                  <path d="M4 14 L4.4 15.4 L6 15.8 L4.4 16.2 L4 17.5 L3.6 16.2 L2 15.8 L3.6 15.4 Z" fill="#CECBF6"/>
+                </svg>
+                {' '}Chat
+              </button>
               <button onClick={handleShare} disabled={shareStatus === 'loading'} style={{
                 ...btnStyle('secondary'),
                 color: shareStatus === 'copied' ? '#065f46' : COLORS.secondary,
               }}>
                 <Share2 size={14} /> {shareStatus === 'copied' ? 'Link copied!' : 'Share'}
               </button>
-              <button onClick={() => setChatOpen(true)} style={btnStyle('primary')}>
-                <MessageSquare size={14} /> Chat
-              </button>
-              {run.pdf_url && (
-                <a href={run.pdf_url} target="_blank" rel="noopener noreferrer" style={btnStyle('secondary')}>
-                  <FileText size={14} /> {run.market && run.market !== 'en' && run.market !== 'auto' && LANGUAGE_FLAGS[run.market]
-                    ? `${LANGUAGE_FLAGS[run.market]} PDF` : 'PDF'}
-                </a>
-              )}
-              {run.excel_url && (
-                <a href={run.excel_url} target="_blank" rel="noopener noreferrer" style={btnStyle('secondary')}>
-                  <Table size={14} /> Excel
-                </a>
-              )}
-              {run.debug_events_url && (
-                <a href={`/AccountResearcherPortal/debug/${run.id}`} style={btnStyle('secondary')}>
-                  <Activity size={14} /> Debug
-                </a>
-              )}
-              {run.market && run.market !== 'en' && run.market !== 'auto' && !englishSubmitted && (
-                <button onClick={handleRunInEnglish} disabled={runningEnglish} style={btnStyle('ghost')}>
-                  {'\u{1F1EC}\u{1F1E7}'} {runningEnglish ? 'Submitting\u2026' : 'Also run in English'}
+
+              {/* Overflow menu */}
+              <div ref={overflowRef} style={{ position: 'relative' }}>
+                <button onClick={() => setOverflowOpen(o => !o)} style={{
+                  ...btnStyle('secondary'), padding: '6px 10px', minWidth: 0,
+                }}>
+                  {'\u22EF'}
                 </button>
-              )}
-              {englishSubmitted && (
-                <span style={{ fontSize: 12, color: '#065f46', display: 'flex', alignItems: 'center', gap: 4, fontFamily: FONTS.sans }}>
-                  {'\u{1F1EC}\u{1F1E7}'} English run submitted
-                </span>
-              )}
-              {userProfile?.role === 'admin' && run.status === 'complete' && (
-                <button
-                  onClick={handleRegeneratePdf}
-                  disabled={rerendering || rerenderDone}
-                  style={{
-                    ...btnStyle('ghost'),
-                    color: rerenderDone ? '#065f46' : COLORS.tertiary,
-                    opacity: rerendering ? 0.6 : 1,
-                  }}
-                >
-                  <RefreshCw size={14} style={rerendering ? { animation: 'spin 1s linear infinite' } : undefined} />
-                  {rerendering ? 'Re-rendering\u2026' : rerenderDone ? 'Dispatched!' : 'Re-render PDF'}
-                </button>
-              )}
-              {userProfile?.role === 'admin' && (
-                <>
-                  {!deleteConfirm ? (
-                    <button onClick={() => setDeleteConfirm(true)} style={btnStyle('ghost')}>
-                      <Trash2 size={14} /> Delete
-                    </button>
-                  ) : (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ fontSize: 12, color: '#854d0e', fontFamily: FONTS.sans }}>Delete permanently?</span>
-                      <button onClick={handleDelete} disabled={deleting} style={{
-                        background: '#dc2626', border: 'none', color: '#fff',
-                        padding: '4px 12px', fontSize: 12, borderRadius: 4, cursor: 'pointer',
-                        fontWeight: 500, opacity: deleting ? 0.6 : 1, fontFamily: FONTS.sans,
-                      }}>{deleting ? 'Deleting...' : 'Yes, delete'}</button>
-                      <button onClick={() => setDeleteConfirm(false)} style={{
-                        background: 'transparent', border: `1px solid ${COLORS.border}`,
-                        color: COLORS.secondary, padding: '4px 10px',
-                        fontSize: 12, borderRadius: 4, cursor: 'pointer', fontFamily: FONTS.sans,
-                      }}>Cancel</button>
-                    </div>
-                  )}
-                </>
-              )}
+                {overflowOpen && (
+                  <div style={{
+                    position: 'absolute', right: 0, top: '100%', marginTop: 4,
+                    background: '#fff', border: `1px solid ${COLORS.border}`,
+                    borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+                    minWidth: 180, zIndex: 50, overflow: 'hidden',
+                  }}>
+                    {run.excel_url && (
+                      <a href={run.excel_url} target="_blank" rel="noopener noreferrer"
+                        onClick={() => setOverflowOpen(false)}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 8,
+                          padding: '10px 14px', fontSize: 13, color: COLORS.secondary,
+                          textDecoration: 'none', fontFamily: FONTS.sans,
+                          borderBottom: `1px solid ${COLORS.borderLight}`,
+                        }}>
+                        <Table size={14} /> Excel
+                      </a>
+                    )}
+                    {run.market && run.market !== 'en' && run.market !== 'auto' && !englishSubmitted && (
+                      <button onClick={() => { handleRunInEnglish(); setOverflowOpen(false); }} disabled={runningEnglish}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+                          padding: '10px 14px', fontSize: 13, color: COLORS.secondary,
+                          background: 'none', border: 'none', cursor: 'pointer',
+                          fontFamily: FONTS.sans, borderBottom: `1px solid ${COLORS.borderLight}`,
+                          textAlign: 'left',
+                        }}>
+                        {'\u{1F1EC}\u{1F1E7}'} {runningEnglish ? 'Submitting\u2026' : 'Run in English'}
+                      </button>
+                    )}
+                    {englishSubmitted && (
+                      <div style={{
+                        display: 'flex', alignItems: 'center', gap: 8,
+                        padding: '10px 14px', fontSize: 13, color: '#065f46',
+                        fontFamily: FONTS.sans, borderBottom: `1px solid ${COLORS.borderLight}`,
+                      }}>
+                        {'\u{1F1EC}\u{1F1E7}'} English run submitted
+                      </div>
+                    )}
+                    {userProfile?.role === 'admin' && run.debug_events_url && (
+                      <a href={`/AccountResearcherPortal/debug/${run.id}`}
+                        onClick={() => setOverflowOpen(false)}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 8,
+                          padding: '10px 14px', fontSize: 13, color: COLORS.secondary,
+                          textDecoration: 'none', fontFamily: FONTS.sans,
+                          borderBottom: `1px solid ${COLORS.borderLight}`,
+                        }}>
+                        <Activity size={14} /> Debug
+                      </a>
+                    )}
+                    {userProfile?.role === 'admin' && run.status === 'complete' && (
+                      <button onClick={() => { handleRegeneratePdf(); setOverflowOpen(false); }}
+                        disabled={rerendering || rerenderDone}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+                          padding: '10px 14px', fontSize: 13,
+                          color: rerenderDone ? '#065f46' : COLORS.secondary,
+                          background: 'none', border: 'none', cursor: 'pointer',
+                          fontFamily: FONTS.sans, borderBottom: `1px solid ${COLORS.borderLight}`,
+                          textAlign: 'left', opacity: rerendering ? 0.6 : 1,
+                        }}>
+                        <RefreshCw size={14} style={rerendering ? { animation: 'spin 1s linear infinite' } : undefined} />
+                        {rerendering ? 'Re-rendering\u2026' : rerenderDone ? 'Dispatched!' : 'Re-render PDF'}
+                      </button>
+                    )}
+                    {userProfile?.role === 'admin' && (
+                      <>
+                        {!deleteConfirm ? (
+                          <button onClick={() => { setDeleteConfirm(true); setOverflowOpen(false); }}
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+                              padding: '10px 14px', fontSize: 13, color: '#dc2626',
+                              background: 'none', border: 'none', cursor: 'pointer',
+                              fontFamily: FONTS.sans, textAlign: 'left',
+                            }}>
+                            <Trash2 size={14} /> Delete
+                          </button>
+                        ) : (
+                          <div style={{ padding: '10px 14px' }}>
+                            <div style={{ fontSize: 12, color: '#854d0e', fontFamily: FONTS.sans, marginBottom: 8 }}>Delete permanently?</div>
+                            <div style={{ display: 'flex', gap: 6 }}>
+                              <button onClick={handleDelete} disabled={deleting} style={{
+                                background: '#dc2626', border: 'none', color: '#fff',
+                                padding: '4px 12px', fontSize: 12, borderRadius: 4, cursor: 'pointer',
+                                fontWeight: 500, opacity: deleting ? 0.6 : 1, fontFamily: FONTS.sans,
+                              }}>{deleting ? 'Deleting...' : 'Yes, delete'}</button>
+                              <button onClick={() => setDeleteConfirm(false)} style={{
+                                background: 'transparent', border: `1px solid ${COLORS.border}`,
+                                color: COLORS.secondary, padding: '4px 10px',
+                                fontSize: 12, borderRadius: 4, cursor: 'pointer', fontFamily: FONTS.sans,
+                              }}>Cancel</button>
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
           {/* MetricsBar — full bleed, inside header */}
           {pov && <MetricsBar pov={pov} hooksData={hooksData} personas={personas} />}
         </div>
+
+        {/* Research Gaps warning — separate card below header */}
+        {pov?.research_gaps && (
+          <details style={{
+            background: '#fefce8', border: `1px solid #fde68a`,
+            borderRadius: 6, marginTop: 10, cursor: 'pointer',
+          }}>
+            <summary style={{
+              padding: '10px 14px', fontSize: 13, color: '#854d0e',
+              fontWeight: 500, listStyle: 'none', display: 'flex',
+              alignItems: 'center', gap: 8, userSelect: 'none',
+              fontFamily: FONTS.sans,
+            }}>
+              <span>{'\u26A0'}</span>
+              <span>Research gaps — review before your call</span>
+              <span style={{ marginLeft: 'auto', fontSize: 11, color: COLORS.faint }}>click to expand</span>
+            </summary>
+            <div style={{ padding: '0 14px 12px', fontSize: 13, color: COLORS.secondary, lineHeight: 1.6, fontFamily: FONTS.sans }}>
+              {Array.isArray(pov.research_gaps) ? (
+                <ul style={{ paddingLeft: 20, margin: 0 }}>
+                  {pov.research_gaps.map((gap: string, i: number) => <li key={i} style={{ marginBottom: 4 }}>{gap}</li>)}
+                </ul>
+              ) : (
+                <p style={{ margin: 0 }}>{pov.research_gaps}</p>
+              )}
+            </div>
+          </details>
+        )}
 
         {/* Run history */}
         <RunHistory currentRunId={run_id || ''} company={run.company} />
