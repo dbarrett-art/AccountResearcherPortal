@@ -44,14 +44,31 @@ const LANGUAGE_FLAGS: Record<string, string> = {
   no: '\u{1F1F3}\u{1F1F4}', da: '\u{1F1E9}\u{1F1F0}', fi: '\u{1F1EB}\u{1F1EE}',
 };
 
-const SUGGESTED_PROMPTS = [
-  "What's the strongest angle for this account?",
-  "Who should I contact first and why?",
-  "Draft a cold email to the Head of Design",
-  "What are the key triggers to reference on the call?",
-  "Summarise the ICP fit in 2 sentences",
-  "What objections should I prepare for?",
-];
+const SUGGESTED_PROMPTS: Record<string, string[]> = {
+  en: [
+    "What's the strongest angle for this account?",
+    "Who should I contact first and why?",
+    "Draft a cold email to the Head of Design",
+    "What are the key triggers to reference on the call?",
+    "Summarise the ICP fit in 2 sentences",
+    "What objections should I prepare for?",
+  ],
+  fr: [
+    "Quel est le meilleur angle d'approche pour ce compte ?",
+    "Qui devrais-je contacter en premier et pourquoi ?",
+    "Rédige un email de prospection pour le responsable Design",
+    "Quels sont les déclencheurs clés à mentionner lors de l'appel ?",
+    "Résume l'adéquation ICP en 2 phrases",
+    "Quelles objections dois-je anticiper ?",
+  ],
+};
+
+function getSuggestedPrompts(market: string | null): string[] {
+  if (market && market !== 'en' && market !== 'auto' && SUGGESTED_PROMPTS[market]) {
+    return SUGGESTED_PROMPTS[market];
+  }
+  return SUGGESTED_PROMPTS.en;
+}
 
 /* ------------------------------------------------------------------ */
 /*  Design tokens                                                      */
@@ -1248,6 +1265,188 @@ function DeepDiveSubsection({ heading, body, defaultOpen = false }: { heading: s
   );
 }
 
+/* ------------------------------------------------------------------ */
+/*  Whitespace & Opportunity                                           */
+/* ------------------------------------------------------------------ */
+
+const FIGMA_PRICES = {
+  fullSeat: 90,    // per seat per month
+  devSeat: 35,     // per seat per month
+  collabSeat: 5,   // per seat per month (not used in display but keep for reference)
+};
+
+function WhitespaceSection({ pov }: { pov: any }) {
+  if (pov?._meta?.whitespace_available === false || !pov?.whitespace_section) return null;
+
+  const ws = pov.whitespace_section;
+  const gaps = ws.key_gaps || {};
+  const services: any[] = (ws.services_opportunities || []).filter((s: any) => s?.found);
+
+  // Format currency
+  const fmtDollar = (v: number) => {
+    if (v == null || isNaN(v)) return '$0';
+    if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
+    return `$${Math.round(v).toLocaleString()}`;
+  };
+
+  // Calculate seat gap values
+  const devGapVal = (gaps.dev_mode?.gap || 0) * FIGMA_PRICES.devSeat * 12;
+  const designerGapVal = (gaps.full_seats_designers?.gap || 0) * FIGMA_PRICES.fullSeat * 12;
+  const pmGapVal = (gaps.make_pm?.gap || 0) * FIGMA_PRICES.fullSeat * 12;
+  const govVal = gaps.governance_plus?.value || 0;
+  const euVal = gaps.enterprise_upgrade?.eligible ? (gaps.enterprise_upgrade?.value || 0) : 0;
+  const servicesTotal = services.length * 125000;
+  const totalWhitespace = devGapVal + designerGapVal + pmGapVal + govVal + euVal + servicesTotal;
+
+  const ACCENT = {
+    devMode: '#7c3aed',
+    fullSeat: '#0891b2',
+    governance: '#dc2626',
+    enterprise: '#4361ee',
+    services: '#059669',
+    arrFloor: '#ca8a04',
+  };
+
+  return (
+    <Section title="Whitespace & Opportunity" accent={COLORS.purple} defaultOpen={false}>
+      {/* Metrics row */}
+      <div style={{ display: 'flex', gap: 10, marginBottom: 18, flexWrap: 'wrap' }}>
+        {[
+          { label: 'CURRENT ARR', value: fmtDollar(ws.current_arr) },
+          { label: 'TOTAL WHITESPACE', value: fmtDollar(totalWhitespace) },
+          { label: 'YOY GROWTH', value: ws.arr_growth_yoy || '—' },
+        ].map((m, i) => (
+          <div key={i} style={{ background: '#f5f5f0', borderRadius: 8, padding: '10px 12px', flex: 1, minWidth: 120 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.faint, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>{m.label}</div>
+            <div style={{ fontFamily: FONTS.serif, fontSize: 20, fontWeight: 500, color: COLORS.heading, marginTop: 4 }}>{m.value}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Seat opportunities */}
+      <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.05em', color: COLORS.tertiary, textTransform: 'uppercase' as const, marginBottom: 10 }}>
+        SEAT OPPORTUNITIES
+      </div>
+
+      {/* Dev Mode */}
+      {gaps.dev_mode?.gap > 0 && (
+        <div style={{ borderLeft: `3px solid ${ACCENT.devMode}`, padding: '12px 16px', marginBottom: 10, borderRadius: '0 6px 6px 0' }}>
+          <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: ACCENT.devMode, marginBottom: 4 }}>DEV MODE</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+            <span style={{ fontSize: 16, fontWeight: 500, color: COLORS.heading }}>Dev Mode seats</span>
+            <span style={{ fontFamily: FONTS.serif, fontSize: 18, fontWeight: 500, color: COLORS.heading }}>{fmtDollar(devGapVal)}</span>
+          </div>
+          <div style={{ marginTop: 6 }}>
+            <div style={{ height: 3, background: '#f0ede8', borderRadius: 2, overflow: 'hidden' }}>
+              <div style={{ height: '100%', background: ACCENT.devMode, width: `${Math.min(100, ((gaps.dev_mode.licensed || 0) / Math.max(gaps.dev_mode.universe || 1, 1)) * 100)}%`, borderRadius: 2 }} />
+            </div>
+            <div style={{ fontSize: 12, color: COLORS.faint, marginTop: 3 }}>{gaps.dev_mode.licensed} of {Math.round(gaps.dev_mode.universe)} licensed</div>
+          </div>
+        </div>
+      )}
+
+      {/* Designer seats */}
+      {gaps.full_seats_designers?.gap > 0 && (
+        <div style={{ borderLeft: `3px solid ${ACCENT.fullSeat}`, padding: '12px 16px', marginBottom: 10, borderRadius: '0 6px 6px 0' }}>
+          <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: ACCENT.fullSeat, marginBottom: 4 }}>FULL SEAT — DESIGN</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+            <span style={{ fontSize: 16, fontWeight: 500, color: COLORS.heading }}>Designer seats</span>
+            <span style={{ fontFamily: FONTS.serif, fontSize: 18, fontWeight: 500, color: COLORS.heading }}>{fmtDollar(designerGapVal)}</span>
+          </div>
+          <div style={{ marginTop: 6 }}>
+            <div style={{ height: 3, background: '#f0ede8', borderRadius: 2, overflow: 'hidden' }}>
+              <div style={{ height: '100%', background: ACCENT.fullSeat, width: `${Math.min(100, ((gaps.full_seats_designers.licensed || 0) / Math.max(gaps.full_seats_designers.universe || 1, 1)) * 100)}%`, borderRadius: 2 }} />
+            </div>
+            <div style={{ fontSize: 12, color: COLORS.faint, marginTop: 3 }}>{gaps.full_seats_designers.licensed} of {Math.round(gaps.full_seats_designers.universe)} licensed</div>
+          </div>
+        </div>
+      )}
+
+      {/* PM / Make seats */}
+      {gaps.make_pm?.gap > 0 && (
+        <div style={{ borderLeft: `3px solid ${ACCENT.fullSeat}`, padding: '12px 16px', marginBottom: 10, borderRadius: '0 6px 6px 0' }}>
+          <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: ACCENT.fullSeat, marginBottom: 4 }}>FULL SEAT — MAKE</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+            <span style={{ fontSize: 16, fontWeight: 500, color: COLORS.heading }}>PM / Make seats</span>
+            <span style={{ fontFamily: FONTS.serif, fontSize: 18, fontWeight: 500, color: COLORS.heading }}>{fmtDollar(pmGapVal)}</span>
+          </div>
+          <div style={{ marginTop: 6 }}>
+            <div style={{ height: 3, background: '#f0ede8', borderRadius: 2, overflow: 'hidden' }}>
+              <div style={{ height: '100%', background: ACCENT.fullSeat, width: `${Math.min(100, ((gaps.make_pm.licensed || 0) / Math.max(gaps.make_pm.universe || 1, 1)) * 100)}%`, borderRadius: 2 }} />
+            </div>
+            <div style={{ fontSize: 12, color: COLORS.faint, marginTop: 3 }}>{gaps.make_pm.licensed} of {Math.round(gaps.make_pm.universe)} licensed</div>
+          </div>
+        </div>
+      )}
+
+      {/* Governance+ */}
+      {govVal > 0 && (
+        <div style={{ borderLeft: `3px solid ${ACCENT.governance}`, padding: '12px 16px', marginBottom: 10, borderRadius: '0 6px 6px 0' }}>
+          <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: ACCENT.governance, marginBottom: 4 }}>GOVERNANCE+</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+            <span style={{ fontSize: 16, fontWeight: 500, color: COLORS.heading }}>Governance+ add-on</span>
+            <span style={{ fontFamily: FONTS.serif, fontSize: 18, fontWeight: 500, color: COLORS.heading }}>{fmtDollar(govVal)}</span>
+          </div>
+          {gaps.governance_plus?.priority && (
+            <span style={{ fontSize: 10, background: '#fee2e2', color: '#991b1b', borderRadius: 20, padding: '2px 8px', fontWeight: 600, display: 'inline-block', marginTop: 6 }}>priority: true</span>
+          )}
+          {gaps.governance_plus?.reason && (
+            <div style={{ fontSize: 15, color: COLORS.secondary, lineHeight: 1.65, marginTop: 6 }}>{gaps.governance_plus.reason}</div>
+          )}
+        </div>
+      )}
+
+      {/* Enterprise upgrade */}
+      {euVal > 0 && (
+        <div style={{ borderLeft: `3px solid ${ACCENT.enterprise}`, padding: '12px 16px', marginBottom: 10, borderRadius: '0 6px 6px 0' }}>
+          <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: ACCENT.enterprise, marginBottom: 4 }}>ENTERPRISE UPGRADE</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+            <span style={{ fontSize: 16, fontWeight: 500, color: COLORS.heading }}>Enterprise tier upgrade</span>
+            <span style={{ fontFamily: FONTS.serif, fontSize: 18, fontWeight: 500, color: COLORS.heading }}>{fmtDollar(euVal)}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Services opportunities */}
+      {services.length > 0 && (
+        <>
+          <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.05em', color: COLORS.tertiary, textTransform: 'uppercase' as const, marginTop: 18, marginBottom: 10 }}>
+            SERVICES OPPORTUNITIES
+          </div>
+          {services.map((s: any, i: number) => (
+            <div key={i} style={{ borderLeft: `3px solid ${ACCENT.services}`, padding: '12px 16px', marginBottom: 10, borderRadius: '0 6px 6px 0' }}>
+              <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: ACCENT.services, marginBottom: 4 }}>$125K ENGAGEMENT</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                <span style={{ fontSize: 16, fontWeight: 500, color: COLORS.heading }}>{s.engagement_label}</span>
+                <span style={{ fontFamily: FONTS.serif, fontSize: 18, fontWeight: 500, color: COLORS.heading }}>$125K</span>
+              </div>
+              {s.evidence && (
+                <div style={{ fontSize: 14, fontStyle: 'italic', color: COLORS.tertiary, marginTop: 8, paddingTop: 8, borderTop: `1px solid #f5f3ef`, lineHeight: 1.6 }}>{s.evidence}</div>
+              )}
+            </div>
+          ))}
+
+          {/* ARR floor */}
+          <div style={{ borderLeft: `3px solid ${ACCENT.arrFloor}`, padding: '12px 16px', marginBottom: 10, borderRadius: '0 6px 6px 0' }}>
+            <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: ACCENT.arrFloor, marginBottom: 4 }}>25% ARR MINIMUM</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+              <span style={{ fontSize: 16, fontWeight: 500, color: COLORS.heading }}>Services floor</span>
+              <span style={{ fontFamily: FONTS.serif, fontSize: 18, fontWeight: 500, color: COLORS.heading }}>{fmtDollar(ws.services_arr_floor || 125000)}</span>
+            </div>
+            <div style={{ fontSize: 15, color: COLORS.secondary, lineHeight: 1.65, marginTop: 6 }}>25% ARR floor — use as anchor if selling a single bundled engagement.</div>
+          </div>
+        </>
+      )}
+
+      {/* Total Whitespace */}
+      <div style={{ borderTop: `1px solid ${COLORS.border}`, padding: '14px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 8 }}>
+        <span style={{ fontSize: 13, color: COLORS.tertiary }}>Total Whitespace — seats + Governance+ + services</span>
+        <span style={{ fontFamily: FONTS.serif, fontSize: 24, fontWeight: 500, color: COLORS.heading }}>{fmtDollar(totalWhitespace)}</span>
+      </div>
+    </Section>
+  );
+}
+
 function ResearchDeepDiveSection({ pov }: { pov: any }) {
   const [expanded, setExpanded] = useState(false);
   const intel = pov?.distilled_intel || pov?.research_deep_dive;
@@ -1976,6 +2175,9 @@ function BriefContent({ pov, personas, hooksData, valuePyramid }: {
       {/* 5. Why Figma */}
       <WhyFigmaSection pov={pov} sources={allSources} />
 
+      {/* 5.5 Whitespace & Opportunity */}
+      <WhitespaceSection pov={pov} />
+
       {/* 6. Value Pyramid */}
       <ValuePyramidSection pyramid={valuePyramid} />
 
@@ -2193,6 +2395,7 @@ export default function BriefView() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           run_id,
+          market: run?.market ?? null,
           messages: newMessages.map(m => ({ role: m.role, content: m.content })),
         }),
       });
@@ -2661,7 +2864,7 @@ export default function BriefView() {
                   Ask anything about this brief
                 </p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {SUGGESTED_PROMPTS.map((prompt, i) => (
+                  {getSuggestedPrompts(run?.market ?? null).map((prompt, i) => (
                     <button key={i} onClick={() => sendMessage(prompt)} style={{
                       textAlign: 'left', background: '#fdfcfa',
                       border: `1px solid ${COLORS.border}`, borderRadius: 6,
