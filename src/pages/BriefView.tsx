@@ -418,7 +418,7 @@ function IntelInline({ text }: { text: string }) {
   return <>{parts}</>;
 }
 
-function CitedProse({ text, sources }: { text: string | undefined | null; sources?: any[] }) {
+function CitedProse({ text, sources, style }: { text: string | undefined | null; sources?: any[]; style?: React.CSSProperties }) {
   if (!text) return null;
   const html = text.replace(/\[(\d+)\]/g, (_, n: string) => {
     const idx = parseInt(n, 10) - 1;
@@ -437,6 +437,7 @@ function CitedProse({ text, sources }: { text: string | undefined | null; source
     <p style={{
       fontSize: 17, lineHeight: 1.75, color: COLORS.body,
       fontFamily: FONTS.sans, margin: 0,
+      ...style,
     }} dangerouslySetInnerHTML={{ __html: sanitized }} />
   );
 }
@@ -889,7 +890,7 @@ function AboutSection({ pov, sources, feedbackNode }: { pov: any; sources: any[]
 /*  Section: Why Anything                                              */
 /* ------------------------------------------------------------------ */
 
-function ExpandableObjective({ objective, index }: { objective: any; index: number }) {
+function ExpandableObjective({ objective, index, sources }: { objective: any; index: number; sources?: any[] }) {
   const [open, setOpen] = useState(false);
   const title = typeof objective === 'string' ? objective : (objective?.objective || objective?.title || `Objective ${index + 1}`);
   const detail = typeof objective === 'string' ? null : (objective?.detail || objective?.description || objective?.narrative);
@@ -902,21 +903,12 @@ function ExpandableObjective({ objective, index }: { objective: any; index: numb
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
         {detail && <ItemChevron open={open} onClick={() => setOpen(o => !o)} />}
         <div style={{ flex: 1, cursor: detail ? 'pointer' : 'default' }} onClick={() => detail && setOpen(o => !o)}>
-          <div style={{
-            fontSize: 16, fontWeight: 500, color: COLORS.body,
-            fontFamily: FONTS.sans, lineHeight: 1.5,
-          }}>
-            {title}
-          </div>
+          <CitedProse text={title} sources={sources} style={{ fontSize: 16, fontWeight: 500, lineHeight: 1.5 }} />
         </div>
       </div>
       {open && detail && (
-        <div style={{
-          marginTop: 8, marginLeft: 32,
-          fontSize: 16, lineHeight: 1.65, color: COLORS.secondary,
-          fontFamily: FONTS.sans,
-        }}>
-          {detail}
+        <div style={{ marginTop: 8, marginLeft: 32 }}>
+          <CitedProse text={detail} sources={sources} style={{ fontSize: 16, lineHeight: 1.65, color: COLORS.secondary }} />
         </div>
       )}
     </div>
@@ -976,7 +968,7 @@ function WhyAnythingSection({ pov, sources, feedbackNode }: { pov: any; sources:
       {objectives.length > 0 && (
         <div style={{ marginBottom: 16 }}>
           {objectives.map((obj: any, i: number) => (
-            <ExpandableObjective key={i} objective={obj} index={i} />
+            <ExpandableObjective key={i} objective={obj} index={i} sources={sources} />
           ))}
         </div>
       )}
