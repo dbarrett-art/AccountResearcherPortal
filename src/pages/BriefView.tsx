@@ -1052,30 +1052,25 @@ function WhyNowSection({ pov, sources, feedbackNode }: { pov: any; sources?: any
 /*  Section: Why Figma                                                 */
 /* ------------------------------------------------------------------ */
 
-function ExpandableProduct({ product }: { product: any }) {
+function ExpandableProduct({ product, sources }: { product: any; sources?: any[] }) {
   const [open, setOpen] = useState(false);
   const name = product?.product || '';
   const relevance = product?.relevance || '';
-  const firstSentence = relevance.split(/\.\s/)[0] + (relevance.includes('. ') ? '.' : '');
-  const hasMore = relevance.length > firstSentence.length + 10;
 
   return (
     <div style={{ padding: '10px 0', borderBottom: `1px solid ${COLORS.borderLight}` }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-        {hasMore && <ItemChevron open={open} onClick={() => setOpen(o => !o)} />}
-        <div style={{ flex: 1 }}>
+        {relevance && <ItemChevron open={open} onClick={() => setOpen(o => !o)} />}
+        <div style={{ flex: 1, cursor: relevance ? 'pointer' : undefined }} onClick={() => relevance && setOpen(o => !o)}>
           <div style={{
             fontSize: 16, fontWeight: 600, color: COLORS.purple,
-            fontFamily: FONTS.sans, marginBottom: 4,
+            fontFamily: FONTS.sans, marginBottom: open ? 4 : 0,
           }}>
             {name}
           </div>
-          <div style={{ fontSize: 15, color: COLORS.secondary, fontFamily: FONTS.sans, lineHeight: 1.6 }}>
-            {firstSentence}
-          </div>
-          {open && hasMore && (
-            <div style={{ fontSize: 15, color: COLORS.secondary, fontFamily: FONTS.sans, lineHeight: 1.6, marginTop: 6 }}>
-              {relevance}
+          {open && relevance && (
+            <div style={{ marginTop: 6 }}>
+              <CitedProse text={relevance} sources={sources} style={{ fontSize: 15, color: COLORS.secondary, lineHeight: 1.6 }} />
             </div>
           )}
         </div>
@@ -1145,9 +1140,7 @@ function WhyFigmaSection({ pov, sources, feedbackNode }: { pov: any; sources: an
             textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6,
             fontFamily: FONTS.sans,
           }}>Strongest Angle</div>
-          <p style={{ fontSize: 16, lineHeight: 1.7, color: COLORS.body, fontFamily: FONTS.sans, margin: 0 }}>
-            {wf.strongest_angle}
-          </p>
+          <CitedProse text={wf.strongest_angle} sources={sources} style={{ fontSize: 16, lineHeight: 1.7 }} />
         </div>
       )}
 
@@ -1162,7 +1155,7 @@ function WhyFigmaSection({ pov, sources, feedbackNode }: { pov: any; sources: an
       {products.length > 0 && (
         <div style={{ marginBottom: 16 }}>
           {products.map((p: any, i: number) => (
-            <ExpandableProduct key={i} product={p} />
+            <ExpandableProduct key={i} product={p} sources={sources} />
           ))}
         </div>
       )}
