@@ -2229,6 +2229,32 @@ export default function BriefView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
+  const [chatWidth, setChatWidth] = useState(360);
+  const MIN_CHAT_WIDTH = 280;
+
+  const handleChatResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = chatWidth;
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'col-resize';
+
+    const onMouseMove = (ev: MouseEvent) => {
+      const maxWidth = window.innerWidth * 0.4;
+      const delta = startX - ev.clientX;
+      setChatWidth(Math.min(maxWidth, Math.max(MIN_CHAT_WIDTH, startWidth + delta)));
+    };
+
+    const onMouseUp = () => {
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  };
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [streaming, setStreaming] = useState(false);
@@ -2716,7 +2742,7 @@ export default function BriefView() {
         .sparkle-dot3 { animation: sparkle-dot 1.4s ease-in-out infinite 0.9s; }
       `}</style>
       <div style={{
-        paddingRight: chatOpen ? 380 : 0,
+        paddingRight: chatOpen ? chatWidth + 20 : 0,
         transition: 'padding-right 200ms ease',
         minHeight: '100vh',
       }}>
@@ -2752,7 +2778,10 @@ export default function BriefView() {
               <div style={{ flex: 1 }} />
 
               {/* Action buttons */}
-              <button onClick={() => setChatOpen(true)} style={btnStyle('secondary')}>
+              <button onClick={() => setChatOpen(prev => !prev)} style={{
+                ...btnStyle('secondary'),
+                ...(chatOpen ? { background: '#f3f0ff', borderColor: '#7c3aed', color: '#7c3aed' } : {}),
+              }}>
                 <svg width="18" height="18" viewBox="0 0 20 20" fill="none" style={{ display: 'block', flexShrink: 0 }}>
                   {/* main star */}
                   <path className="sparkle-main" d="M10 2.5 L11.3 7.2 L16.5 8.5 L11.3 9.8 L10 14.5 L8.7 9.8 L3.5 8.5 L8.7 7.2 Z" fill="#7F77DD"/>
@@ -3161,12 +3190,20 @@ export default function BriefView() {
       {/* ============ Chat panel ============ */}
       {chatOpen && (
         <div style={{
-          position: 'fixed', right: 0, top: 0, bottom: 0, width: 380,
+          position: 'fixed', right: 0, top: 0, bottom: 0, width: chatWidth,
           background: '#fff', borderLeft: `1px solid ${COLORS.border}`,
           display: 'flex', flexDirection: 'column', zIndex: 100,
           animation: 'slideIn 150ms ease-out',
           fontFamily: FONTS.sans,
         }}>
+          {/* Resize drag handle */}
+          <div
+            onMouseDown={handleChatResizeStart}
+            style={{
+              position: 'absolute', left: 0, top: 0, bottom: 0, width: 6,
+              cursor: 'col-resize', zIndex: 10,
+            }}
+          />
           {/* Header */}
           <div style={{
             padding: '14px 18px', borderBottom: `1px solid ${COLORS.border}`,
