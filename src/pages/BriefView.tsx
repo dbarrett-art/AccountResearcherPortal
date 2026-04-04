@@ -7,7 +7,7 @@ import TableSkeleton from '../components/TableSkeleton';
 import usePageTitle from '../hooks/usePageTitle';
 import { ArrowLeft, FileText, X, ChevronDown, ExternalLink, Send, Trash2, Activity, Share2, RefreshCw, Paperclip, ClipboardList, Copy, Check } from 'lucide-react';
 import SectionFeedback from '../components/SectionFeedback';
-import DOMPurify from 'dompurify';
+// DOMPurify removed — CitedProse now renders React elements instead of innerHTML
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -418,27 +418,154 @@ function IntelInline({ text }: { text: string }) {
   return <>{parts}</>;
 }
 
-function CitedProse({ text, sources, style }: { text: string | undefined | null; sources?: any[]; style?: React.CSSProperties }) {
+function CitedProse({ text, sources, style, onCitationClick }: {
+  text: string | undefined | null;
+  sources?: any[];
+  style?: React.CSSProperties;
+  onCitationClick?: (index: number, source: any, event: React.MouseEvent) => void;
+}) {
   if (!text) return null;
-  const html = text.replace(/\[(\d+)\]/g, (_, n: string) => {
-    const idx = parseInt(n, 10) - 1;
+
+  // Split text on [N] citation markers and build React elements
+  const parts: React.ReactNode[] = [];
+  const regex = /\[(\d+)\]/g;
+  let lastIndex = 0;
+  let match;
+  let key = 0;
+
+  while ((match = regex.exec(text)) !== null) {
+    // Text before this citation
+    if (match.index > lastIndex) {
+      parts.push(text.slice(lastIndex, match.index));
+    }
+    const n = parseInt(match[1], 10);
+    const idx = n - 1;
     const src = sources?.[idx];
     const url = src ? (typeof src === 'string' ? src : (src?.url || src?.source || '')) : '';
-    if (url && url.startsWith('http')) {
-      return `<sup><a href="${url.replace(/"/g, '&quot;')}" target="_blank" rel="noopener noreferrer" style="color:${COLORS.purple};text-decoration:none;cursor:pointer">[${n}]</a></sup>`;
+
+    if (url && url.startsWith('http') && onCitationClick && src) {
+      parts.push(
+        <sup key={key++}>
+          <span
+            role="button"
+            tabIndex={0}
+            onClick={(e) => { e.stopPropagation(); onCitationClick(idx, src, e); }}
+            style={{
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              width: 18, height: 18, borderRadius: 4,
+              background: '#EEEDFE', color: '#534AB7',
+              fontSize: 11, fontWeight: 500, cursor: 'pointer',
+              border: '0.5px solid #AFA9EC',
+              verticalAlign: 'middle', margin: '0 1px',
+              fontFamily: 'DM Sans, sans-serif', lineHeight: 1,
+            }}
+          >
+            {n}
+          </span>
+        </sup>
+      );
+    } else if (url && url.startsWith('http')) {
+      parts.push(
+        <sup key={key++}>
+          <a href={url} target="_blank" rel="noopener noreferrer"
+            style={{ color: COLORS.purple, textDecoration: 'none', cursor: 'pointer' }}>
+            [{n}]
+          </a>
+        </sup>
+      );
+    } else {
+      parts.push(<sup key={key++} style={{ color: COLORS.faint }}>[{n}]</sup>);
     }
-    return `<sup style="color:${COLORS.faint}">[${n}]</sup>`;
-  });
-  const sanitized = DOMPurify.sanitize(html, {
-    ALLOWED_TAGS: ['sup', 'a'],
-    ALLOWED_ATTR: ['href', 'target', 'rel', 'style'],
-  });
+    lastIndex = match.index + match[0].length;
+  }
+
+  // Remaining text after last citation
+  if (lastIndex < text.length) {
+    parts.push(text.slice(lastIndex));
+  }
+
   return (
     <p style={{
       fontSize: 17, lineHeight: 1.75, color: COLORS.body,
       fontFamily: FONTS.sans, margin: 0,
       ...style,
-    }} dangerouslySetInnerHTML={{ __html: sanitized }} />
+    }}>
+      {parts}
+    </p>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Citation tooltip + modal                                           */
+/* ------------------------------------------------------------------ */
+
+function CitationTooltip({ tooltip }: {
+  tooltip: { source: any; index: number; x: number; y: number };
+}) {
+  const source = tooltip.source;
+  const url = typeof source === 'string' ? source : (source?.url || source?.source || '');
+  let domain: string | null = null;
+  try { domain = url ? new URL(url).hostname.replace('www.', '') : null; } catch {}
+  const title = source?.title || source?.what_it_provided || 'Source';
+  const summary = source?.snippet || source?.description || source?.what_it_provided || null;
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        left: Math.min(tooltip.x, window.innerWidth - 340),
+        top: tooltip.y + 8,
+        width: 320,
+        background: '#fff',
+        border: '0.5px solid #e5e5e0',
+        borderRadius: 12,
+        padding: '14px 16px',
+        zIndex: 1000,
+        boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+        fontFamily: 'DM Sans, sans-serif',
+      }}
+      onClick={e => e.stopPropagation()}
+    >
+      {domain && (
+        <div style={{ fontSize: 11, color: '#888', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#7F77DD', flexShrink: 0 }} />
+          {domain} · Source [{tooltip.index + 1}]
+        </div>
+      )}
+      <div style={{ fontSize: 13, fontWeight: 500, color: COLORS.body, marginBottom: 8, lineHeight: 1.4 }}>
+        {title.length > 120 ? title.slice(0, 120) + '…' : title}
+      </div>
+      {summary && summary !== title && (
+        <div style={{ fontSize: 13, color: COLORS.secondary, lineHeight: 1.5, marginBottom: 12 }}>
+          {summary.length > 200 ? summary.slice(0, 200) + '…' : summary}
+        </div>
+      )}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 10, borderTop: '0.5px solid #f0f0ec' }}>
+        <div style={{ fontSize: 11, color: '#999' }}>
+          {source?.date || ''}
+        </div>
+        {url && (
+          <a
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              fontSize: 12, color: '#534AB7', fontWeight: 500, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: 4,
+              background: '#EEEDFE', border: 'none',
+              borderRadius: 8, padding: '5px 10px',
+              textDecoration: 'none',
+            }}
+          >
+            Open source
+            <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="#534AB7" strokeWidth="1.5">
+              <rect x="2" y="2" width="10" height="10" rx="2"/>
+              <path d="M7 9l5-5M9 4h3v3"/>
+            </svg>
+          </a>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -746,7 +873,7 @@ function MetricsBar({ pov }: { pov: any; hooksData?: any; personas?: any }) {
 /*  Section: ICP Fit                                                   */
 /* ------------------------------------------------------------------ */
 
-function IcpSection({ pov, sources }: { pov: any; sources: any[] }) {
+function IcpSection({ pov, sources, onCitationClick }: { pov: any; sources: any[]; onCitationClick?: (i: number, src: any, e: React.MouseEvent) => void }) {
   const icp = pov?.icp_fit || pov?.icp_assessment;
   if (!icp) return null;
   return (
@@ -755,7 +882,7 @@ function IcpSection({ pov, sources }: { pov: any; sources: any[] }) {
       accent={SECTION_ACCENTS.icp}
       badge={<IcpBadge score={icp.score} size="small" />}
     >
-      <CitedProse text={icp.rationale} sources={sources} />
+      <CitedProse text={icp.rationale} sources={sources} onCitationClick={onCitationClick} />
     </Section>
   );
 }
@@ -855,7 +982,7 @@ function stripMarkdownHeaders(text: string): string {
     .trim();
 }
 
-function AboutSection({ pov, sources, feedbackNode }: { pov: any; sources: any[]; feedbackNode?: React.ReactNode }) {
+function AboutSection({ pov, sources, feedbackNode, onCitationClick }: { pov: any; sources: any[]; feedbackNode?: React.ReactNode; onCitationClick?: (i: number, src: any, e: React.MouseEvent) => void }) {
   const about = pov?.about;
   if (!about) return null;
 
@@ -865,7 +992,7 @@ function AboutSection({ pov, sources, feedbackNode }: { pov: any; sources: any[]
     <Section title="About" accent={SECTION_ACCENTS.about} feedbackNode={feedbackNode}>
       {/* Narrative intro */}
       {(about.who_they_are || cleanWhatTheyDo) && (
-        <CitedProse text={about.who_they_are || cleanWhatTheyDo} sources={sources} />
+        <CitedProse text={about.who_they_are || cleanWhatTheyDo} sources={sources} onCitationClick={onCitationClick} />
       )}
 
       {/* Pulled numbers */}
@@ -880,7 +1007,7 @@ function AboutSection({ pov, sources, feedbackNode }: { pov: any; sources: any[]
 
       {/* what_they_do prose (only content before ## headers, if who_they_are already shown) */}
       {about.who_they_are && cleanWhatTheyDo && (
-        <CitedProse text={cleanWhatTheyDo} sources={sources} />
+        <CitedProse text={cleanWhatTheyDo} sources={sources} onCitationClick={onCitationClick} />
       )}
     </Section>
   );
@@ -890,7 +1017,7 @@ function AboutSection({ pov, sources, feedbackNode }: { pov: any; sources: any[]
 /*  Section: Why Anything                                              */
 /* ------------------------------------------------------------------ */
 
-function ExpandableObjective({ objective, index, sources }: { objective: any; index: number; sources?: any[] }) {
+function ExpandableObjective({ objective, index, sources, onCitationClick }: { objective: any; index: number; sources?: any[]; onCitationClick?: (i: number, src: any, e: React.MouseEvent) => void }) {
   const [open, setOpen] = useState(false);
   const title = typeof objective === 'string' ? objective : (objective?.objective || objective?.title || `Objective ${index + 1}`);
   const detail = typeof objective === 'string' ? null : (objective?.detail || objective?.description || objective?.narrative);
@@ -903,19 +1030,19 @@ function ExpandableObjective({ objective, index, sources }: { objective: any; in
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
         {detail && <ItemChevron open={open} onClick={() => setOpen(o => !o)} />}
         <div style={{ flex: 1, cursor: detail ? 'pointer' : 'default' }} onClick={() => detail && setOpen(o => !o)}>
-          <CitedProse text={title} sources={sources} style={{ fontSize: 17, fontWeight: 500, lineHeight: 1.5 }} />
+          <CitedProse text={title} sources={sources} style={{ fontSize: 17, fontWeight: 500, lineHeight: 1.5 }} onCitationClick={onCitationClick} />
         </div>
       </div>
       {open && detail && (
         <div style={{ marginTop: 8, marginLeft: 32 }}>
-          <CitedProse text={detail} sources={sources} style={{ fontSize: 17, lineHeight: 1.65, color: COLORS.secondary }} />
+          <CitedProse text={detail} sources={sources} style={{ fontSize: 17, lineHeight: 1.65, color: COLORS.secondary }} onCitationClick={onCitationClick} />
         </div>
       )}
     </div>
   );
 }
 
-function WhyAnythingSection({ pov, sources, feedbackNode }: { pov: any; sources: any[]; feedbackNode?: React.ReactNode }) {
+function WhyAnythingSection({ pov, sources, feedbackNode, onCitationClick }: { pov: any; sources: any[]; feedbackNode?: React.ReactNode; onCitationClick?: (i: number, src: any, e: React.MouseEvent) => void }) {
   const wa = pov?.why_anything;
   if (!wa) return null;
   const objectives = wa.strategic_objectives || [];
@@ -938,14 +1065,14 @@ function WhyAnythingSection({ pov, sources, feedbackNode }: { pov: any; sources:
             textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6,
             fontFamily: FONTS.sans,
           }}>Corporate Strategy</div>
-          <CitedProse text={wa.corporate_strategy} sources={sources} />
+          <CitedProse text={wa.corporate_strategy} sources={sources} onCitationClick={onCitationClick} />
         </div>
       )}
 
       {/* Narrative */}
       {wa.narrative && (
         <div style={{ marginBottom: 16 }}>
-          <CitedProse text={wa.narrative} sources={sources} />
+          <CitedProse text={wa.narrative} sources={sources} onCitationClick={onCitationClick} />
         </div>
       )}
 
@@ -960,7 +1087,7 @@ function WhyAnythingSection({ pov, sources, feedbackNode }: { pov: any; sources:
             textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6,
             fontFamily: FONTS.sans,
           }}>Macro Forces</div>
-          <CitedProse text={wa.macro_forces} sources={sources} />
+          <CitedProse text={wa.macro_forces} sources={sources} onCitationClick={onCitationClick} />
         </div>
       )}
 
@@ -968,7 +1095,7 @@ function WhyAnythingSection({ pov, sources, feedbackNode }: { pov: any; sources:
       {objectives.length > 0 && (
         <div style={{ marginBottom: 16 }}>
           {objectives.map((obj: any, i: number) => (
-            <ExpandableObjective key={i} objective={obj} index={i} sources={sources} />
+            <ExpandableObjective key={i} objective={obj} index={i} sources={sources} onCitationClick={onCitationClick} />
           ))}
         </div>
       )}
@@ -980,7 +1107,7 @@ function WhyAnythingSection({ pov, sources, feedbackNode }: { pov: any; sources:
 /*  Section: Why Now                                                   */
 /* ------------------------------------------------------------------ */
 
-function TriggerBlock({ trigger, sources }: { trigger: any; sources?: any[] }) {
+function TriggerBlock({ trigger, sources, onCitationClick }: { trigger: any; sources?: any[]; onCitationClick?: (i: number, src: any, e: React.MouseEvent) => void }) {
   const [expanded, setExpanded] = useState(false);
   const cat = (trigger?.category || trigger?.type || 'BUSINESS').toUpperCase();
   const style = TRIGGER_COLORS[cat] || TRIGGER_COLORS.BUSINESS;
@@ -1011,7 +1138,7 @@ function TriggerBlock({ trigger, sources }: { trigger: any; sources?: any[] }) {
       {trigger?.evidence && (
         <Trunc lines={2} expanded={expanded} onToggle={() => setExpanded(e => !e)}>
           <div style={{ fontSize: 16, color: COLORS.secondary, fontFamily: FONTS.sans }}>
-            <CitedProse text={trigger.evidence} sources={sources} />
+            <CitedProse text={trigger.evidence} sources={sources} onCitationClick={onCitationClick} />
           </div>
         </Trunc>
       )}
@@ -1030,7 +1157,7 @@ function TriggerBlock({ trigger, sources }: { trigger: any; sources?: any[] }) {
   );
 }
 
-function WhyNowSection({ pov, sources, feedbackNode }: { pov: any; sources?: any[]; feedbackNode?: React.ReactNode }) {
+function WhyNowSection({ pov, sources, feedbackNode, onCitationClick }: { pov: any; sources?: any[]; feedbackNode?: React.ReactNode; onCitationClick?: (i: number, src: any, e: React.MouseEvent) => void }) {
   const triggers = pov?.why_now?.triggers || [];
   if (triggers.length === 0) return null;
 
@@ -1038,11 +1165,11 @@ function WhyNowSection({ pov, sources, feedbackNode }: { pov: any; sources?: any
     <Section title="Why Now" accent={SECTION_ACCENTS.whyNow} count={`${triggers.length} triggers`} feedbackNode={feedbackNode}>
       {pov?.why_now?.urgency_rationale && (
         <div style={{ marginBottom: 16 }}>
-          <CitedProse text={pov.why_now.urgency_rationale} sources={sources} />
+          <CitedProse text={pov.why_now.urgency_rationale} sources={sources} onCitationClick={onCitationClick} />
         </div>
       )}
       {triggers.map((t: any, i: number) => (
-        <TriggerBlock key={i} trigger={t} sources={sources} />
+        <TriggerBlock key={i} trigger={t} sources={sources} onCitationClick={onCitationClick} />
       ))}
     </Section>
   );
@@ -1052,7 +1179,7 @@ function WhyNowSection({ pov, sources, feedbackNode }: { pov: any; sources?: any
 /*  Section: Why Figma                                                 */
 /* ------------------------------------------------------------------ */
 
-function ExpandableProduct({ product, sources }: { product: any; sources?: any[] }) {
+function ExpandableProduct({ product, sources, onCitationClick }: { product: any; sources?: any[]; onCitationClick?: (i: number, src: any, e: React.MouseEvent) => void }) {
   const [open, setOpen] = useState(false);
   const name = product?.product || '';
   const relevance = product?.relevance || '';
@@ -1070,7 +1197,7 @@ function ExpandableProduct({ product, sources }: { product: any; sources?: any[]
           </div>
           {open && relevance && (
             <div style={{ marginTop: 6 }}>
-              <CitedProse text={relevance} sources={sources} style={{ fontSize: 15, color: COLORS.secondary, lineHeight: 1.6 }} />
+              <CitedProse text={relevance} sources={sources} style={{ fontSize: 15, color: COLORS.secondary, lineHeight: 1.6 }} onCitationClick={onCitationClick} />
             </div>
           )}
         </div>
@@ -1079,7 +1206,7 @@ function ExpandableProduct({ product, sources }: { product: any; sources?: any[]
   );
 }
 
-function WhyFigmaSection({ pov, sources, feedbackNode }: { pov: any; sources: any[]; feedbackNode?: React.ReactNode }) {
+function WhyFigmaSection({ pov, sources, feedbackNode, onCitationClick }: { pov: any; sources: any[]; feedbackNode?: React.ReactNode; onCitationClick?: (i: number, src: any, e: React.MouseEvent) => void }) {
   const wf = pov?.why_figma;
   if (!wf) return null;
   const products = wf.primary_products || [];
@@ -1140,14 +1267,14 @@ function WhyFigmaSection({ pov, sources, feedbackNode }: { pov: any; sources: an
             textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6,
             fontFamily: FONTS.sans,
           }}>Strongest Angle</div>
-          <CitedProse text={wf.strongest_angle} sources={sources} style={{ fontSize: 16, lineHeight: 1.7 }} />
+          <CitedProse text={wf.strongest_angle} sources={sources} style={{ fontSize: 16, lineHeight: 1.7 }} onCitationClick={onCitationClick} />
         </div>
       )}
 
       {/* Rationale */}
       {wf.rationale && (
         <div style={{ marginBottom: 16 }}>
-          <CitedProse text={wf.rationale} sources={sources} />
+          <CitedProse text={wf.rationale} sources={sources} onCitationClick={onCitationClick} />
         </div>
       )}
 
@@ -1155,7 +1282,7 @@ function WhyFigmaSection({ pov, sources, feedbackNode }: { pov: any; sources: an
       {products.length > 0 && (
         <div style={{ marginBottom: 16 }}>
           {products.map((p: any, i: number) => (
-            <ExpandableProduct key={i} product={p} sources={sources} />
+            <ExpandableProduct key={i} product={p} sources={sources} onCitationClick={onCitationClick} />
           ))}
         </div>
       )}
@@ -2143,6 +2270,18 @@ function BriefContent({ pov, personas, hooksData, valuePyramid, sectionFeedback,
   const allSources = pov?.sources_used || [];
   void ProofPointsSection; // Retained but removed from render tree (2026-04-01 reframe)
 
+  const [citationTooltip, setCitationTooltip] = useState<{
+    source: any; index: number; x: number; y: number;
+  } | null>(null);
+
+  const handleCitationClick = (index: number, source: any, event: React.MouseEvent) => {
+    if (!source) return;
+    const rect = (event.target as HTMLElement).getBoundingClientRect();
+    setCitationTooltip({ source, index, x: rect.left, y: rect.bottom });
+  };
+
+  const onCitationClick = (i: number, src: any, e: React.MouseEvent) => handleCitationClick(i, src, e);
+
   const fb = (key: string) => (
     <SectionFeedback sectionKey={key} feedback={sectionFeedback[key]} onChange={onSectionFeedback} />
   );
@@ -2150,19 +2289,19 @@ function BriefContent({ pov, personas, hooksData, valuePyramid, sectionFeedback,
   return (
     <>
       {/* 1. ICP Fit */}
-      <IcpSection pov={pov} sources={allSources} />
+      <IcpSection pov={pov} sources={allSources} onCitationClick={onCitationClick} />
 
       {/* 2. About */}
-      <AboutSection pov={pov} sources={allSources} feedbackNode={fb('about')} />
+      <AboutSection pov={pov} sources={allSources} feedbackNode={fb('about')} onCitationClick={onCitationClick} />
 
       {/* 3. Why Anything */}
-      <WhyAnythingSection pov={pov} sources={allSources} feedbackNode={fb('why_anything')} />
+      <WhyAnythingSection pov={pov} sources={allSources} feedbackNode={fb('why_anything')} onCitationClick={onCitationClick} />
 
       {/* 4. Why Now */}
-      <WhyNowSection pov={pov} sources={allSources} feedbackNode={fb('why_now')} />
+      <WhyNowSection pov={pov} sources={allSources} feedbackNode={fb('why_now')} onCitationClick={onCitationClick} />
 
       {/* 5. Why Figma */}
-      <WhyFigmaSection pov={pov} sources={allSources} feedbackNode={fb('why_figma')} />
+      <WhyFigmaSection pov={pov} sources={allSources} feedbackNode={fb('why_figma')} onCitationClick={onCitationClick} />
 
       {/* 5.5 Whitespace & Opportunity */}
       <WhitespaceSection pov={pov} feedbackNode={fb('whitespace')} />
@@ -2193,7 +2332,13 @@ function BriefContent({ pov, personas, hooksData, valuePyramid, sectionFeedback,
       {/* 14. Sources */}
       <SourcesSection pov={pov} />
 
-      {/* Feedback moved to header toolbar Rate button */}
+      {/* Citation tooltip */}
+      {citationTooltip && (
+        <>
+          <div style={{ position: 'fixed', inset: 0, zIndex: 999 }} onClick={() => setCitationTooltip(null)} />
+          <CitationTooltip tooltip={citationTooltip} />
+        </>
+      )}
     </>
   );
 }
