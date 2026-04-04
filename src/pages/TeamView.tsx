@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { supabase } from '../lib/supabase';
+import { supabase, workerFetch } from '../lib/supabase';
 import Layout from '../components/Layout';
 import StatusBadge from '../components/StatusBadge';
 import TableSkeleton from '../components/TableSkeleton';
@@ -171,7 +171,23 @@ export default function TeamView() {
                       <td style={{ padding: '11px 16px', textAlign: 'center' }}>
                         <div style={{ display: 'flex', justifyContent: 'center', gap: 8 }}>
                           {run.pdf_url ? (
-                            <a href={run.pdf_url} target="_blank" rel="noopener noreferrer"><FileText size={16} style={{ color: 'var(--text-secondary)' }} /></a>
+                            <button
+                              title="Download PDF"
+                              onClick={async (e) => {
+                                e.preventDefault();
+                                const btn = e.currentTarget;
+                                btn.disabled = true;
+                                try {
+                                  const res = await workerFetch(`/pdf/${run.id}`);
+                                  if (!res.ok) throw new Error();
+                                  const { signedUrl } = await res.json();
+                                  window.open(signedUrl, '_blank');
+                                } catch { /* noop */ } finally { btn.disabled = false; }
+                              }}
+                              style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+                            >
+                              <FileText size={16} style={{ color: 'var(--text-secondary)' }} />
+                            </button>
                           ) : (
                             <FileText size={16} style={{ color: 'var(--text-disabled)' }} />
                           )}

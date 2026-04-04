@@ -17,6 +17,9 @@ DROP POLICY IF EXISTS "Enable update for users based on id" ON public.users;
 DROP POLICY IF EXISTS "users_select_policy" ON public.users;
 DROP POLICY IF EXISTS "users_insert_policy" ON public.users;
 DROP POLICY IF EXISTS "users_update_policy" ON public.users;
+DROP POLICY IF EXISTS "users_update_own" ON public.users;
+DROP POLICY IF EXISTS "users_update_any" ON public.users;
+DROP POLICY IF EXISTS "users_update_own_profile" ON public.users;
 
 -- Make sure RLS is enabled
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
@@ -38,21 +41,20 @@ CREATE POLICY "users_select_all_for_managers"
   -- Role-based filtering is done in the app. This avoids the recursion
   -- that comes from a policy that queries the users table itself.
 
--- Policy: users can update their own row
-CREATE POLICY "users_update_own"
+-- Policy: users can update their own row (non-sensitive fields ONLY)
+-- SECURITY: role, credits_remaining, and manager_id are protected — users cannot
+-- self-promote to admin or grant themselves credits. Admin operations route through
+-- the Cloudflare Worker (service key, bypasses RLS).
+CREATE POLICY "users_update_own_profile"
   ON public.users FOR UPDATE
   TO authenticated
   USING (id = auth.uid())
-  WITH CHECK (id = auth.uid());
-
--- Policy: admins can update any user (role changes, credit grants)
--- We allow all authenticated users to update for now; app enforces admin check.
--- A recursive policy checking role from the same table causes infinite recursion.
-CREATE POLICY "users_update_any"
-  ON public.users FOR UPDATE
-  TO authenticated
-  USING (true)
-  WITH CHECK (true);
+  WITH CHECK (
+    id = auth.uid()
+    AND role = (SELECT role FROM public.users WHERE id = auth.uid())
+    AND credits_remaining = (SELECT credits_remaining FROM public.users WHERE id = auth.uid())
+    AND manager_id IS NOT DISTINCT FROM (SELECT manager_id FROM public.users WHERE id = auth.uid())
+  );
 
 -- Policy: allow insert (for auto-provisioning new users)
 CREATE POLICY "users_insert_own"
@@ -73,11 +75,18 @@ DROP POLICY IF EXISTS "Enable read access for all users" ON public.runs;
 
 ALTER TABLE public.runs ENABLE ROW LEVEL SECURITY;
 
--- All authenticated users can read runs (needed for team view, admin, duplicate check)
-CREATE POLICY "runs_select_authenticated"
+-- Users can read their own runs + admins/managers can read all
+-- Duplicate check uses service key (Worker), so this doesn't affect it
+CREATE POLICY "runs_select_own_or_admin"
   ON public.runs FOR SELECT
   TO authenticated
-  USING (true);
+  USING (
+    user_id = auth.uid()
+    OR EXISTS (
+      SELECT 1 FROM public.users
+      WHERE id = auth.uid() AND role IN ('admin', 'manager')
+    )
+  );
 
 -- Users can insert their own runs (though worker handles this via service key)
 CREATE POLICY "runs_insert_authenticated"
@@ -98,10 +107,8 @@ CREATE POLICY "credit_grants_select_authenticated"
   TO authenticated
   USING (true);
 
-CREATE POLICY "credit_grants_insert_authenticated"
-  ON public.credit_grants FOR INSERT
-  TO authenticated
-  WITH CHECK (true);
+-- credit_grants INSERT restricted to service role only (Worker uses service key)
+-- No authenticated INSERT policy — prevents users from forging audit trail entries
 
 
 -- 4. Ensure Realtime is enabled on runs table
@@ -114,6 +121,11 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.runs;
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
+  -- Only allow @figma.com email addresses (server-side enforcement)
+  IF NEW.email NOT LIKE '%@figma.com' THEN
+    RETURN NULL;
+  END IF;
+
   INSERT INTO public.users (id, email, name, role, credits_remaining)
   VALUES (
     NEW.id,
@@ -152,20 +164,18 @@ CREATE POLICY "health_log_select_authenticated"
   TO authenticated
   USING (true);
 
-CREATE POLICY "health_log_insert_service"
-  ON public.health_log FOR INSERT
-  TO authenticated
-  WITH CHECK (true);
+-- health_log INSERT restricted to service role only (Worker uses service key)
+-- No authenticated INSERT policy — prevents users from injecting fake health records
 
 
 -- 7. Verify your user row exists and is admin
 -- -----------------------------------------------------------------------
--- Replace the UUID below with your auth.users id if different
+-- Replace YOUR_AUTH_USER_UUID and YOUR_EMAIL with your auth.users values
 INSERT INTO public.users (id, email, name, role, credits_remaining)
 VALUES (
-  'a24d0a1f-dbdb-4999-b6b9-edc03b55dba7',
-  'daniel@figma.com',
-  'Dan Barrett',
+  'YOUR_AUTH_USER_UUID',  -- Replace with your auth.users id
+  'your-email@figma.com', -- Replace with your email
+  'Your Name',
   'admin',
   20
 )

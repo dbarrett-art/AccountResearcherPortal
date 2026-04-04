@@ -6,6 +6,7 @@ import Layout from '../components/Layout';
 import TableSkeleton from '../components/TableSkeleton';
 import usePageTitle from '../hooks/usePageTitle';
 import { ArrowLeft, FileText, Table, X, ChevronDown, ExternalLink, Send, Trash2, Activity, Share2, RefreshCw } from 'lucide-react';
+import DOMPurify from 'dompurify';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -411,11 +412,15 @@ function CitedProse({ text, sources }: { text: string | undefined | null; source
     }
     return `<sup style="color:${COLORS.faint}">[${n}]</sup>`;
   });
+  const sanitized = DOMPurify.sanitize(html, {
+    ALLOWED_TAGS: ['sup', 'a'],
+    ALLOWED_ATTR: ['href', 'target', 'rel', 'style'],
+  });
   return (
     <p style={{
       fontSize: 17, lineHeight: 1.75, color: COLORS.body,
       fontFamily: FONTS.sans, margin: 0,
-    }} dangerouslySetInnerHTML={{ __html: html }} />
+    }} dangerouslySetInnerHTML={{ __html: sanitized }} />
   );
 }
 
@@ -2229,7 +2234,11 @@ export default function BriefView() {
   const [streaming, setStreaming] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [shareStatus, setShareStatus] = useState<'idle' | 'loading' | 'copied'>('idle');
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareEmail, setShareEmail] = useState('');
+  const [shareStatus, setShareStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+  const [shareError, setShareError] = useState('');
+  const shareRef = useRef<HTMLDivElement>(null);
   const [runningEnglish, setRunningEnglish] = useState(false);
   const [englishSubmitted, setEnglishSubmitted] = useState(false);
   const [rerendering, setRerendering] = useState(false);
@@ -2244,6 +2253,7 @@ export default function BriefView() {
   const [rateSubmitted, setRateSubmitted] = useState(false);
   const [rateSubmitting, setRateSubmitting] = useState(false);
   const rateRef = useRef<HTMLDivElement>(null);
+  const [pdfLoading, setPdfLoading] = useState(false);
 
 
   const handleRunInEnglish = async () => {
@@ -2260,17 +2270,46 @@ export default function BriefView() {
     finally { setRunningEnglish(false); }
   };
 
-  const handleShare = async () => {
-    if (!session || shareStatus === 'loading') return;
-    setShareStatus('loading');
+  const handleDownloadPdf = async () => {
+    if (!run?.id || pdfLoading) return;
+    setPdfLoading(true);
     try {
-      const res = await workerFetch(`/share/${run_id}`, { method: 'POST' });
-      const data = await res.json();
-      const shareUrl = `${window.location.origin}/shared/${data.token}`;
-      await navigator.clipboard.writeText(shareUrl);
-      setShareStatus('copied');
-      setTimeout(() => setShareStatus('idle'), 2000);
-    } catch { setShareStatus('idle'); }
+      const res = await workerFetch(`/pdf/${run.id}`);
+      if (!res.ok) throw new Error('Failed to get PDF');
+      const { signedUrl } = await res.json();
+      window.open(signedUrl, '_blank');
+    } catch {
+      // Silently fail — the button just stops loading
+    } finally {
+      setPdfLoading(false);
+    }
+  };
+
+  const handleShare = async () => {
+    if (!session || shareStatus === 'sending') return;
+    const email = shareEmail.trim().toLowerCase();
+    if (!email || !email.endsWith('@figma.com')) {
+      setShareStatus('error');
+      setShareError('Only @figma.com email addresses are allowed');
+      return;
+    }
+    setShareStatus('sending');
+    setShareError('');
+    try {
+      const res = await workerFetch(`/share/${run_id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      if (!res.ok) {
+        const { error } = await res.json().catch(() => ({ error: 'Failed to send' }));
+        throw new Error(error || 'Failed to send');
+      }
+      setShareStatus('sent');
+    } catch (err: any) {
+      setShareStatus('error');
+      setShareError(err.message || 'Failed to send access link');
+    }
   };
 
   const handleDelete = async () => {
@@ -2316,6 +2355,16 @@ export default function BriefView() {
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [overflowOpen]);
+
+  // Close share popover on outside click
+  useEffect(() => {
+    if (!shareOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (shareRef.current && !shareRef.current.contains(e.target as Node)) setShareOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [shareOpen]);
 
   // Close rate popover on outside click
   useEffect(() => {
@@ -2549,12 +2598,10 @@ export default function BriefView() {
 
               {/* Action buttons */}
               {run.pdf_url && (
-                <a href={run.pdf_url} target="_blank" rel="noopener noreferrer" style={{
-                  ...btnStyle('secondary'), textDecoration: 'none',
-                }}>
-                  <FileText size={14} /> {run.market && run.market !== 'en' && run.market !== 'auto' && LANGUAGE_FLAGS[run.market]
-                    ? `${LANGUAGE_FLAGS[run.market]} PDF` : 'PDF'}
-                </a>
+                <button onClick={handleDownloadPdf} disabled={pdfLoading} style={btnStyle('secondary')}>
+                  <FileText size={14} /> {pdfLoading ? 'Loading...' : (run.market && run.market !== 'en' && run.market !== 'auto' && LANGUAGE_FLAGS[run.market]
+                    ? `${LANGUAGE_FLAGS[run.market]} PDF` : 'PDF')}
+                </button>
               )}
               <button onClick={() => setChatOpen(true)} style={btnStyle('secondary')}>
                 <svg width="18" height="18" viewBox="0 0 20 20" fill="none" style={{ display: 'block', flexShrink: 0 }}>
@@ -2569,12 +2616,56 @@ export default function BriefView() {
                 </svg>
                 {' '}Chat
               </button>
-              <button onClick={handleShare} disabled={shareStatus === 'loading'} style={{
-                ...btnStyle('secondary'),
-                color: shareStatus === 'copied' ? '#065f46' : COLORS.secondary,
-              }}>
-                <Share2 size={14} /> {shareStatus === 'copied' ? 'Link copied!' : 'Share'}
-              </button>
+              {/* Share button + popover */}
+              <div ref={shareRef} style={{ position: 'relative' }}>
+                <button onClick={() => { setShareOpen(o => !o); setShareStatus('idle'); setShareError(''); setShareEmail(''); }} style={btnStyle('secondary')}>
+                  <Share2 size={14} /> Share
+                </button>
+                {shareOpen && (
+                  <div style={{
+                    position: 'absolute', right: 0, top: '100%', marginTop: 4,
+                    background: '#1a1a1a', border: '1px solid #333', borderRadius: 8,
+                    padding: 16, width: 300, zIndex: 50, boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                  }}>
+                    {shareStatus === 'sent' ? (
+                      <div style={{ fontSize: 13, color: '#22c55e', lineHeight: 1.6 }}>
+                        Access link sent to <strong>{shareEmail}</strong>. They'll receive an email to view this brief.
+                      </div>
+                    ) : (
+                      <>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: '#ccc', marginBottom: 8 }}>
+                          Share with a Figma colleague
+                        </div>
+                        <input
+                          type="email"
+                          placeholder="name@figma.com"
+                          value={shareEmail}
+                          onChange={e => setShareEmail(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter') handleShare(); }}
+                          style={{
+                            width: '100%', padding: '8px 10px', fontSize: 13,
+                            background: '#111', border: '1px solid #444', borderRadius: 6,
+                            color: '#e5e5e5', outline: 'none', boxSizing: 'border-box',
+                          }}
+                        />
+                        {shareStatus === 'error' && (
+                          <div style={{ fontSize: 12, color: '#ef4444', marginTop: 6 }}>{shareError}</div>
+                        )}
+                        <button
+                          onClick={handleShare}
+                          disabled={shareStatus === 'sending' || !shareEmail.trim()}
+                          style={{
+                            ...btnStyle('primary'), width: '100%', marginTop: 8,
+                            justifyContent: 'center', opacity: shareStatus === 'sending' || !shareEmail.trim() ? 0.5 : 1,
+                          }}
+                        >
+                          <Send size={13} /> {shareStatus === 'sending' ? 'Sending...' : 'Send access link'}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
 
               {/* Rate button + popover */}
               {session && (
@@ -2788,9 +2879,9 @@ export default function BriefView() {
           }}>
             This brief was generated with an earlier pipeline version — some sections may be missing.
             {run.pdf_url && (
-              <a href={run.pdf_url} target="_blank" rel="noopener noreferrer" style={{ color: COLORS.purple, marginLeft: 8 }}>
-                Download full PDF <ExternalLink size={11} style={{ display: 'inline', verticalAlign: 'middle' }} />
-              </a>
+              <button onClick={handleDownloadPdf} disabled={pdfLoading} style={{ background: 'none', border: 'none', padding: 0, color: COLORS.purple, marginLeft: 8, cursor: 'pointer', fontSize: 'inherit', fontFamily: 'inherit' }}>
+                {pdfLoading ? 'Loading...' : 'Download full PDF'} <ExternalLink size={11} style={{ display: 'inline', verticalAlign: 'middle' }} />
+              </button>
             )}
           </div>
         )}
@@ -2808,11 +2899,9 @@ export default function BriefView() {
               The structured brief will appear here once the pipeline completes.
             </div>
             {run.pdf_url && (
-              <a href={run.pdf_url} target="_blank" rel="noopener noreferrer" style={{
-                ...btnStyle('primary'), textDecoration: 'none',
-              }}>
-                <FileText size={14} /> Download PDF
-              </a>
+              <button onClick={handleDownloadPdf} disabled={pdfLoading} style={btnStyle('primary')}>
+                <FileText size={14} /> {pdfLoading ? 'Loading...' : 'Download PDF'}
+              </button>
             )}
           </div>
         )}

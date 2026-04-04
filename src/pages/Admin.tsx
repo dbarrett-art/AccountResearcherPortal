@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { supabase, workerFetch } from '../lib/supabase';
+import { supabase, workerFetch, SUPABASE_URL, SUPABASE_ANON_KEY } from '../lib/supabase';
 import Layout from '../components/Layout';
 import StatusBadge from '../components/StatusBadge';
 import ProgressBar from '../components/ProgressBar';
@@ -659,7 +659,20 @@ function RunMonitorTab() {
                   {formatDuration(r.started_at, r.created_at, r.completed_at)}
                 </td>
                 <td style={{ padding: '11px 16px' }}>
-                  {r.pdf_url ? <a href={r.pdf_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>PDF</a> : '—'}
+                  {r.pdf_url ? <button
+                    onClick={async (e) => {
+                      const btn = e.currentTarget;
+                      btn.disabled = true;
+                      btn.textContent = '...';
+                      try {
+                        const res = await workerFetch(`/pdf/${r.id}`);
+                        if (!res.ok) throw new Error();
+                        const { signedUrl } = await res.json();
+                        window.open(signedUrl, '_blank');
+                      } catch { /* noop */ } finally { btn.disabled = false; btn.textContent = 'PDF'; }
+                    }}
+                    style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--accent)', fontSize: 'inherit', fontFamily: 'inherit' }}
+                  >PDF</button> : '—'}
                 </td>
                 <td style={{ padding: '11px 16px', whiteSpace: 'nowrap' }}>
                   {r.gha_run_id ? (
@@ -965,10 +978,8 @@ function HealthTab() {
 
       // Supabase REST
       try {
-        const sbUrl = 'https://yeraphdhllaylogqiqht.supabase.co';
-        const sbAnon = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InllcmFwaGRobGxheWxvZ3FpcWh0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ1MDY4NjQsImV4cCI6MjA5MDA4Mjg2NH0.5ZIIIoYU3-4ZoGX448LMyuKfu4ncmIUVwyNDImEsVTY';
-        const res = await fetch(`${sbUrl}/rest/v1/`, {
-          headers: { 'apikey': sbAnon, 'Authorization': `Bearer ${sbAnon}` },
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/`, {
+          headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
         });
         results.push({ name: 'Supabase', status: res.status < 500 ? 'ok' : 'error', checked: now, message: res.status < 500 ? 'Connected' : `HTTP ${res.status}` });
       } catch (e: any) {
@@ -991,10 +1002,8 @@ function HealthTab() {
 
       // Supabase Storage — check briefs bucket
       try {
-        const sbUrl = 'https://yeraphdhllaylogqiqht.supabase.co';
-        const sbAnon = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InllcmFwaGRobGxheWxvZ3FpcWh0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ1MDY4NjQsImV4cCI6MjA5MDA4Mjg2NH0.5ZIIIoYU3-4ZoGX448LMyuKfu4ncmIUVwyNDImEsVTY';
-        const res = await fetch(`${sbUrl}/storage/v1/bucket/briefs`, {
-          headers: { 'apikey': sbAnon, 'Authorization': `Bearer ${sbAnon}` },
+        const res = await fetch(`${SUPABASE_URL}/storage/v1/bucket/briefs`, {
+          headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
         });
         results.push({ name: 'Supabase Storage', status: res.ok ? 'ok' : 'error', checked: now, message: res.ok ? 'briefs bucket accessible' : `HTTP ${res.status}` });
       } catch (e: any) {

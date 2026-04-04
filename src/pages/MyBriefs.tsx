@@ -329,9 +329,23 @@ export default function MyBriefs() {
                         </button>
                       )}
                       {run.pdf_url ? (
-                        <a href={run.pdf_url} target="_blank" rel="noopener noreferrer" title="Download PDF">
+                        <button
+                          title="Download PDF"
+                          onClick={async (e) => {
+                            e.preventDefault();
+                            const btn = e.currentTarget;
+                            btn.disabled = true;
+                            try {
+                              const res = await workerFetch(`/pdf/${run.id}`);
+                              if (!res.ok) throw new Error();
+                              const { signedUrl } = await res.json();
+                              window.open(signedUrl, '_blank');
+                            } catch { /* noop */ } finally { btn.disabled = false; }
+                          }}
+                          style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+                        >
                           <FileText size={16} style={{ color: 'var(--text-secondary)' }} />
-                        </a>
+                        </button>
                       ) : (
                         <span title="PDF not available"><FileText size={16} style={{ color: 'var(--text-disabled)' }} /></span>
                       )}

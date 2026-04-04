@@ -10,8 +10,7 @@ type BannerType = 'info' | 'warning' | 'error' | 'success';
 interface BannerState {
   type: BannerType;
   msg: string;
-  pdfUrl?: string;
-  excelUrl?: string;
+  runId?: string;
 }
 
 function normaliseUrl(input: string): string {
@@ -145,14 +144,13 @@ export default function Submit() {
           setBanner({
             type: 'info',
             msg: `Using cached brief (${data.age_days} days old).`,
-            pdfUrl: data.pdf_url,
-            excelUrl: data.excel_url,
+            runId: data.run_id,
           });
         } else if (data.cached && data.stale) {
           setBanner({
             type: 'warning',
             msg: `Brief is ${data.age_days} days old. Submit again for a fresh run.`,
-            pdfUrl: data.pdf_url,
+            runId: data.run_id,
           });
         } else {
           setBanner({ type: 'success', msg: 'Research running — usually ~5 minutes. Check My Briefs for updates.' });
@@ -268,20 +266,12 @@ export default function Submit() {
           <div style={{ marginTop: 16 }}>
             <Banner type={banner.type}>
               {banner.msg}
-              {(banner.pdfUrl || banner.excelUrl) && (
-                <div style={{ marginTop: 8, display: 'flex', gap: 12 }}>
-                  {banner.pdfUrl && (
-                    <a href={banner.pdfUrl} target="_blank" rel="noopener noreferrer"
-                      style={{ color: 'inherit', textDecoration: 'underline', fontSize: 13 }}>
-                      View PDF
-                    </a>
-                  )}
-                  {banner.excelUrl && (
-                    <a href={banner.excelUrl} target="_blank" rel="noopener noreferrer"
-                      style={{ color: 'inherit', textDecoration: 'underline', fontSize: 13 }}>
-                      Download Excel
-                    </a>
-                  )}
+              {banner.runId && (
+                <div style={{ marginTop: 8 }}>
+                  <a href={`#/briefs/${banner.runId}`}
+                    style={{ color: 'inherit', textDecoration: 'underline', fontSize: 13 }}>
+                    View Brief
+                  </a>
                 </div>
               )}
             </Banner>
