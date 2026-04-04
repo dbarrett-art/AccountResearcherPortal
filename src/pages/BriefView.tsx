@@ -439,8 +439,8 @@ function CitedProse({ text, sources, style, onCitationClick }: {
       parts.push(text.slice(lastIndex, match.index));
     }
     const n = parseInt(match[1], 10);
-    const idx = n - 1;
-    const src = sources?.[idx];
+    // Look up by citation_number first (new pipeline), fall back to array index (legacy)
+    const src = sources?.find((s: any) => s.citation_number === n) ?? sources?.[n - 1];
     const url = src ? (typeof src === 'string' ? src : (src?.url || src?.source || '')) : '';
 
     if (url && url.startsWith('http') && onCitationClick && src) {
@@ -449,7 +449,7 @@ function CitedProse({ text, sources, style, onCitationClick }: {
           <span
             role="button"
             tabIndex={0}
-            onClick={(e) => { e.stopPropagation(); onCitationClick(idx, src, e); }}
+            onClick={(e) => { e.stopPropagation(); onCitationClick(n - 1, src, e); }}
             style={{
               display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
               width: 18, height: 18, borderRadius: 4,
