@@ -1300,58 +1300,38 @@ function WhyFigmaSection({ pov, sources, feedbackNode, onCitationClick }: { pov:
         </div>
       )}
 
-      {/* Design infrastructure */}
+      {/* Design Infrastructure → Entry Point */}
       {di && (
-        <div style={{ marginTop: 8 }}>
-          {(() => {
-            const hasContent = (di.named_systems?.length > 0) || (di.confirmed_tools?.length > 0) || di.design_team_size;
-            if (!hasContent) return null;
-            return (
-              <>
-                <div style={{
-                  fontSize: 12, fontWeight: 700, color: COLORS.purple,
-                  textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10,
-                  fontFamily: FONTS.sans,
-                }}>Design Infrastructure</div>
+        (() => {
+          const hasConfirmedFigma = (di.confirmed_tools || []).some((t: string) =>
+            (typeof t === 'string' ? t : '').toLowerCase().includes('figma')
+          );
+          const namedSystem = (di.named_systems || [])[0];
+          const systemName = typeof namedSystem === 'string' ? namedSystem : namedSystem?.name;
+          const handoff = di.handoff_approach;
 
-                {di.named_systems?.length > 0 && (
-                  <div style={{ marginBottom: 12 }}>
-                    {di.named_systems.map((sys: any, i: number) => (
-                      <div key={i} style={{ fontSize: 15, color: COLORS.secondary, fontFamily: FONTS.sans, marginBottom: 4 }}>
-                        <strong style={{ color: COLORS.body }}>{sys.name}</strong>
-                        {sys.scope && <span> — {sys.scope}</span>}
-                        {sys.maturity && <span style={{ color: COLORS.tertiary }}> ({sys.maturity})</span>}
-                      </div>
-                    ))}
-                  </div>
-                )}
+          if (!hasConfirmedFigma && !systemName && !handoff) return null;
 
-                {di.confirmed_tools?.length > 0 && (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
-                    {di.confirmed_tools.map((tool: string, i: number) => (
-                      <span key={i} style={{
-                        fontSize: 12, padding: '3px 10px', borderRadius: 12,
-                        background: '#f3f0ff', color: COLORS.purple, fontWeight: 500,
-                        fontFamily: FONTS.sans,
-                      }}>{tool}</span>
-                    ))}
-                  </div>
-                )}
+          const parts: string[] = [];
+          if (hasConfirmedFigma) parts.push('Figma confirmed in active use');
+          if (systemName) parts.push(`Design system: ${systemName}`);
+          if (handoff) parts.push(handoff);
 
-                {di.design_team_size && (
-                  <div style={{ fontSize: 15, color: COLORS.secondary, fontFamily: FONTS.sans, marginBottom: 8 }}>
-                    <strong>Team size:</strong> {di.design_team_size}
-                  </div>
-                )}
-                {di.handoff_approach && (
-                  <div style={{ fontSize: 15, color: COLORS.secondary, fontFamily: FONTS.sans, marginBottom: 8 }}>
-                    <strong>Handoff:</strong> {di.handoff_approach}
-                  </div>
-                )}
-              </>
-            );
-          })()}
-        </div>
+          return (
+            <div style={{
+              fontSize: 13, color: COLORS.secondary, fontFamily: FONTS.sans,
+              marginTop: 12, paddingTop: 12, borderTop: `0.5px solid ${COLORS.borderLight}`,
+              lineHeight: 1.5,
+            }}>
+              <span style={{ fontWeight: 500, color: COLORS.tertiary, textTransform: 'uppercase', fontSize: 10, letterSpacing: '0.05em' }}>
+                Entry Point
+              </span>
+              {' — '}
+              {parts.join('. ')}
+              {parts.length > 0 && '.'}
+            </div>
+          );
+        })()
       )}
     </Section>
   );
