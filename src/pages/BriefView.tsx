@@ -232,7 +232,6 @@ function Section({
             {count}
           </span>
         )}
-        {feedbackNode}
         <ChevronDown size={16} style={{
           color: COLORS.faint,
           transform: open ? 'rotate(180deg)' : 'none',
@@ -242,6 +241,11 @@ function Section({
       {open && (
         <div style={{ padding: '12px 18px 16px', background: 'transparent' }}>
           {children}
+          {feedbackNode && (
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
+              {feedbackNode}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -665,17 +669,9 @@ function extractEmployeesFromProse(...texts: (string | undefined | null)[]): str
   return null;
 }
 
-function extractDesignOrgFromProse(...texts: (string | undefined | null)[]): string | null {
-  for (const text of texts) {
-    if (!text) continue;
-    const m = text.match(/(?:design\s+(?:team|org|organisation|organization|department|function))[^.]*?(?:of\s+)?(?:~|approximately |about |over |nearly |around )?([\d,]+\+?)/i)
-      || text.match(/([\d,]+\+?)\s*(?:designers?|UX\s+(?:designers?|researchers?))/i);
-    if (m) return m[1].trim();
-  }
-  return null;
-}
+/* extractDesignOrgFromProse removed — Design Org metric replaced by ARR/Whitespace in MetricsBar */
 
-function MetricsBar({ pov, personas }: { pov: any; hooksData?: any; personas?: any }) {
+function MetricsBar({ pov }: { pov: any; hooksData?: any; personas?: any }) {
   // Try structured fields first, then extract from prose
   const revenue = pov?.overview?.revenue || pov?.about?.revenue
     || extractMetricFromProse(pov?.about?.how_they_make_money, pov?.about?.what_they_do);
@@ -685,44 +681,32 @@ function MetricsBar({ pov, personas }: { pov: any; hooksData?: any; personas?: a
     || pov?.overview?.headcount
     || pov?.org_structure?.total_headcount
     || extractEmployeesFromProse(pov?.about?.what_they_do, pov?.about?.who_they_are, pov?.org_structure?.structure_summary, pov?.about?.how_they_make_money);
-  const designOrg = pov?.overview?.design_org_size
-    || pov?.org_structure?.design_team_size
-    || pov?.why_figma?.design_org?.estimated_size
-    || pov?.why_figma?.design_org?.team_size
-    || pov?.why_figma?.design_infrastructure?.design_team_size
-    || pov?.why_figma?.design_infrastructure?.team_size
-    || extractDesignOrgFromProse(
-        pov?.why_figma?.design_org?.notes,
-        pov?.why_figma?.primary_products?.[0]?.relevance,
-        pov?.about?.what_they_do,
-      );
-  const triggers = pov?.why_now?.triggers || [];
-  // Count contacts
-  const matrix = personas?.matrix;
-  let totalContacts = 0;
-  let ebCount = 0;
-  let champCount = 0;
-  if (matrix) {
-    for (const fn of ['design', 'engineering', 'product']) {
-      for (const tier of ['eb', 'champion', 'coach']) {
-        const count = matrix?.[fn]?.[tier]?.length || 0;
-        totalContacts += count;
-        if (tier === 'eb') ebCount += count;
-        if (tier === 'champion') champCount += count;
-      }
-    }
-  }
+
+  // Whitespace data
+  const ws = pov?.whitespace_section;
+  const currentArr = ws?.current_arr;
+  const gaps = ws?.key_gaps || {};
+  const devGapVal = (gaps.dev_mode?.gap || 0) * FIGMA_PRICES.devSeat * 12;
+  const designerGapVal = (gaps.full_seats_designers?.gap || 0) * FIGMA_PRICES.fullSeat * 12;
+  const pmGapVal = (gaps.make_pm?.gap || 0) * FIGMA_PRICES.fullSeat * 12;
+  const govVal = gaps.governance_plus?.value || 0;
+  const euVal = gaps.enterprise_upgrade?.eligible ? (gaps.enterprise_upgrade?.value || 0) : 0;
+  const services: any[] = (ws?.services_opportunities || []).filter((s: any) => s?.found);
+  const servicesTotal = services.length * 125000;
+  const totalWhitespace = ws ? devGapVal + designerGapVal + pmGapVal + govVal + euVal + servicesTotal : null;
+
+  const fmtDollar = (v: number | null | undefined) => {
+    if (v == null || isNaN(v)) return '\u2014';
+    if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
+    if (v >= 1_000) return `$${Math.round(v / 1_000)}k`;
+    return `$${Math.round(v).toLocaleString()}`;
+  };
 
   const items: { label: string; value: string }[] = [];
   if (revenue) items.push({ label: 'REVENUE', value: typeof revenue === 'string' ? revenue : `$${revenue}` });
   if (employees) items.push({ label: 'EMPLOYEES', value: typeof employees === 'number' ? employees.toLocaleString() : employees });
-  if (designOrg) items.push({ label: 'DESIGN ORG', value: typeof designOrg === 'number' ? `~${designOrg}` : designOrg });
-  if (triggers.length > 0) {
-    items.push({ label: 'TRIGGERS', value: `${triggers.length}` });
-  }
-  if (totalContacts > 0) {
-    items.push({ label: 'CONTACTS', value: `${totalContacts}` });
-  }
+  items.push({ label: 'ARR', value: fmtDollar(currentArr) });
+  items.push({ label: 'WHITESPACE', value: fmtDollar(totalWhitespace) });
 
   if (items.length === 0) return null;
 
@@ -2673,8 +2657,6 @@ export default function BriefView() {
   };
 
   const mainStyle: React.CSSProperties = {
-    maxWidth: 1200,
-    margin: '0 auto',
     paddingBottom: 64,
   };
 
@@ -2739,7 +2721,7 @@ export default function BriefView() {
         .sparkle-dot3 { animation: sparkle-dot 1.4s ease-in-out infinite 0.9s; }
       `}</style>
       <div style={{
-        paddingRight: chatOpen ? 300 : 0,
+        paddingRight: chatOpen ? 380 : 0,
         transition: 'padding-right 200ms ease',
         minHeight: '100vh',
       }}>
@@ -2775,12 +2757,6 @@ export default function BriefView() {
               <div style={{ flex: 1 }} />
 
               {/* Action buttons */}
-              {run.pdf_url && (
-                <button onClick={handleDownloadPdf} disabled={pdfLoading} style={btnStyle('secondary')}>
-                  <FileText size={14} /> {pdfLoading ? 'Loading...' : (run.market && run.market !== 'en' && run.market !== 'auto' && LANGUAGE_FLAGS[run.market]
-                    ? `${LANGUAGE_FLAGS[run.market]} PDF` : 'PDF')}
-                </button>
-              )}
               <button onClick={() => setChatOpen(true)} style={btnStyle('secondary')}>
                 <svg width="18" height="18" viewBox="0 0 20 20" fill="none" style={{ display: 'block', flexShrink: 0 }}>
                   {/* main star */}
@@ -2821,56 +2797,6 @@ export default function BriefView() {
               }} style={btnStyle('ghost')}>
                 <FileText size={14} /> Generate PSP
               </button>
-              {/* Share button + popover */}
-              <div ref={shareRef} style={{ position: 'relative' }}>
-                <button onClick={() => { setShareOpen(o => !o); setShareStatus('idle'); setShareError(''); setShareEmail(''); }} style={btnStyle('secondary')}>
-                  <Share2 size={14} /> Share
-                </button>
-                {shareOpen && (
-                  <div style={{
-                    position: 'absolute', right: 0, top: '100%', marginTop: 4,
-                    background: '#1a1a1a', border: '1px solid #333', borderRadius: 8,
-                    padding: 16, width: 300, zIndex: 50, boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-                  }}>
-                    {shareStatus === 'sent' ? (
-                      <div style={{ fontSize: 13, color: '#22c55e', lineHeight: 1.6 }}>
-                        Access link sent to <strong>{shareEmail}</strong>. They'll receive an email to view this brief.
-                      </div>
-                    ) : (
-                      <>
-                        <div style={{ fontSize: 12, fontWeight: 600, color: '#ccc', marginBottom: 8 }}>
-                          Share with a Figma colleague
-                        </div>
-                        <input
-                          type="email"
-                          placeholder="name@figma.com"
-                          value={shareEmail}
-                          onChange={e => setShareEmail(e.target.value)}
-                          onKeyDown={e => { if (e.key === 'Enter') handleShare(); }}
-                          style={{
-                            width: '100%', padding: '8px 10px', fontSize: 13,
-                            background: '#111', border: '1px solid #444', borderRadius: 6,
-                            color: '#e5e5e5', outline: 'none', boxSizing: 'border-box',
-                          }}
-                        />
-                        {shareStatus === 'error' && (
-                          <div style={{ fontSize: 12, color: '#ef4444', marginTop: 6 }}>{shareError}</div>
-                        )}
-                        <button
-                          onClick={handleShare}
-                          disabled={shareStatus === 'sending' || !shareEmail.trim()}
-                          style={{
-                            ...btnStyle('primary'), width: '100%', marginTop: 8,
-                            justifyContent: 'center', opacity: shareStatus === 'sending' || !shareEmail.trim() ? 0.5 : 1,
-                          }}
-                        >
-                          <Send size={13} /> {shareStatus === 'sending' ? 'Sending...' : 'Send access link'}
-                        </button>
-                      </>
-                    )}
-                  </div>
-                )}
-              </div>
 
               {/* Section feedback score pill */}
               {overallScoreText && (
@@ -2955,6 +2881,78 @@ export default function BriefView() {
                     borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
                     minWidth: 180, zIndex: 50, overflow: 'hidden',
                   }}>
+                    {/* Share — opens popover inline */}
+                    <div ref={shareRef} style={{ position: 'relative' }}>
+                      <button onClick={(e) => { e.stopPropagation(); setShareOpen(o => !o); setShareStatus('idle'); setShareError(''); setShareEmail(''); }}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+                          padding: '10px 14px', fontSize: 13, color: COLORS.secondary,
+                          background: 'none', border: 'none', cursor: 'pointer',
+                          fontFamily: FONTS.sans, borderBottom: `1px solid ${COLORS.borderLight}`,
+                          textAlign: 'left',
+                        }}>
+                        <Share2 size={14} /> Share
+                      </button>
+                      {shareOpen && (
+                        <div style={{
+                          position: 'absolute', right: '100%', top: 0, marginRight: 4,
+                          background: '#1a1a1a', border: '1px solid #333', borderRadius: 8,
+                          padding: 16, width: 300, zIndex: 50, boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                        }}>
+                          {shareStatus === 'sent' ? (
+                            <div style={{ fontSize: 13, color: '#22c55e', lineHeight: 1.6 }}>
+                              Access link sent to <strong>{shareEmail}</strong>. They'll receive an email to view this brief.
+                            </div>
+                          ) : (
+                            <>
+                              <div style={{ fontSize: 12, fontWeight: 600, color: '#ccc', marginBottom: 8 }}>
+                                Share with a Figma colleague
+                              </div>
+                              <input
+                                type="email"
+                                placeholder="name@figma.com"
+                                value={shareEmail}
+                                onChange={e => setShareEmail(e.target.value)}
+                                onKeyDown={e => { if (e.key === 'Enter') handleShare(); }}
+                                onClick={e => e.stopPropagation()}
+                                style={{
+                                  width: '100%', padding: '8px 10px', fontSize: 13,
+                                  background: '#111', border: '1px solid #444', borderRadius: 6,
+                                  color: '#e5e5e5', outline: 'none', boxSizing: 'border-box',
+                                }}
+                              />
+                              {shareStatus === 'error' && (
+                                <div style={{ fontSize: 12, color: '#ef4444', marginTop: 6 }}>{shareError}</div>
+                              )}
+                              <button
+                                onClick={handleShare}
+                                disabled={shareStatus === 'sending' || !shareEmail.trim()}
+                                style={{
+                                  ...btnStyle('primary'), width: '100%', marginTop: 8,
+                                  justifyContent: 'center', opacity: shareStatus === 'sending' || !shareEmail.trim() ? 0.5 : 1,
+                                }}
+                              >
+                                <Send size={13} /> {shareStatus === 'sending' ? 'Sending...' : 'Send access link'}
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    {/* Download PDF */}
+                    {run.pdf_url && (
+                      <button onClick={() => { handleDownloadPdf(); setOverflowOpen(false); }} disabled={pdfLoading}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+                          padding: '10px 14px', fontSize: 13, color: COLORS.secondary,
+                          background: 'none', border: 'none', cursor: 'pointer',
+                          fontFamily: FONTS.sans, borderBottom: `1px solid ${COLORS.borderLight}`,
+                          textAlign: 'left',
+                        }}>
+                        <FileText size={14} /> {pdfLoading ? 'Loading...' : (run.market && run.market !== 'en' && run.market !== 'auto' && LANGUAGE_FLAGS[run.market]
+                          ? `${LANGUAGE_FLAGS[run.market]} Download PDF` : 'Download PDF')}
+                      </button>
+                    )}
                     {run.excel_url && (
                       <a href={run.excel_url} target="_blank" rel="noopener noreferrer"
                         onClick={() => setOverflowOpen(false)}
