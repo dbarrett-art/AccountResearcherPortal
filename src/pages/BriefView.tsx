@@ -903,12 +903,12 @@ function ExpandableObjective({ objective, index, sources }: { objective: any; in
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
         {detail && <ItemChevron open={open} onClick={() => setOpen(o => !o)} />}
         <div style={{ flex: 1, cursor: detail ? 'pointer' : 'default' }} onClick={() => detail && setOpen(o => !o)}>
-          <CitedProse text={title} sources={sources} style={{ fontSize: 16, fontWeight: 500, lineHeight: 1.5 }} />
+          <CitedProse text={title} sources={sources} style={{ fontSize: 17, fontWeight: 500, lineHeight: 1.5 }} />
         </div>
       </div>
       {open && detail && (
         <div style={{ marginTop: 8, marginLeft: 32 }}>
-          <CitedProse text={detail} sources={sources} style={{ fontSize: 16, lineHeight: 1.65, color: COLORS.secondary }} />
+          <CitedProse text={detail} sources={sources} style={{ fontSize: 17, lineHeight: 1.65, color: COLORS.secondary }} />
         </div>
       )}
     </div>
