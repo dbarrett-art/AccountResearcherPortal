@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import Layout from '../components/Layout';
 import TableSkeleton from '../components/TableSkeleton';
 import usePageTitle from '../hooks/usePageTitle';
-import { ArrowLeft, FileText, X, ChevronDown, ExternalLink, Send, Trash2, Activity, Share2, RefreshCw, Paperclip, ClipboardList, Copy, Check, ThumbsUp } from 'lucide-react';
+import { ArrowLeft, FileText, X, ChevronDown, ExternalLink, Send, Trash2, Activity, Share2, RefreshCw, Paperclip, ClipboardList, Copy, Check } from 'lucide-react';
 import SectionFeedback from '../components/SectionFeedback';
 import DOMPurify from 'dompurify';
 
@@ -713,26 +713,25 @@ function MetricsBar({ pov }: { pov: any; hooksData?: any; personas?: any }) {
   return (
     <div style={{
       display: 'grid',
-      gridTemplateColumns: `repeat(${items.length}, 1fr)`,
-      gap: 1,
-      background: COLORS.border,
-      borderTop: `1px solid ${COLORS.border}`,
+      gridTemplateColumns: `repeat(4, 1fr)`,
+      gap: 8,
     }}>
       {items.map((item, i) => (
         <div key={i} style={{
-          background: '#fff',
-          padding: '14px 16px',
+          background: 'var(--color-background-secondary, #f5f5f0)',
+          borderRadius: 'var(--border-radius-md, 8px)',
+          padding: '10px 14px',
         }}>
           <div style={{
-            fontSize: 9, fontWeight: 600, letterSpacing: '0.07em',
-            textTransform: 'uppercase', color: COLORS.faint,
-            fontFamily: FONTS.sans, marginBottom: 3, textAlign: 'center',
+            fontSize: 11, letterSpacing: '0.05em',
+            textTransform: 'uppercase' as const, color: COLORS.tertiary,
+            fontFamily: FONTS.sans, marginBottom: 3,
           }}>
             {item.label}
           </div>
           <div style={{
-            fontSize: 22, fontWeight: 700, color: COLORS.heading,
-            fontFamily: FONTS.serif, textAlign: 'center',
+            fontSize: 16, fontWeight: 500, color: COLORS.heading,
+            fontFamily: FONTS.sans,
           }}>
             {item.value}
           </div>
@@ -2484,10 +2483,6 @@ export default function BriefView() {
   const hasAnyFeedback = Object.values(sectionFeedback).some(f => f.score !== 0);
   const showFeedbackBanner = !feedbackBannerDismissed && !hasAnyFeedback && timeOnPage >= 120 && scrolledPastMid;
 
-  // Overall score calculation
-  const ratedSections = Object.values(sectionFeedback).filter(f => f.score !== 0);
-  const thumbsUpCount = ratedSections.filter(f => f.score === 1).length;
-  const overallScoreText = ratedSections.length > 0 ? `${thumbsUpCount}/${ratedSections.length} sections rated positively` : null;
 
   // sparkle keyframes moved to inline <style> tag in JSX
 
@@ -2753,7 +2748,7 @@ export default function BriefView() {
           borderBottom: `1px solid ${COLORS.border}`,
           margin: '-32px -40px 24px',
         }}>
-          <div style={{ padding: '32px 40px 0' }}>
+          <div style={{ padding: '32px 40px 20px' }}>
             {/* Back link */}
             <button onClick={() => navigate('/my-briefs')} style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
@@ -2764,41 +2759,48 @@ export default function BriefView() {
               <ArrowLeft size={14} /> My Briefs
             </button>
 
-            {/* Title + badges + action buttons — single row */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16, flexWrap: 'wrap' }}>
-              <h1 style={{
-                fontFamily: FONTS.serif, fontSize: 30, fontWeight: 600,
-                margin: 0, letterSpacing: '-0.03em', color: COLORS.heading,
-              }}>
-                {pov?.company_name || run.company}
-              </h1>
+            {/* Part 1 — Company name + badges */}
+            <h1 style={{
+              fontFamily: FONTS.sans, fontSize: 20, fontWeight: 500,
+              margin: 0, color: COLORS.heading,
+            }}>
+              {pov?.company_name || run.company}
+            </h1>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, marginBottom: 16 }}>
+              <IcpBadge score={pov?.icp_fit?.score} size="small" />
               <AgeBadge createdAt={run.created_at} />
+            </div>
 
-              {/* Spacer */}
-              <div style={{ flex: 1 }} />
-
-              {/* Action buttons */}
+            {/* Part 2 — Button row */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
               <button onClick={() => setChatOpen(prev => !prev)} style={{
-                ...btnStyle('secondary'),
-                ...(chatOpen ? { background: '#f3f0ff', borderColor: '#7c3aed', color: '#7c3aed' } : {}),
+                display: 'flex', alignItems: 'center', gap: 6, padding: '6px 13px',
+                borderRadius: 'var(--border-radius-md, 8px)',
+                border: '0.5px solid var(--color-border-secondary, #d6d3d1)',
+                fontSize: 13, cursor: 'pointer', fontFamily: FONTS.sans,
+                background: chatOpen ? '#f3f0ff' : 'var(--color-background-secondary, #f5f5f0)',
+                color: chatOpen ? '#7c3aed' : COLORS.secondary,
+                ...(chatOpen ? { borderColor: '#7c3aed' } : {}),
               }}>
-                <svg width="18" height="18" viewBox="0 0 20 20" fill="none" style={{ display: 'block', flexShrink: 0 }}>
-                  {/* main star */}
-                  <path className="sparkle-main" d="M10 2.5 L11.3 7.2 L16.5 8.5 L11.3 9.8 L10 14.5 L8.7 9.8 L3.5 8.5 L8.7 7.2 Z" fill="#7F77DD"/>
-                  {/* top right dot */}
+                <svg width="14" height="14" viewBox="0 0 20 20" fill="none" style={{ display: 'block', flexShrink: 0 }}>
+                  <path className="sparkle-main" d="M10 2.5 L11.3 7.2 L16.5 8.5 L11.3 9.8 L10 14.5 L8.7 9.8 L3.5 8.5 L8.7 7.2 Z" fill={chatOpen ? '#7c3aed' : '#7F77DD'}/>
                   <circle className="sparkle-dot1" cx="16" cy="3" r="1.5" fill="#AFA9EC"/>
-                  {/* bottom left dot */}
                   <circle className="sparkle-dot2" cx="4" cy="15.5" r="1" fill="#CECBF6"/>
-                  {/* mid right dot */}
                   <circle className="sparkle-dot3" cx="17.5" cy="12" r="1" fill="#AFA9EC"/>
                 </svg>
-                {' '}Chat
+                Chat
               </button>
               <button onClick={() => {
                 setChatOpen(true);
                 reviewFileInputRef.current?.click();
-              }} style={btnStyle('secondary')}>
-                <ClipboardList size={14} /> Review Plan
+              }} style={{
+                display: 'flex', alignItems: 'center', gap: 6, padding: '6px 13px',
+                borderRadius: 'var(--border-radius-md, 8px)',
+                border: '0.5px solid var(--color-border-secondary, #d6d3d1)',
+                fontSize: 13, cursor: 'pointer', fontFamily: FONTS.sans,
+                background: 'transparent', color: COLORS.secondary,
+              }}>
+                <ClipboardList size={14} /> Review PSP
               </button>
               <input
                 ref={reviewFileInputRef}
@@ -2818,34 +2820,35 @@ export default function BriefView() {
               <button onClick={() => {
                 setToastMessage('Coming soon — Generate PSP will be available once we\'ve reviewed example plans.');
                 setTimeout(() => setToastMessage(null), 4000);
-              }} style={btnStyle('ghost')}>
+              }} style={{
+                display: 'flex', alignItems: 'center', gap: 6, padding: '6px 13px',
+                borderRadius: 'var(--border-radius-md, 8px)',
+                border: '0.5px solid var(--color-border-secondary, #d6d3d1)',
+                fontSize: 13, cursor: 'pointer', fontFamily: FONTS.sans,
+                background: 'transparent', color: COLORS.secondary,
+              }}>
                 <FileText size={14} /> Generate PSP
               </button>
 
-              {/* Section feedback score pill */}
-              {overallScoreText && (
-                <span style={{
-                  fontSize: 11, fontFamily: FONTS.sans, fontWeight: 500,
-                  color: '#065f46', background: '#ecfdf5',
-                  padding: '4px 10px', borderRadius: 20,
-                  display: 'flex', alignItems: 'center', gap: 4,
-                }}>
-                  <ThumbsUp size={11} /> {overallScoreText}
-                </span>
-              )}
+              {/* Vertical divider */}
+              <div style={{ width: 0.5, height: 18, background: 'var(--color-border-tertiary, #e7e5e4)' }} />
 
               {/* Rate button + popover */}
               {session && (
                 <div ref={rateRef} style={{ position: 'relative' }}>
                   <button onClick={() => setRateOpen(o => !o)} style={{
-                    ...btnStyle('secondary'),
+                    display: 'flex', alignItems: 'center', gap: 6, padding: '6px 13px',
+                    borderRadius: 'var(--border-radius-md, 8px)',
+                    border: '0.5px solid var(--color-border-secondary, #d6d3d1)',
+                    fontSize: 13, cursor: 'pointer', fontFamily: FONTS.sans,
+                    background: 'transparent',
                     color: rateSubmitted ? '#065f46' : COLORS.secondary,
                   }}>
-                    <span style={{ fontSize: 14 }}>{rateSubmitted ? '★' : '☆'}</span> {rateSubmitted ? 'Rated!' : 'Rate'}
+                    <span style={{ fontSize: 14 }}>{rateSubmitted ? '\u2605' : '\u2606'}</span> {rateSubmitted ? 'Rated!' : 'Rate'}
                   </button>
                   {rateOpen && !rateSubmitted && (
                     <div style={{
-                      position: 'absolute', right: 0, top: '100%', marginTop: 4,
+                      position: 'absolute', left: 0, top: '100%', marginTop: 4,
                       background: '#fff', border: `1px solid ${COLORS.border}`,
                       borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
                       padding: 16, minWidth: 260, zIndex: 50,
@@ -2894,7 +2897,11 @@ export default function BriefView() {
               {/* Overflow menu */}
               <div ref={overflowRef} style={{ position: 'relative' }}>
                 <button onClick={() => setOverflowOpen(o => !o)} style={{
-                  ...btnStyle('secondary'), padding: '6px 10px', minWidth: 0,
+                  display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px',
+                  borderRadius: 'var(--border-radius-md, 8px)',
+                  border: '0.5px solid var(--color-border-secondary, #d6d3d1)',
+                  fontSize: 13, cursor: 'pointer', fontFamily: FONTS.sans,
+                  background: 'transparent', color: COLORS.secondary, minWidth: 0,
                 }}>
                   {'\u22EF'}
                 </button>
@@ -3060,10 +3067,10 @@ export default function BriefView() {
                 )}
               </div>
             </div>
-          </div>
 
-          {/* MetricsBar — full bleed, inside header */}
-          {pov && <MetricsBar pov={pov} hooksData={hooksData} personas={personas} />}
+            {/* Part 3 — Stat cards */}
+            {pov && <MetricsBar pov={pov} hooksData={hooksData} personas={personas} />}
+          </div>
         </div>
 
         {/* Research Gaps warning — separate card below header */}
