@@ -838,28 +838,41 @@ function MetricsBar({ pov }: { pov: any; hooksData?: any; personas?: any }) {
 
   if (items.length === 0) return null;
 
+  const METRIC_ACCENTS = ['#7F77DD', '#1D9E75', '#378ADD', '#D85A30'];
+
   return (
     <div style={{
       display: 'grid',
-      gridTemplateColumns: `repeat(4, 1fr)`,
+      gridTemplateColumns: 'repeat(4, 1fr)',
       gap: 8,
     }}>
       {items.map((item, i) => (
         <div key={i} style={{
-          background: 'var(--color-background-secondary, #f5f5f0)',
-          borderRadius: 'var(--border-radius-md, 8px)',
-          padding: '10px 14px',
+          background: 'var(--color-background-primary)',
+          border: '0.5px solid var(--color-border-tertiary)',
+          borderTop: `3px solid ${METRIC_ACCENTS[i] || METRIC_ACCENTS[0]}`,
+          borderRadius: 'var(--border-radius-md)',
+          padding: '14px 16px',
+          textAlign: 'center' as const,
         }}>
           <div style={{
-            fontSize: 11, letterSpacing: '0.05em',
-            textTransform: 'uppercase' as const, color: COLORS.tertiary,
-            fontFamily: FONTS.sans, marginBottom: 3,
+            fontSize: 11,
+            color: 'var(--color-text-secondary)',
+            textTransform: 'uppercase' as const,
+            letterSpacing: '0.05em',
+            fontFamily: FONTS.sans,
+            marginBottom: 6,
+            textAlign: 'center' as const,
           }}>
             {item.label}
           </div>
           <div style={{
-            fontSize: 16, fontWeight: 500, color: COLORS.heading,
+            fontSize: 22,
+            fontWeight: 500,
+            color: 'var(--color-text-primary)',
             fontFamily: FONTS.sans,
+            textAlign: 'center' as const,
+            lineHeight: 1,
           }}>
             {item.value}
           </div>
