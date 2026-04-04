@@ -5,7 +5,8 @@ import { useAuth } from '../context/AuthContext';
 import Layout from '../components/Layout';
 import TableSkeleton from '../components/TableSkeleton';
 import usePageTitle from '../hooks/usePageTitle';
-import { ArrowLeft, FileText, Table, X, ChevronDown, ExternalLink, Send, Trash2, Activity, Share2, RefreshCw } from 'lucide-react';
+import { ArrowLeft, FileText, Table, X, ChevronDown, ExternalLink, Send, Trash2, Activity, Share2, RefreshCw, Paperclip, ClipboardList, Copy, Check, ThumbsUp } from 'lucide-react';
+import SectionFeedback from '../components/SectionFeedback';
 import DOMPurify from 'dompurify';
 
 /* ------------------------------------------------------------------ */
@@ -33,9 +34,19 @@ interface Brief {
   schema_version: number | null;
 }
 
+interface ChatAttachment {
+  type: 'pdf' | 'image';
+  mimeType: string;
+  filename: string;
+  data: string; // base64
+  file?: File; // original file for preview
+}
+
 interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
+  attachments?: ChatAttachment[];
+  reviewMode?: boolean;
 }
 
 const LANGUAGE_FLAGS: Record<string, string> = {
@@ -179,7 +190,7 @@ const isNoisySource = (url: string, title?: string) => {
 /* ------------------------------------------------------------------ */
 
 function Section({
-  title, accent, badge, count, defaultOpen = false, children,
+  title, accent, badge, count, defaultOpen = false, children, feedbackNode,
 }: {
   title: string;
   accent: string;
@@ -187,6 +198,7 @@ function Section({
   count?: string;
   defaultOpen?: boolean;
   children: React.ReactNode;
+  feedbackNode?: React.ReactNode;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
@@ -220,6 +232,7 @@ function Section({
             {count}
           </span>
         )}
+        {feedbackNode}
         <ChevronDown size={16} style={{
           color: COLORS.faint,
           transform: open ? 'rotate(180deg)' : 'none',
@@ -858,14 +871,14 @@ function stripMarkdownHeaders(text: string): string {
     .trim();
 }
 
-function AboutSection({ pov, sources }: { pov: any; sources: any[] }) {
+function AboutSection({ pov, sources, feedbackNode }: { pov: any; sources: any[]; feedbackNode?: React.ReactNode }) {
   const about = pov?.about;
   if (!about) return null;
 
   const cleanWhatTheyDo = about.what_they_do ? stripMarkdownHeaders(about.what_they_do) : null;
 
   return (
-    <Section title="About" accent={SECTION_ACCENTS.about}>
+    <Section title="About" accent={SECTION_ACCENTS.about} feedbackNode={feedbackNode}>
       {/* Narrative intro */}
       {(about.who_they_are || cleanWhatTheyDo) && (
         <CitedProse text={about.who_they_are || cleanWhatTheyDo} sources={sources} />
@@ -927,7 +940,7 @@ function ExpandableObjective({ objective, index }: { objective: any; index: numb
   );
 }
 
-function WhyAnythingSection({ pov, sources }: { pov: any; sources: any[] }) {
+function WhyAnythingSection({ pov, sources, feedbackNode }: { pov: any; sources: any[]; feedbackNode?: React.ReactNode }) {
   const wa = pov?.why_anything;
   if (!wa) return null;
   const objectives = wa.strategic_objectives || [];
@@ -937,6 +950,7 @@ function WhyAnythingSection({ pov, sources }: { pov: any; sources: any[] }) {
       title="Why Anything"
       accent={SECTION_ACCENTS.whyAnything}
       count={objectives.length > 0 ? `${objectives.length} objectives` : undefined}
+      feedbackNode={feedbackNode}
     >
       {/* Corporate strategy callout */}
       {wa.corporate_strategy && (
@@ -1046,12 +1060,12 @@ function TriggerBlock({ trigger, sources }: { trigger: any; sources?: any[] }) {
   );
 }
 
-function WhyNowSection({ pov, sources }: { pov: any; sources?: any[] }) {
+function WhyNowSection({ pov, sources, feedbackNode }: { pov: any; sources?: any[]; feedbackNode?: React.ReactNode }) {
   const triggers = pov?.why_now?.triggers || [];
   if (triggers.length === 0) return null;
 
   return (
-    <Section title="Why Now" accent={SECTION_ACCENTS.whyNow} count={`${triggers.length} triggers`}>
+    <Section title="Why Now" accent={SECTION_ACCENTS.whyNow} count={`${triggers.length} triggers`} feedbackNode={feedbackNode}>
       {pov?.why_now?.urgency_rationale && (
         <div style={{ marginBottom: 16 }}>
           <CitedProse text={pov.why_now.urgency_rationale} sources={sources} />
@@ -1100,7 +1114,7 @@ function ExpandableProduct({ product }: { product: any }) {
   );
 }
 
-function WhyFigmaSection({ pov, sources }: { pov: any; sources: any[] }) {
+function WhyFigmaSection({ pov, sources, feedbackNode }: { pov: any; sources: any[]; feedbackNode?: React.ReactNode }) {
   const wf = pov?.why_figma;
   if (!wf) return null;
   const products = wf.primary_products || [];
@@ -1108,7 +1122,7 @@ function WhyFigmaSection({ pov, sources }: { pov: any; sources: any[] }) {
   const painSignals = wf.pain_signals || wf.what_they_say || [];
 
   return (
-    <Section title="Why Figma" accent={SECTION_ACCENTS.whyFigma} count={products.length > 0 ? `${products.length} products` : undefined}>
+    <Section title="Why Figma" accent={SECTION_ACCENTS.whyFigma} count={products.length > 0 ? `${products.length} products` : undefined} feedbackNode={feedbackNode}>
       {/* What They're Saying — exec quotes before strongest angle */}
       {painSignals.length > 0 && (
         <div style={{ marginBottom: 16 }}>
@@ -1280,7 +1294,7 @@ const FIGMA_PRICES = {
   collabSeat: 5,   // per seat per month (not used in display but keep for reference)
 };
 
-function WhitespaceSection({ pov }: { pov: any }) {
+function WhitespaceSection({ pov, feedbackNode }: { pov: any; feedbackNode?: React.ReactNode }) {
   if (pov?._meta?.whitespace_available === false || !pov?.whitespace_section) return null;
 
   const ws = pov.whitespace_section;
@@ -1313,7 +1327,7 @@ function WhitespaceSection({ pov }: { pov: any }) {
   };
 
   return (
-    <Section title="Whitespace & Opportunity" accent={COLORS.purple} defaultOpen={false}>
+    <Section title="Whitespace & Opportunity" accent={COLORS.purple} defaultOpen={false} feedbackNode={feedbackNode}>
       {/* Metrics row */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 18, flexWrap: 'wrap' }}>
         {[
@@ -1452,7 +1466,7 @@ function WhitespaceSection({ pov }: { pov: any }) {
   );
 }
 
-function ResearchDeepDiveSection({ pov }: { pov: any }) {
+function ResearchDeepDiveSection({ pov, feedbackNode }: { pov: any; feedbackNode?: React.ReactNode }) {
   const [expanded, setExpanded] = useState(false);
   const intel = pov?.distilled_intel || pov?.research_deep_dive;
   if (!intel) return null;
@@ -1464,7 +1478,7 @@ function ResearchDeepDiveSection({ pov }: { pov: any }) {
 
   if (sections.length > 0) {
     return (
-      <Section title="Research Deep Dive" accent={SECTION_ACCENTS.researchDeepDive} count={`${sections.length} sections`}>
+      <Section title="Research Deep Dive" accent={SECTION_ACCENTS.researchDeepDive} count={`${sections.length} sections`} feedbackNode={feedbackNode}>
         {sections.map((section: string, i: number) => {
           const lines = section.split('\n');
           const heading = lines[0].trim();
@@ -1477,7 +1491,7 @@ function ResearchDeepDiveSection({ pov }: { pov: any }) {
 
   // Fallback: render as truncated prose
   return (
-    <Section title="Research Deep Dive" accent={SECTION_ACCENTS.researchDeepDive}>
+    <Section title="Research Deep Dive" accent={SECTION_ACCENTS.researchDeepDive} feedbackNode={feedbackNode}>
       <Trunc lines={10} expanded={expanded} onToggle={() => setExpanded(e => !e)}>
         <div style={{ fontSize: 16, lineHeight: 1.7, color: COLORS.secondary, fontFamily: FONTS.sans }}>
           <IntelMarkdown text={cleanIntel} />
@@ -1491,7 +1505,7 @@ function ResearchDeepDiveSection({ pov }: { pov: any }) {
 /*  Section: Value Pyramid                                             */
 /* ------------------------------------------------------------------ */
 
-function ValuePyramidSection({ pyramid }: { pyramid: any }) {
+function ValuePyramidSection({ pyramid, feedbackNode }: { pyramid: any; feedbackNode?: React.ReactNode }) {
   if (!pyramid) return null;
   const objectives = pyramid.corporate_objectives || [];
   const strategies = pyramid.business_strategies || [];
@@ -1507,7 +1521,7 @@ function ValuePyramidSection({ pyramid }: { pyramid: any }) {
   ];
 
   return (
-    <Section title="Value Pyramid" accent={SECTION_ACCENTS.valuePyramid} count={`${totalItems} items`}>
+    <Section title="Value Pyramid" accent={SECTION_ACCENTS.valuePyramid} count={`${totalItems} items`} feedbackNode={feedbackNode}>
       {layers.map((layer, li) => {
         if (layer.items.length === 0) return null;
         return (
@@ -1911,7 +1925,7 @@ function ContactCard({ contact }: { contact: any }) {
   );
 }
 
-function ContactsSection({ personas, hooksData }: { personas: any; hooksData?: any }) {
+function ContactsSection({ personas, hooksData, feedbackNode }: { personas: any; hooksData?: any; feedbackNode?: React.ReactNode }) {
   const matrix = personas?.matrix;
   if (!matrix) return null;
 
@@ -1959,6 +1973,7 @@ function ContactsSection({ personas, hooksData }: { personas: any; hooksData?: a
       title="Who to Contact"
       accent={SECTION_ACCENTS.contacts}
       count={`${unique.length} contacts`}
+      feedbackNode={feedbackNode}
     >
       {rfm && (
         <div style={{
@@ -2157,11 +2172,17 @@ function RunHistory({ currentRunId, company }: { currentRunId: string; company: 
 /*  Brief content (all sections assembled)                             */
 /* ------------------------------------------------------------------ */
 
-function BriefContent({ pov, personas, hooksData, valuePyramid }: {
+function BriefContent({ pov, personas, hooksData, valuePyramid, sectionFeedback, onSectionFeedback }: {
   pov: any; personas: any; hooksData?: any; valuePyramid?: any;
+  sectionFeedback: Record<string, { score: number; comment: string }>;
+  onSectionFeedback: (key: string, score: number, comment: string) => void;
 }) {
   const allSources = pov?.sources_used || [];
   void ProofPointsSection; // Retained but removed from render tree (2026-04-01 reframe)
+
+  const fb = (key: string) => (
+    <SectionFeedback sectionKey={key} feedback={sectionFeedback[key]} onChange={onSectionFeedback} />
+  );
 
   return (
     <>
@@ -2169,28 +2190,28 @@ function BriefContent({ pov, personas, hooksData, valuePyramid }: {
       <IcpSection pov={pov} sources={allSources} />
 
       {/* 2. About */}
-      <AboutSection pov={pov} sources={allSources} />
+      <AboutSection pov={pov} sources={allSources} feedbackNode={fb('about')} />
 
       {/* 3. Why Anything */}
-      <WhyAnythingSection pov={pov} sources={allSources} />
+      <WhyAnythingSection pov={pov} sources={allSources} feedbackNode={fb('why_anything')} />
 
       {/* 4. Why Now */}
-      <WhyNowSection pov={pov} sources={allSources} />
+      <WhyNowSection pov={pov} sources={allSources} feedbackNode={fb('why_now')} />
 
       {/* 5. Why Figma */}
-      <WhyFigmaSection pov={pov} sources={allSources} />
+      <WhyFigmaSection pov={pov} sources={allSources} feedbackNode={fb('why_figma')} />
 
       {/* 5.5 Whitespace & Opportunity */}
-      <WhitespaceSection pov={pov} />
+      <WhitespaceSection pov={pov} feedbackNode={fb('whitespace')} />
 
       {/* 6. Value Pyramid */}
-      <ValuePyramidSection pyramid={valuePyramid} />
+      <ValuePyramidSection pyramid={valuePyramid} feedbackNode={fb('value_pyramid')} />
 
       {/* 8. Digital Products */}
       <DigitalProductsSection pov={pov} />
 
       {/* 9. Who to Contact */}
-      <ContactsSection personas={personas} hooksData={hooksData} />
+      <ContactsSection personas={personas} hooksData={hooksData} feedbackNode={fb('contact_matrix')} />
 
       {/* 10. Job Signals */}
       <JobSignalsSection pov={pov} />
@@ -2202,7 +2223,7 @@ function BriefContent({ pov, personas, hooksData, valuePyramid }: {
       <TechPartnersSection pov={pov} />
 
       {/* 13. Research Deep Dive */}
-      <ResearchDeepDiveSection pov={pov} />
+      <ResearchDeepDiveSection pov={pov} feedbackNode={fb('research_deep_dive')} />
 
       {/* Proof Points — removed from spec (2026-04-01 reframe) */}
 
@@ -2254,6 +2275,24 @@ export default function BriefView() {
   const [rateSubmitting, setRateSubmitting] = useState(false);
   const rateRef = useRef<HTMLDivElement>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [pendingAttachments, setPendingAttachments] = useState<ChatAttachment[]>([]);
+  const [reviewMode, setReviewMode] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Section feedback state
+  const [sectionFeedback, setSectionFeedback] = useState<Record<string, { score: number; comment: string }>>({});
+  const sectionFeedbackRef = useRef(sectionFeedback);
+  sectionFeedbackRef.current = sectionFeedback;
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [feedbackBannerDismissed, setFeedbackBannerDismissed] = useState(() => {
+    const dismissed = localStorage.getItem('feedback_banner_dismissed');
+    return dismissed ? Date.now() - parseInt(dismissed) < 7 * 24 * 60 * 60 * 1000 : false;
+  });
+  const [timeOnPage, setTimeOnPage] = useState(0);
+  const [scrolledPastMid, setScrolledPastMid] = useState(false);
+  const [emailCopied, setEmailCopied] = useState<number | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const reviewFileInputRef = useRef<HTMLInputElement>(null);
 
 
   const handleRunInEnglish = async () => {
@@ -2390,6 +2429,61 @@ export default function BriefView() {
     setRateSubmitting(false);
   };
 
+  // Section feedback handler — debounced auto-save
+  const handleSectionFeedback = (key: string, score: number, comment: string) => {
+    const updated = { ...sectionFeedbackRef.current, [key]: { score, comment } };
+    // Remove entries reset to 0 with no comment
+    if (score === 0 && !comment) delete updated[key];
+    setSectionFeedback(updated);
+
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(async () => {
+      if (!run_id) return;
+      const rated = Object.values(updated).filter(f => f.score !== 0);
+      const thumbsUp = rated.filter(f => f.score === 1).length;
+      const overallScore = rated.length > 0 ? thumbsUp / rated.length : null;
+      try {
+        await workerFetch(`/feedback/${run_id}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            section_feedback: updated,
+            overall_score: overallScore,
+            rating: rating || null,
+            accuracy_rating: accuracy || null,
+            usefulness_rating: usefulness || null,
+            comment: rateComment || null,
+          }),
+        });
+      } catch { /* silent */ }
+    }, 1000);
+  };
+
+  // Time-on-page counter for feedback banner
+  useEffect(() => {
+    const interval = setInterval(() => setTimeOnPage(t => t + 1), 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Scroll-past-midpoint detection for feedback banner
+  useEffect(() => {
+    const handler = () => {
+      const scrolled = window.scrollY + window.innerHeight;
+      const mid = document.documentElement.scrollHeight / 2;
+      if (scrolled >= mid) setScrolledPastMid(true);
+    };
+    window.addEventListener('scroll', handler, { passive: true });
+    return () => window.removeEventListener('scroll', handler);
+  }, []);
+
+  const hasAnyFeedback = Object.values(sectionFeedback).some(f => f.score !== 0);
+  const showFeedbackBanner = !feedbackBannerDismissed && !hasAnyFeedback && timeOnPage >= 120 && scrolledPastMid;
+
+  // Overall score calculation
+  const ratedSections = Object.values(sectionFeedback).filter(f => f.score !== 0);
+  const thumbsUpCount = ratedSections.filter(f => f.score === 1).length;
+  const overallScoreText = ratedSections.length > 0 ? `${thumbsUpCount}/${ratedSections.length} sections rated positively` : null;
+
   // sparkle keyframes moved to inline <style> tag in JSX
 
   useEffect(() => {
@@ -2426,17 +2520,95 @@ export default function BriefView() {
   const personas = brief?.personas_json;
   const hooksData = brief?.hooks_json;
 
-  const sendMessage = async (content: string) => {
-    if (!content.trim() || streaming) return;
+  const toBase64 = (file: File): Promise<string> => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve((reader.result as string).split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 
-    const userMessage: ChatMessage = { role: 'user', content };
+  const handleFileSelect = async (files: FileList | null) => {
+    if (!files) return;
+    const fileArr = Array.from(files);
+    const errors: string[] = [];
+
+    // Enforce limits
+    const totalCount = pendingAttachments.length + fileArr.length;
+    if (totalCount > 5) { errors.push('Max 5 attachments total.'); }
+
+    const validFiles: ChatAttachment[] = [];
+    for (const file of fileArr.slice(0, 5 - pendingAttachments.length)) {
+      if (file.type === 'application/pdf' && file.size > 10 * 1024 * 1024) {
+        errors.push(`${file.name}: PDF must be under 10MB.`);
+        continue;
+      }
+      if (file.type.startsWith('image/') && file.size > 5 * 1024 * 1024) {
+        errors.push(`${file.name}: Image must be under 5MB.`);
+        continue;
+      }
+      if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
+        errors.push(`${file.name}: Only PDF and image files are supported.`);
+        continue;
+      }
+      try {
+        const data = await toBase64(file);
+        validFiles.push({
+          type: file.type === 'application/pdf' ? 'pdf' : 'image',
+          mimeType: file.type,
+          filename: file.name,
+          data,
+          file,
+        });
+      } catch {
+        errors.push(`${file.name}: Failed to read file.`);
+      }
+    }
+
+    if (errors.length > 0) {
+      setToastMessage(errors.join(' '));
+      setTimeout(() => setToastMessage(null), 4000);
+    }
+    if (validFiles.length > 0) {
+      setPendingAttachments(prev => [...prev, ...validFiles]);
+    }
+  };
+
+  const removeAttachment = (index: number) => {
+    setPendingAttachments(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const sendMessage = async (content: string) => {
+    if ((!content.trim() && pendingAttachments.length === 0) || streaming) return;
+
+    const currentAttachments = pendingAttachments.length > 0 ? [...pendingAttachments] : undefined;
+    const currentReviewMode = reviewMode;
+    const userMessage: ChatMessage = { role: 'user', content, attachments: currentAttachments, reviewMode: currentReviewMode || undefined };
     const newMessages = [...chatMessages, userMessage];
     setChatMessages(newMessages);
     setChatInput('');
+    setPendingAttachments([]);
+    setReviewMode(false);
     setStreaming(true);
 
-    const assistantMessage: ChatMessage = { role: 'assistant', content: '' };
+    const assistantMessage: ChatMessage = { role: 'assistant', content: '', reviewMode: currentReviewMode || undefined };
     setChatMessages([...newMessages, assistantMessage]);
+
+    // Build messages for API — convert attachments to content blocks for the current message
+    const apiMessages = newMessages.map(m => {
+      if (m.attachments && m.attachments.length > 0) {
+        const content: any[] = [];
+        for (const att of m.attachments) {
+          if (att.type === 'pdf') {
+            content.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: att.data } });
+          } else {
+            content.push({ type: 'image', source: { type: 'base64', media_type: att.mimeType, data: att.data } });
+          }
+        }
+        content.push({ type: 'text', text: m.content || '(attached files)' });
+        return { role: m.role, content };
+      }
+      return { role: m.role, content: m.content };
+    });
 
     try {
       const res = await workerFetch('/chat', {
@@ -2445,7 +2617,9 @@ export default function BriefView() {
         body: JSON.stringify({
           run_id,
           market: run?.market ?? null,
-          messages: newMessages.map(m => ({ role: m.role, content: m.content })),
+          messages: apiMessages,
+          reviewMode: currentReviewMode || undefined,
+          attachments: currentAttachments?.map(a => ({ type: a.type, mimeType: a.mimeType, filename: a.filename, data: a.data })),
         }),
       });
 
@@ -2544,6 +2718,10 @@ export default function BriefView() {
   return (
     <Layout bgColor={COLORS.bg}>
       <style>{`
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateX(-50%) translateY(8px); }
+          to { opacity: 1; transform: translateX(-50%) translateY(0); }
+        }
         @keyframes sparkle-spin {
           0%   { transform: rotate(0deg) scale(1);    opacity: 1; }
           25%  { transform: rotate(15deg) scale(1.15); opacity: 0.8; }
@@ -2616,6 +2794,33 @@ export default function BriefView() {
                 </svg>
                 {' '}Chat
               </button>
+              <button onClick={() => {
+                setChatOpen(true);
+                reviewFileInputRef.current?.click();
+              }} style={btnStyle('secondary')}>
+                <ClipboardList size={14} /> Review Plan
+              </button>
+              <input
+                ref={reviewFileInputRef}
+                type="file"
+                accept="application/pdf,image/*"
+                multiple
+                style={{ display: 'none' }}
+                onChange={async (e) => {
+                  if (e.target.files && e.target.files.length > 0) {
+                    await handleFileSelect(e.target.files);
+                    setChatInput('Please review this PSP against the brief.');
+                    setReviewMode(true);
+                  }
+                  e.target.value = '';
+                }}
+              />
+              <button onClick={() => {
+                setToastMessage('Coming soon — Generate PSP will be available once we\'ve reviewed example plans.');
+                setTimeout(() => setToastMessage(null), 4000);
+              }} style={btnStyle('ghost')}>
+                <FileText size={14} /> Generate PSP
+              </button>
               {/* Share button + popover */}
               <div ref={shareRef} style={{ position: 'relative' }}>
                 <button onClick={() => { setShareOpen(o => !o); setShareStatus('idle'); setShareError(''); setShareEmail(''); }} style={btnStyle('secondary')}>
@@ -2666,6 +2871,18 @@ export default function BriefView() {
                   </div>
                 )}
               </div>
+
+              {/* Section feedback score pill */}
+              {overallScoreText && (
+                <span style={{
+                  fontSize: 11, fontFamily: FONTS.sans, fontWeight: 500,
+                  color: '#065f46', background: '#ecfdf5',
+                  padding: '4px 10px', borderRadius: 20,
+                  display: 'flex', alignItems: 'center', gap: 4,
+                }}>
+                  <ThumbsUp size={11} /> {overallScoreText}
+                </span>
+              )}
 
               {/* Rate button + popover */}
               {session && (
@@ -2911,10 +3128,54 @@ export default function BriefView() {
           <BriefContent
             pov={pov} personas={personas} hooksData={hooksData}
             valuePyramid={brief?.value_pyramid || pov?.value_pyramid}
+            sectionFeedback={sectionFeedback}
+            onSectionFeedback={handleSectionFeedback}
           />
         )}
       </div>
       </div>
+
+      {/* ============ Feedback prompt banner ============ */}
+      {showFeedbackBanner && (
+        <div style={{
+          position: 'fixed', bottom: 20, left: '50%', transform: 'translateX(-50%)',
+          background: '#fffbeb', border: '1px solid #fbbf24', borderRadius: 10,
+          padding: '12px 20px', display: 'flex', alignItems: 'center', gap: 12,
+          boxShadow: '0 4px 16px rgba(0,0,0,0.08)', zIndex: 80,
+          fontFamily: FONTS.sans, fontSize: 14, color: '#92400e',
+          maxWidth: 520,
+        }}>
+          <span style={{ flex: 1 }}>Finding this brief useful? Let us know what's working.</span>
+          <button
+            onClick={() => {
+              // Scroll to first section with feedback thumbs
+              const firstSection = document.querySelector('[data-section-feedback]');
+              if (firstSection) firstSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              setFeedbackBannerDismissed(true);
+              localStorage.setItem('feedback_banner_dismissed', String(Date.now()));
+            }}
+            style={{
+              background: '#f59e0b', color: '#fff', border: 'none',
+              padding: '6px 14px', borderRadius: 6, cursor: 'pointer',
+              fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap',
+            }}
+          >
+            Rate sections
+          </button>
+          <button
+            onClick={() => {
+              setFeedbackBannerDismissed(true);
+              localStorage.setItem('feedback_banner_dismissed', String(Date.now()));
+            }}
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              color: '#92400e', padding: 4, fontSize: 16, lineHeight: 1,
+            }}
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
 
       {/* ============ Chat panel ============ */}
       {chatOpen && (
@@ -2971,29 +3232,90 @@ export default function BriefView() {
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 {chatMessages.map((msg, i) => (
-                  <div key={i} style={{
-                    display: 'flex',
-                    flexDirection: msg.role === 'user' ? 'row-reverse' : 'row',
-                    gap: 8,
-                  }}>
+                  <div key={i}>
                     <div style={{
-                      maxWidth: '85%', padding: '8px 12px',
-                      borderRadius: msg.role === 'user' ? '12px 12px 4px 12px' : '12px 12px 12px 4px',
-                      background: msg.role === 'user' ? COLORS.purple : '#f5f5f0',
-                      fontSize: 13, lineHeight: 1.5,
-                      color: msg.role === 'user' ? '#fff' : COLORS.body,
-                      whiteSpace: 'pre-wrap',
+                      display: 'flex',
+                      flexDirection: msg.role === 'user' ? 'row-reverse' : 'row',
+                      gap: 8,
                     }}>
-                      {msg.content}
-                      {streaming && i === chatMessages.length - 1 && msg.role === 'assistant' && (
-                        <span style={{
-                          display: 'inline-block', width: 2, height: 14,
-                          background: COLORS.faint, marginLeft: 2,
-                          animation: 'pulse-dot 1s ease-in-out infinite',
-                          verticalAlign: 'text-bottom',
-                        }} />
-                      )}
+                      <div style={{
+                        maxWidth: '85%', padding: '8px 12px',
+                        borderRadius: msg.role === 'user' ? '12px 12px 4px 12px' : '12px 12px 12px 4px',
+                        background: msg.role === 'user' ? COLORS.purple : '#f5f5f0',
+                        fontSize: 13, lineHeight: 1.5,
+                        color: msg.role === 'user' ? '#fff' : COLORS.body,
+                        whiteSpace: 'pre-wrap',
+                      }}>
+                        {/* Attachment chips in user messages */}
+                        {msg.role === 'user' && msg.attachments && msg.attachments.length > 0 && (
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 6 }}>
+                            {msg.attachments.map((att, j) => (
+                              <span key={j} style={{
+                                display: 'inline-flex', alignItems: 'center', gap: 4,
+                                background: 'rgba(255,255,255,0.2)', borderRadius: 4,
+                                padding: '2px 8px', fontSize: 11,
+                              }}>
+                                {att.type === 'pdf' ? <FileText size={11} /> : null}
+                                {att.type === 'image' && att.file ? (
+                                  <img src={URL.createObjectURL(att.file)} alt="" style={{ height: 20, borderRadius: 2 }} />
+                                ) : null}
+                                {att.filename}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        {msg.content}
+                        {streaming && i === chatMessages.length - 1 && msg.role === 'assistant' && (
+                          <span style={{
+                            display: 'inline-block', width: 2, height: 14,
+                            background: COLORS.faint, marginLeft: 2,
+                            animation: 'pulse-dot 1s ease-in-out infinite',
+                            verticalAlign: 'text-bottom',
+                          }} />
+                        )}
+                      </div>
                     </div>
+                    {/* Copy as Email button for review mode responses */}
+                    {msg.role === 'assistant' && msg.reviewMode && msg.content && !streaming && (
+                      <div style={{ display: 'flex', justifyContent: 'flex-start', marginTop: 6 }}>
+                        <button
+                          onClick={() => {
+                            const accountName = pov?.company_name || run.company;
+                            const plain = msg.content
+                              .replace(/\*\*([^*]+)\*\*/g, '$1')
+                              .replace(/##\s*/g, '')
+                              .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+                              .replace(/^[-*]\s/gm, '- ')
+                              .replace(/`([^`]+)`/g, '$1');
+                            // Extract sections
+                            const workingMatch = plain.match(/What'?s working\n([\s\S]*?)(?=Areas to develop|$)/i);
+                            const areasMatch = plain.match(/Areas to develop\n([\s\S]*?)(?=Priorities before|$)/i);
+                            const prioritiesMatch = plain.match(/Priorities before[^\n]*\n([\s\S]*?)$/i);
+                            const working = workingMatch ? workingMatch[1].trim() : '';
+                            const areas = areasMatch ? areasMatch[1].trim() : '';
+                            const priorities = prioritiesMatch ? prioritiesMatch[1].trim() : '';
+                            const priorityList = priorities
+                              .split('\n')
+                              .filter(l => l.trim())
+                              .map((l, idx) => `${idx + 1}. ${l.replace(/^\d+\.\s*/, '').replace(/^[-*]\s*/, '')}`)
+                              .slice(0, 3)
+                              .join('\n');
+                            const email = `Subject: PSP Review — ${accountName}\n\nHi [Rep Name],\n\nHere's a summary of my coaching notes on your ${accountName} PSP ahead of our next session.\n\n${working}\n\n${areas}\n\nBefore our next session:\n${priorityList}\n\nHappy to dig into any of these together.\n\n${userProfile?.name || '[Manager Name]'}`;
+                            navigator.clipboard.writeText(email);
+                            setEmailCopied(i);
+                            setTimeout(() => setEmailCopied(null), 2000);
+                          }}
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 4,
+                            background: 'none', border: `1px solid ${COLORS.border}`,
+                            borderRadius: 4, padding: '4px 10px', fontSize: 11,
+                            color: COLORS.secondary, cursor: 'pointer', fontFamily: FONTS.sans,
+                          }}
+                        >
+                          {emailCopied === i ? <><Check size={11} /> Copied</> : <><Copy size={11} /> Copy as email</>}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ))}
                 <div ref={messagesEndRef} />
@@ -3003,7 +3325,59 @@ export default function BriefView() {
 
           {/* Input */}
           <div style={{ padding: '12px 18px', borderTop: `1px solid ${COLORS.border}`, flexShrink: 0 }}>
+            {/* Attachment preview strip */}
+            {pendingAttachments.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+                {pendingAttachments.map((att, i) => (
+                  <div key={i} style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 4,
+                    background: '#f5f5f0', border: `1px solid ${COLORS.border}`,
+                    borderRadius: 6, padding: '4px 8px', fontSize: 12, color: COLORS.body,
+                  }}>
+                    {att.type === 'pdf' ? (
+                      <><FileText size={12} color={COLORS.secondary} /> {att.filename}</>
+                    ) : (
+                      att.file ? <img src={URL.createObjectURL(att.file)} alt="" style={{ height: 32, borderRadius: 3 }} /> : att.filename
+                    )}
+                    <button onClick={() => removeAttachment(i)} style={{
+                      background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+                      color: COLORS.faint, marginLeft: 2, lineHeight: 1,
+                    }}>
+                      <X size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {reviewMode && (
+              <div style={{
+                background: '#f0edf8', borderRadius: 6, padding: '6px 10px',
+                fontSize: 11, color: COLORS.purple, marginBottom: 6, fontWeight: 500,
+              }}>
+                PSP Review mode — Claude will coach against this brief
+              </div>
+            )}
             <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={streaming}
+                style={{
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  color: COLORS.secondary, padding: '4px', alignSelf: 'flex-end',
+                  opacity: streaming ? 0.4 : 1,
+                }}
+                title="Attach file"
+              >
+                <Paperclip size={16} />
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="application/pdf,image/*"
+                multiple
+                style={{ display: 'none' }}
+                onChange={e => { handleFileSelect(e.target.files); e.target.value = ''; }}
+              />
               <textarea
                 value={chatInput}
                 onChange={e => setChatInput(e.target.value)}
@@ -3026,12 +3400,12 @@ export default function BriefView() {
               />
               <button
                 onClick={() => sendMessage(chatInput)}
-                disabled={!chatInput.trim() || streaming}
+                disabled={(!chatInput.trim() && pendingAttachments.length === 0) || streaming}
                 style={{
                   background: COLORS.purple, color: '#fff',
                   border: 'none', borderRadius: 6, padding: '0 14px',
                   fontSize: 13, fontWeight: 500, cursor: 'pointer',
-                  opacity: (!chatInput.trim() || streaming) ? 0.4 : 1,
+                  opacity: ((!chatInput.trim() && pendingAttachments.length === 0) || streaming) ? 0.4 : 1,
                   alignSelf: 'flex-end', height: 36,
                   display: 'flex', alignItems: 'center', gap: 4,
                 }}
@@ -3043,6 +3417,20 @@ export default function BriefView() {
               Enter to send &middot; Shift+Enter for new line
             </p>
           </div>
+        </div>
+      )}
+
+      {/* Toast notification */}
+      {toastMessage && (
+        <div style={{
+          position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+          background: '#1a1a1a', color: '#fff', padding: '10px 20px',
+          borderRadius: 8, fontSize: 13, fontFamily: FONTS.sans,
+          boxShadow: '0 4px 12px rgba(0,0,0,0.3)', zIndex: 200,
+          maxWidth: 400, textAlign: 'center',
+          animation: 'fadeIn 150ms ease-out',
+        }}>
+          {toastMessage}
         </div>
       )}
     </Layout>

@@ -6,10 +6,10 @@ import StatusBadge from '../components/StatusBadge';
 import ProgressBar from '../components/ProgressBar';
 import TableSkeleton from '../components/TableSkeleton';
 import usePageTitle from '../hooks/usePageTitle';
-import { Users, Activity, Heart, BarChart3, ExternalLink, Cpu, FileText, X, RefreshCw, Trash2, UserPlus, Check, RotateCcw, Link } from 'lucide-react';
+import { Users, Activity, Heart, BarChart3, ExternalLink, Cpu, FileText, X, RefreshCw, Trash2, UserPlus, Check, RotateCcw, Link, MessageSquare, Download } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
-type Tab = 'users' | 'runs' | 'health' | 'credits' | 'api-credits' | 'assign';
+type Tab = 'users' | 'runs' | 'health' | 'credits' | 'api-credits' | 'assign' | 'feedback';
 
 interface UserRow {
   id: string; name: string; email: string; role: string;
@@ -439,6 +439,19 @@ function CopyLogsButton({ logs }: { logs: string }) {
   );
 }
 
+interface QueueEntry {
+  run_id: string; company: string; user_name: string; user_email: string;
+  started_at?: string; queued_at?: string; queue_position?: number; estimated_wait_minutes?: number;
+}
+
+interface QueueState {
+  max_concurrent: number;
+  running: QueueEntry[];
+  queued: QueueEntry[];
+}
+
+const MAX_CONCURRENT_DISPLAY = 2;
+
 function RunMonitorTab() {
   const { session, userProfile } = useAuth();
   const [runs, setRuns] = useState<RunRow[]>([]);
@@ -454,6 +467,7 @@ function RunMonitorTab() {
   const [rerunning, setRerunning] = useState<string | null>(null);
   const [rerenderingPdf, setRerenderingPdf] = useState<string | null>(null);
   const [progressMap, setProgressMap] = useState<Record<string, { step: number; total: number; module: string | null; pct: number }>>({});
+  const [queueState, setQueueState] = useState<QueueState | null>(null);
 
   const handleRerun = async (run: RunRow) => {
     if (!session || !run.url) return;
@@ -563,22 +577,32 @@ function RunMonitorTab() {
     return () => { supabase.removeChannel(channel); };
   }, []);
 
-  // Poll progress for running runs
+  // Poll progress for running runs + queue state
   const runningIds = runs.filter(r => r.status === 'running').map(r => r.id).join(',');
+  const hasQueued = runs.some(r => r.status === 'queued');
   useEffect(() => {
-    if (!runningIds || !session) return;
-    const ids = runningIds.split(',');
+    if (!session) return;
+    if (!runningIds && !hasQueued) return;
+    const ids = runningIds ? runningIds.split(',') : [];
     const poll = async () => {
       const updates: Record<string, any> = {};
-      await Promise.all(ids.map(async (id) => {
-        try {
-          const res = await workerFetch(`/progress/${id}`);
-          if (res.ok) {
-            const data = await res.json();
-            if (data.progress) updates[id] = data.progress;
-          }
-        } catch { /* ignore */ }
-      }));
+      await Promise.all([
+        ...ids.map(async (id) => {
+          try {
+            const res = await workerFetch(`/progress/${id}`);
+            if (res.ok) {
+              const data = await res.json();
+              if (data.progress) updates[id] = data.progress;
+            }
+          } catch { /* ignore */ }
+        }),
+        (async () => {
+          try {
+            const res = await workerFetch('/queue');
+            if (res.ok) setQueueState(await res.json());
+          } catch { /* ignore */ }
+        })(),
+      ]);
       if (Object.keys(updates).length > 0) {
         setProgressMap(prev => ({ ...prev, ...updates }));
       }
@@ -586,7 +610,7 @@ function RunMonitorTab() {
     poll();
     const interval = setInterval(poll, 15000);
     return () => clearInterval(interval);
-  }, [runningIds, session]);
+  }, [runningIds, hasQueued, session]);
 
   const filtered = runs.filter((r) => {
     if (statusFilter !== 'all' && r.status !== statusFilter) return false;
@@ -602,8 +626,72 @@ function RunMonitorTab() {
 
   if (loading) return <TableSkeleton rows={6} cols={7} />;
 
+  const queueRunningCount = queueState?.running.length ?? runs.filter(r => r.status === 'running').length;
+  const queuedCount = queueState?.queued.length ?? runs.filter(r => r.status === 'queued').length;
+
   return (
     <>
+      {/* Queue Status Panel */}
+      {(queueRunningCount > 0 || queuedCount > 0) && (
+        <div style={{
+          border: '1px solid var(--border)', borderRadius: 8, padding: 16, marginBottom: 16,
+          background: 'var(--bg-surface)',
+        }}>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>
+            GHA Runner Slots ({queueRunningCount}/{MAX_CONCURRENT_DISPLAY})
+          </div>
+          <div style={{ display: 'flex', gap: 8, marginBottom: queuedCount > 0 ? 12 : 0 }}>
+            {[0, 1].map(i => {
+              const entry = queueState?.running[i];
+              return (
+                <div key={i} style={{
+                  flex: 1, padding: '8px 12px', borderRadius: 6,
+                  border: `1px solid ${entry ? 'var(--status-running)' : 'var(--border)'}`,
+                  background: entry ? 'rgba(217,119,6,0.08)' : 'transparent',
+                  opacity: entry ? 1 : 0.5,
+                }}>
+                  {entry ? (
+                    <>
+                      <div style={{ fontSize: 13, fontWeight: 500 }}>{entry.company}</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                        {entry.user_name} — {entry.started_at ? relativeTime(entry.started_at) : '—'}
+                      </div>
+                    </>
+                  ) : (
+                    <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>Slot available</div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          {queuedCount > 0 && (
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 6 }}>
+                Queued ({queuedCount})
+              </div>
+              {(queueState?.queued || []).map((q) => (
+                <div key={q.run_id} style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '4px 0', fontSize: 12, color: 'var(--text-secondary)',
+                }}>
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    width: 20, height: 20, borderRadius: '50%',
+                    background: 'rgba(217,119,6,0.15)', color: 'var(--status-running-text)',
+                    fontSize: 11, fontWeight: 600, flexShrink: 0,
+                  }}>
+                    {q.queue_position}
+                  </span>
+                  <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{q.company}</span>
+                  <span>{q.user_name}</span>
+                  <span style={{ color: 'var(--text-tertiary)' }}>~{q.estimated_wait_minutes}m wait</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={selectStyle}>
           <option value="all">All statuses</option>
@@ -1228,14 +1316,22 @@ function ApiCreditsTab() {
   const [credits, setCredits] = useState<CreditInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchedAt, setFetchedAt] = useState('');
+  const [apolloUsage, setApolloUsage] = useState<{ credits_used: number; free_tier_limit: number; percent_used: number; month: string } | null>(null);
 
   const fetchCredits = async () => {
     setLoading(true);
     try {
-      const res = await workerFetch('/api-credits');
-      const data = await res.json();
+      const [creditsRes, apolloRes] = await Promise.all([
+        workerFetch('/api-credits'),
+        workerFetch('/apollo-usage'),
+      ]);
+      const data = await creditsRes.json();
       setCredits(data.credits || []);
       setFetchedAt(data.fetched_at || new Date().toISOString());
+      try {
+        const apolloData = await apolloRes.json();
+        if (!apolloData.error) setApolloUsage(apolloData);
+      } catch { /* apollo_usage table may not exist yet */ }
     } catch (err: any) {
       setCredits([{ service: 'Error', error: err.message }]);
     } finally {
@@ -1273,6 +1369,33 @@ function ApiCreditsTab() {
           <RefreshCw size={12} /> Refresh
         </button>
       </div>
+      {apolloUsage && (
+        <div style={{
+          background: 'var(--bg-surface)', border: '1px solid var(--border)',
+          borderLeft: `3px solid ${apolloUsage.percent_used >= 100 ? 'var(--status-failed)' : apolloUsage.percent_used >= 80 ? 'var(--status-running-text)' : 'var(--status-complete)'}`,
+          borderRadius: 8, padding: 18, marginBottom: 16,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+            <div style={{
+              width: 28, height: 28, borderRadius: 6, background: 'var(--bg-elevated)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 13, fontWeight: 600, color: 'var(--accent)',
+            }}>A</div>
+            <span style={{ fontSize: 14, fontWeight: 500 }}>Apollo Monthly Usage</span>
+            <span style={{ fontSize: 11, color: 'var(--text-tertiary)', marginLeft: 'auto' }}>{apolloUsage.month}</span>
+          </div>
+          <div style={{ fontSize: 22, fontWeight: 600, marginBottom: 8, color: apolloUsage.percent_used >= 100 ? 'var(--status-failed)' : apolloUsage.percent_used >= 80 ? 'var(--status-running-text)' : 'var(--text-primary)' }}>
+            {apolloUsage.credits_used} / {apolloUsage.free_tier_limit} credits ({apolloUsage.percent_used}%)
+          </div>
+          <div style={{ height: 8, background: 'var(--bg-elevated)', borderRadius: 4, overflow: 'hidden' }}>
+            <div style={{
+              height: '100%', borderRadius: 4, transition: 'width 0.3s',
+              width: `${Math.min(apolloUsage.percent_used, 100)}%`,
+              background: apolloUsage.percent_used >= 100 ? 'var(--status-failed)' : apolloUsage.percent_used >= 80 ? 'var(--status-running-text)' : 'var(--accent)',
+            }} />
+          </div>
+        </div>
+      )}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
         {credits.map((c) => (
           <div key={c.service} style={{
@@ -1499,6 +1622,182 @@ function AssignBriefsTab() {
   );
 }
 
+// --- Feedback Tab ---
+
+const SECTION_LABELS: Record<string, string> = {
+  about: 'About', why_anything: 'Why Anything', why_now: 'Why Now',
+  why_figma: 'Why Figma', whitespace: 'Whitespace', value_pyramid: 'Value Pyramid',
+  contact_matrix: 'Contact Matrix', research_deep_dive: 'Research Deep Dive',
+};
+
+function FeedbackTab() {
+  const [feedback, setFeedback] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await workerFetch('/feedback');
+        if (res.ok) setFeedback(await res.json());
+      } catch { /* silent */ }
+      setLoading(false);
+    })();
+  }, []);
+
+  // Summary stats
+  const totalWithFeedback = feedback.filter(f => f.section_feedback && Object.keys(f.section_feedback).length > 0).length;
+  const avgOverall = feedback.filter(f => f.overall_score != null).reduce((sum, f, _, arr) => sum + f.overall_score / arr.length, 0);
+  const avgRating = feedback.filter(f => f.rating != null).reduce((sum, f, _, arr) => sum + f.rating / arr.length, 0);
+
+  // Most flagged section
+  const sectionDownCounts: Record<string, number> = {};
+  for (const f of feedback) {
+    if (!f.section_feedback) continue;
+    for (const [key, val] of Object.entries(f.section_feedback) as [string, any][]) {
+      if (val?.score === -1) sectionDownCounts[key] = (sectionDownCounts[key] || 0) + 1;
+    }
+  }
+  const mostFlagged = Object.entries(sectionDownCounts).sort((a, b) => b[1] - a[1])[0];
+
+  const exportCsv = () => {
+    const sectionKeys = Object.keys(SECTION_LABELS);
+    const headers = ['run_id', 'company', 'ae_email', 'overall_score', 'overall_rating',
+      ...sectionKeys.flatMap(k => [`${k}_score`, `${k}_comment`]),
+      'comment', 'created_at'];
+    const rows = feedback.map(f => {
+      const sf = f.section_feedback || {};
+      return [
+        f.run_id, f.company, f.user_email, f.overall_score ?? '', f.rating ?? '',
+        ...sectionKeys.flatMap(k => [sf[k]?.score ?? '', (sf[k]?.comment ?? '').replace(/"/g, '""')]),
+        (f.comment ?? '').replace(/"/g, '""'), f.created_at,
+      ].map(v => typeof v === 'string' && (v.includes(',') || v.includes('"') || v.includes('\n')) ? `"${v}"` : v);
+    });
+    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `brief-feedback-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click(); URL.revokeObjectURL(url);
+  };
+
+  if (loading) return <TableSkeleton />;
+
+  return (
+    <>
+      {/* Summary cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16, marginBottom: 24 }}>
+        {[
+          { label: 'Briefs with feedback', value: totalWithFeedback },
+          { label: 'Avg overall score', value: avgOverall ? `${(avgOverall * 100).toFixed(0)}%` : '\u2014' },
+          { label: 'Avg star rating', value: avgRating ? `${avgRating.toFixed(1)}/5` : '\u2014' },
+          { label: 'Most flagged section', value: mostFlagged ? `${SECTION_LABELS[mostFlagged[0]] || mostFlagged[0]} (${mostFlagged[1]})` : '\u2014' },
+        ].map(card => (
+          <div key={card.label} style={{
+            background: 'var(--bg-surface)', border: '1px solid var(--border)',
+            borderRadius: 8, padding: '16px 20px',
+          }}>
+            <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{card.label}</div>
+            <div style={{ fontSize: 22, fontWeight: 600, marginTop: 4 }}>{card.value}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Export button */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+        <button onClick={exportCsv} style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+          background: 'var(--accent)', color: '#fff', border: 'none',
+          padding: '6px 14px', borderRadius: 6, fontSize: 12, fontWeight: 500, cursor: 'pointer',
+        }}>
+          <Download size={13} /> Export CSV
+        </button>
+      </div>
+
+      {/* Feedback table */}
+      {feedback.length === 0 ? (
+        <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>No feedback submitted yet.</p>
+      ) : (
+        <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ background: 'var(--bg-surface)', borderBottom: '1px solid var(--border)' }}>
+                {['Company', 'AE', 'Overall Score', 'Star Rating', 'Sections Rated', 'Date', ''].map(h => (
+                  <th key={h} style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', padding: '10px 16px', textAlign: 'left' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {feedback.map(f => {
+                const sf = f.section_feedback || {};
+                const rated = Object.values(sf).filter((v: any) => v?.score !== 0);
+                const thumbsUp = (rated as any[]).filter(v => v?.score === 1).length;
+                const isExpanded = expandedId === f.id;
+                return (
+                  <tr key={f.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                    <td style={{ padding: '11px 16px', fontSize: 13, fontWeight: 500 }}>{f.company}</td>
+                    <td style={{ padding: '11px 16px', fontSize: 13, color: 'var(--text-secondary)' }}>{f.user_email}</td>
+                    <td style={{ padding: '11px 16px', fontSize: 13 }}>
+                      {rated.length > 0 ? `${thumbsUp}/${rated.length}` : '\u2014'}
+                    </td>
+                    <td style={{ padding: '11px 16px', fontSize: 13 }}>
+                      {f.rating ? `${f.rating}/5` : '\u2014'}
+                    </td>
+                    <td style={{ padding: '11px 16px', fontSize: 13 }}>{rated.length}</td>
+                    <td style={{ padding: '11px 16px', fontSize: 13, color: 'var(--text-secondary)' }}>
+                      {new Date(f.created_at).toLocaleDateString()}
+                    </td>
+                    <td style={{ padding: '11px 16px' }}>
+                      <button
+                        onClick={() => setExpandedId(isExpanded ? null : f.id)}
+                        style={{
+                          background: 'transparent', border: '1px solid var(--border)',
+                          padding: '3px 10px', borderRadius: 4, fontSize: 11, cursor: 'pointer',
+                          color: 'var(--text-secondary)',
+                        }}
+                      >
+                        {isExpanded ? 'Hide' : 'Details'}
+                      </button>
+                      {isExpanded && (
+                        <div style={{
+                          position: 'absolute', right: 40, marginTop: 8,
+                          background: '#fff', border: '1px solid var(--border)',
+                          borderRadius: 8, padding: 16, minWidth: 320, zIndex: 20,
+                          boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+                        }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>Section Feedback</div>
+                          {Object.entries(SECTION_LABELS).map(([key, label]) => {
+                            const sv = sf[key];
+                            if (!sv || sv.score === 0) return null;
+                            return (
+                              <div key={key} style={{ display: 'flex', gap: 8, marginBottom: 6, fontSize: 12 }}>
+                                <span style={{ width: 120, color: 'var(--text-secondary)' }}>{label}</span>
+                                <span style={{ color: sv.score === 1 ? '#059669' : '#dc2626' }}>
+                                  {sv.score === 1 ? '👍' : '👎'}
+                                </span>
+                                {sv.comment && <span style={{ color: 'var(--text-secondary)', fontStyle: 'italic' }}>{sv.comment}</span>}
+                              </div>
+                            );
+                          })}
+                          {f.comment && (
+                            <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-secondary)', borderTop: '1px solid var(--border)', paddingTop: 8 }}>
+                              <strong>Comment:</strong> {f.comment}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
+  );
+}
+
 // --- Main Admin Page ---
 const tabs: { id: Tab; label: string; icon: any }[] = [
   { id: 'users', label: 'Users', icon: Users },
@@ -1507,6 +1806,7 @@ const tabs: { id: Tab; label: string; icon: any }[] = [
   { id: 'credits', label: 'Credit Analytics', icon: BarChart3 },
   { id: 'api-credits', label: 'API Credits', icon: Cpu },
   { id: 'assign', label: 'Assign Briefs', icon: Link },
+  { id: 'feedback', label: 'Feedback', icon: MessageSquare },
 ];
 
 export default function Admin() {
@@ -1547,6 +1847,7 @@ export default function Admin() {
       {activeTab === 'credits' && <CreditAnalyticsTab />}
       {activeTab === 'api-credits' && <ApiCreditsTab />}
       {activeTab === 'assign' && <AssignBriefsTab />}
+      {activeTab === 'feedback' && <FeedbackTab />}
     </Layout>
   );
 }
