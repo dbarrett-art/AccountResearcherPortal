@@ -947,12 +947,7 @@ function WhyAnythingSection({ pov, sources, feedbackNode }: { pov: any; sources:
             textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6,
             fontFamily: FONTS.sans,
           }}>Corporate Strategy</div>
-          <div style={{
-            fontSize: 16, fontFamily: FONTS.serif, fontWeight: 500,
-            color: COLORS.body, lineHeight: 1.6,
-          }}>
-            <CitedProse text={wa.corporate_strategy} sources={sources} />
-          </div>
+          <CitedProse text={wa.corporate_strategy} sources={sources} />
         </div>
       )}
 
