@@ -95,16 +95,17 @@ export default function Submit() {
   useEffect(() => {
     if (!userProfile) return;
     (async () => {
-      const cutoff = new Date(Date.now() - 10 * 60000).toISOString();
+      const cutoff = new Date(Date.now() - 60 * 60000).toISOString();
       const { data } = await supabase
         .from('runs')
-        .select('company')
+        .select('company, status')
         .eq('user_id', userProfile.id)
-        .eq('status', 'running')
+        .in('status', ['running', 'queued'])
         .gte('created_at', cutoff)
         .limit(1);
       if (data && data.length > 0) {
-        setBanner({ type: 'info', msg: `You have a run in progress for "${data[0].company}". Check My Briefs for updates.` });
+        const label = data[0].status === 'queued' ? 'queued' : 'in progress';
+        setBanner({ type: 'info', msg: `You have a run ${label} for "${data[0].company}". Check My Briefs for updates.` });
       }
     })();
   }, [userProfile]);
@@ -152,6 +153,13 @@ export default function Submit() {
             msg: `Brief is ${data.age_days} days old. Submit again for a fresh run.`,
             runId: data.run_id,
           });
+        } else if (data.status === 'queued') {
+          setBanner({
+            type: 'warning',
+            msg: `You're #${data.queue_position || '?'} in the queue — estimated wait ~${data.estimated_wait_minutes || '?'} mins. We'll update you when your run starts.`,
+          });
+          setCompany('');
+          setUrl('');
         } else {
           setBanner({ type: 'success', msg: 'Research running — usually ~5 minutes. Check My Briefs for updates.' });
           setCompany('');

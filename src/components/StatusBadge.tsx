@@ -2,9 +2,9 @@ type Status = 'queued' | 'running' | 'complete' | 'failed';
 
 const statusStyles: Record<Status, { bg: string; text: string; dot: string }> = {
   queued: {
-    bg: 'rgba(74,74,74,0.3)',
-    text: 'var(--status-queued-text)',
-    dot: 'var(--status-queued)',
+    bg: 'rgba(59,130,246,0.12)',
+    text: '#3b82f6',
+    dot: '#3b82f6',
   },
   running: {
     bg: 'rgba(217,119,6,0.15)',

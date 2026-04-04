@@ -22,6 +22,8 @@ interface Run {
   error_message: string | null;
   brief_id: string | null;
   market: string | null;
+  queued_at: string | null;
+  queue_position: number | null;
 }
 
 const LANGUAGE_FLAGS: Record<string, string> = {
@@ -88,7 +90,7 @@ export default function MyBriefs() {
     if (!userProfile) return;
     const { data } = await supabase
       .from('runs')
-      .select('id, company, url, created_at, status, summary, pdf_url, excel_url, error_message, brief_id, market')
+      .select('id, company, url, created_at, status, summary, pdf_url, excel_url, error_message, brief_id, market, queued_at, queue_position')
       .or(`user_id.eq.${userProfile.id},assigned_to.eq.${userProfile.id}`)
       .order('created_at', { ascending: false });
     if (data) setRuns(data as Run[]);
@@ -281,6 +283,11 @@ export default function MyBriefs() {
                   <td style={{ padding: '11px 16px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <StatusBadge status={run.status} />
+                      {run.status === 'queued' && run.queued_at && (
+                        <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                          Position #{run.queue_position || '?'}
+                        </span>
+                      )}
                       {run.status === 'failed' && (
                         <button
                           onClick={() => handleRetry(run.id)}
