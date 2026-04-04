@@ -8,7 +8,7 @@ import StatusBadge from '../components/StatusBadge';
 import ProgressBar from '../components/ProgressBar';
 import TableSkeleton from '../components/TableSkeleton';
 import usePageTitle from '../hooks/usePageTitle';
-import { FileText, Table, RefreshCw, Eye, Clock, Trash2, RotateCcw } from 'lucide-react';
+import { FileText, RefreshCw, Eye, Clock, Trash2, RotateCcw } from 'lucide-react';
 
 interface Run {
   id: string;
@@ -18,7 +18,6 @@ interface Run {
   status: 'queued' | 'running' | 'complete' | 'failed';
   summary: string | null;
   pdf_url: string | null;
-  excel_url: string | null;
   error_message: string | null;
   brief_id: string | null;
   market: string | null;
@@ -90,7 +89,7 @@ export default function MyBriefs() {
     if (!userProfile) return;
     const { data } = await supabase
       .from('runs')
-      .select('id, company, url, created_at, status, summary, pdf_url, excel_url, error_message, brief_id, market, queued_at, queue_position')
+      .select('id, company, url, created_at, status, summary, pdf_url, error_message, brief_id, market, queued_at, queue_position')
       .or(`user_id.eq.${userProfile.id},assigned_to.eq.${userProfile.id}`)
       .order('created_at', { ascending: false });
     if (data) setRuns(data as Run[]);
@@ -356,13 +355,6 @@ export default function MyBriefs() {
                       ) : (
                         <span title="PDF not available"><FileText size={16} style={{ color: 'var(--text-disabled)' }} /></span>
                       )}
-                      {run.excel_url ? (
-                        <a href={run.excel_url} target="_blank" rel="noopener noreferrer" title="Download Excel">
-                          <Table size={16} style={{ color: 'var(--text-secondary)' }} />
-                        </a>
-                      ) : (
-                        <span title="Excel not available"><Table size={16} style={{ color: 'var(--text-disabled)' }} /></span>
-                      )}
                     </div>
                   </td>
                   {userProfile?.role === 'admin' && (
@@ -421,7 +413,7 @@ export default function MyBriefs() {
           }}>
             <div style={{ fontWeight: 500, marginBottom: 8 }}>Delete this brief?</div>
             <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 20, lineHeight: 1.5 }}>
-              This will permanently delete the run record, brief data, and any uploaded PDF/Excel files.
+              This will permanently delete the run record, brief data, and any uploaded PDF files.
               This cannot be undone.
             </div>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>

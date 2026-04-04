@@ -964,7 +964,7 @@ function RunMonitorTab() {
           }}>
             <div style={{ fontWeight: 500, marginBottom: 8 }}>Delete this brief?</div>
             <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 20, lineHeight: 1.5 }}>
-              This will permanently delete the run record, brief data, and any uploaded PDF/Excel files.
+              This will permanently delete the run record, brief data, and any uploaded PDF files.
               This cannot be undone.
             </div>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>

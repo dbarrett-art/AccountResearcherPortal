@@ -5,14 +5,14 @@ import Layout from '../components/Layout';
 import StatusBadge from '../components/StatusBadge';
 import TableSkeleton from '../components/TableSkeleton';
 import usePageTitle from '../hooks/usePageTitle';
-import { FileText, Table } from 'lucide-react';
+import { FileText } from 'lucide-react';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 
 interface UserEntry { id: string; name: string; email: string; }
 interface Run {
   id: string; company: string; created_at: string;
   status: 'queued' | 'running' | 'complete' | 'failed';
-  summary: string | null; pdf_url: string | null; excel_url: string | null;
+  summary: string | null; pdf_url: string | null;
 }
 
 function relativeTime(dateStr: string): string {
@@ -54,7 +54,7 @@ export default function TeamView() {
     setRunsLoading(true);
     const { data } = await supabase
       .from('runs')
-      .select('id, company, created_at, status, summary, pdf_url, excel_url')
+      .select('id, company, created_at, status, summary, pdf_url')
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
     if (data) setRuns(data as Run[]);
@@ -190,11 +190,6 @@ export default function TeamView() {
                             </button>
                           ) : (
                             <FileText size={16} style={{ color: 'var(--text-disabled)' }} />
-                          )}
-                          {run.excel_url ? (
-                            <a href={run.excel_url} target="_blank" rel="noopener noreferrer"><Table size={16} style={{ color: 'var(--text-secondary)' }} /></a>
-                          ) : (
-                            <Table size={16} style={{ color: 'var(--text-disabled)' }} />
                           )}
                         </div>
                       </td>

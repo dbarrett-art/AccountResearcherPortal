@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import Layout from '../components/Layout';
 import TableSkeleton from '../components/TableSkeleton';
 import usePageTitle from '../hooks/usePageTitle';
-import { ArrowLeft, FileText, Table, X, ChevronDown, ExternalLink, Send, Trash2, Activity, Share2, RefreshCw, Paperclip, ClipboardList, Copy, Check, ThumbsUp } from 'lucide-react';
+import { ArrowLeft, FileText, X, ChevronDown, ExternalLink, Send, Trash2, Activity, Share2, RefreshCw, Paperclip, ClipboardList, Copy, Check, ThumbsUp } from 'lucide-react';
 import SectionFeedback from '../components/SectionFeedback';
 import DOMPurify from 'dompurify';
 
@@ -20,7 +20,6 @@ interface Run {
   created_at: string;
   status: string;
   pdf_url: string | null;
-  excel_url: string | null;
   brief_id: string | null;
   market: string | null;
   debug_events_url: string | null;
@@ -2478,7 +2477,7 @@ export default function BriefView() {
     async function load() {
       const { data: runData, error: runErr } = await supabase
         .from('runs')
-        .select('id, company, url, created_at, status, pdf_url, excel_url, brief_id, market, debug_events_url')
+        .select('id, company, url, created_at, status, pdf_url, brief_id, market, debug_events_url')
         .eq('id', run_id)
         .single();
 
@@ -2953,18 +2952,6 @@ export default function BriefView() {
                         <FileText size={14} /> {pdfLoading ? 'Loading...' : (run.market && run.market !== 'en' && run.market !== 'auto' && LANGUAGE_FLAGS[run.market]
                           ? `${LANGUAGE_FLAGS[run.market]} Download PDF` : 'Download PDF')}
                       </button>
-                    )}
-                    {run.excel_url && (
-                      <a href={run.excel_url} target="_blank" rel="noopener noreferrer"
-                        onClick={() => setOverflowOpen(false)}
-                        style={{
-                          display: 'flex', alignItems: 'center', gap: 8,
-                          padding: '10px 14px', fontSize: 13, color: COLORS.secondary,
-                          textDecoration: 'none', fontFamily: FONTS.sans,
-                          borderBottom: `1px solid ${COLORS.borderLight}`,
-                        }}>
-                        <Table size={14} /> Excel
-                      </a>
                     )}
                     {run.market && run.market !== 'en' && run.market !== 'auto' && !englishSubmitted && (
                       <button onClick={() => { handleRunInEnglish(); setOverflowOpen(false); }} disabled={runningEnglish}
