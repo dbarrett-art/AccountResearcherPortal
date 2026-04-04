@@ -242,7 +242,8 @@ function Section({
         <div style={{ padding: '12px 18px 16px', background: 'transparent' }}>
           {children}
           {feedbackNode && (
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', gap: 8, marginTop: 12 }}>
+              <span style={{ fontSize: 12, color: '#999', fontFamily: 'DM Sans, sans-serif' }}>Rate this section:</span>
               {feedbackNode}
             </div>
           )}

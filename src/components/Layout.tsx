@@ -17,7 +17,7 @@ export default function Layout({ children, bgColor }: { children: React.ReactNod
           marginLeft: 220,
           flex: 1,
           padding: '32px 40px',
-          maxWidth: 960 + 80,
+          width: '100%',
           background: bgColor || 'var(--bg-app)',
           minHeight: '100vh',
         }}
