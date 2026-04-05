@@ -157,6 +157,18 @@ function formatCategory(cat: string): string {
     .replace(/\b\w/g, c => c.toUpperCase());
 }
 
+const FEEDBACK_SECTIONS = [
+  { id: 'icp_fit',           label: 'ICP Fit',                  icon: '\u25CE' },
+  { id: 'about',             label: 'About',                    icon: '\u25A4' },
+  { id: 'why_anything',      label: 'Why Anything',             icon: '\u25C8' },
+  { id: 'why_now',           label: 'Why Now',                  icon: '\u25F7' },
+  { id: 'why_figma',         label: 'Why Figma',                icon: '\u25C6' },
+  { id: 'whitespace',        label: 'Whitespace & Opportunity', icon: '\u25EB' },
+  { id: 'value_pyramid',     label: 'Value Pyramid',            icon: '\u25B3' },
+  { id: 'contact_matrix',    label: 'Key Contacts',             icon: '\u25C9' },
+  { id: 'research_deep_dive', label: 'Research Deep Dive',      icon: '\u25C8' },
+];
+
 const TIER_COLORS: Record<string, { bg: string; text: string }> = {
   eb: { bg: '#ecfdf5', text: '#065f46' },
   EB: { bg: '#ecfdf5', text: '#065f46' },
@@ -496,18 +508,69 @@ function CitedProse({ text, sources, style, onCitationClick }: {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Citation snippet extraction                                        */
+/* ------------------------------------------------------------------ */
+
+function extractSnippet(distilledIntel: string | null | undefined, sourceUrl: string): string | null {
+  if (!distilledIntel || !sourceUrl) return null;
+
+  // distilled_intel uses [SOURCE: <url>] tags before each factual claim
+  const tag = `[SOURCE: ${sourceUrl}]`;
+  const tagIdx = distilledIntel.indexOf(tag);
+  if (tagIdx === -1) {
+    // Try matching just the domain+path (some URLs may differ slightly)
+    try {
+      const parsed = new URL(sourceUrl);
+      const shortUrl = parsed.hostname + parsed.pathname.replace(/\/$/, '');
+      const shortIdx = distilledIntel.indexOf(shortUrl);
+      if (shortIdx === -1) return null;
+      // Find the [SOURCE: ...] tag that contains this URL
+      const tagStart = distilledIntel.lastIndexOf('[SOURCE:', shortIdx);
+      if (tagStart === -1) return null;
+      const tagEnd = distilledIntel.indexOf(']', shortIdx);
+      if (tagEnd === -1) return null;
+      return extractAroundTag(distilledIntel, tagStart, tagEnd + 1);
+    } catch {
+      return null;
+    }
+  }
+
+  return extractAroundTag(distilledIntel, tagIdx, tagIdx + tag.length);
+}
+
+function extractAroundTag(text: string, _tagStart: number, tagEnd: number): string | null {
+  // Grab the content after the tag until the next [SOURCE:] or section heading or 300 chars
+  const afterTag = text.slice(tagEnd).trimStart();
+  const nextTag = afterTag.search(/\[SOURCE:|^##\s/m);
+  const chunk = nextTag > 0 ? afterTag.slice(0, nextTag) : afterTag.slice(0, 400);
+
+  // Split into sentences and take 2-3
+  const sentences = chunk.split(/(?<=[.!?])\s+/).filter(s => s.trim().length > 10);
+  const snippet = sentences.slice(0, 3).join(' ').trim();
+
+  // Clean up markdown artifacts
+  return snippet
+    .replace(/\[SOURCE:[^\]]*\]/g, '')
+    .replace(/^[-•*]\s*/, '')
+    .replace(/\*\*/g, '')
+    .trim() || null;
+}
+
+/* ------------------------------------------------------------------ */
 /*  Citation tooltip + modal                                           */
 /* ------------------------------------------------------------------ */
 
 function CitationTooltip({ tooltip }: {
-  tooltip: { source: any; index: number; x: number; y: number };
+  tooltip: { source: any; index: number; x: number; y: number; snippet?: string | null };
 }) {
   const source = tooltip.source;
   const url = typeof source === 'string' ? source : (source?.url || source?.source || '');
   let domain: string | null = null;
   try { domain = url ? new URL(url).hostname.replace('www.', '') : null; } catch {}
-  const title = source?.title || source?.what_it_provided || 'Source';
-  const summary = source?.snippet || source?.description || source?.what_it_provided || null;
+  const title = source?.title || source?.source || source?.what_it_provided || 'Source';
+  const snippet = tooltip.snippet;
+  const fallbackSummary = source?.snippet || source?.description || source?.what_it_provided || null;
+  const displayText = snippet || fallbackSummary;
 
   return (
     <div
@@ -535,9 +598,17 @@ function CitationTooltip({ tooltip }: {
       <div style={{ fontSize: 13, fontWeight: 500, color: COLORS.body, marginBottom: 8, lineHeight: 1.4 }}>
         {title.length > 120 ? title.slice(0, 120) + '…' : title}
       </div>
-      {summary && summary !== title && (
+      {snippet ? (
+        <div style={{ fontSize: 13, color: COLORS.secondary, lineHeight: 1.55, marginBottom: 12, fontStyle: 'italic' }}>
+          {snippet.length > 280 ? snippet.slice(0, 280) + '…' : snippet}
+        </div>
+      ) : displayText && displayText !== title && displayText !== 'Research source' ? (
         <div style={{ fontSize: 13, color: COLORS.secondary, lineHeight: 1.5, marginBottom: 12 }}>
-          {summary.length > 200 ? summary.slice(0, 200) + '…' : summary}
+          {displayText.length > 200 ? displayText.slice(0, 200) + '…' : displayText}
+        </div>
+      ) : (
+        <div style={{ fontSize: 12, color: '#aaa', lineHeight: 1.5, marginBottom: 12, fontStyle: 'italic' }}>
+          No preview available
         </div>
       )}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 10, borderTop: '0.5px solid #f0f0ec' }}>
@@ -557,11 +628,7 @@ function CitationTooltip({ tooltip }: {
               textDecoration: 'none',
             }}
           >
-            Open source
-            <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="#534AB7" strokeWidth="1.5">
-              <rect x="2" y="2" width="10" height="10" rx="2"/>
-              <path d="M7 9l5-5M9 4h3v3"/>
-            </svg>
+            View source ↗
           </a>
         )}
       </div>
@@ -2167,8 +2234,8 @@ function ProofPointsSection({ pov }: { pov: any }) {
 function SourcesSection({ pov }: { pov: any }) {
   const allSources = pov?.sources_used || [];
   const cleanSources = allSources.filter((s: any) => {
-    const url = typeof s === 'string' ? s : (s?.url || s?.source || '');
-    const title = typeof s === 'string' ? '' : (s?.title || s?.what_it_provided || '');
+    const url = typeof s === 'string' ? s : (s?.url || '');
+    const title = typeof s === 'string' ? '' : (s?.source || s?.title || '');
     if (url.length > 200) return false;
     return !isNoisySource(url, title);
   });
@@ -2178,8 +2245,13 @@ function SourcesSection({ pov }: { pov: any }) {
   return (
     <Section title="Sources" accent={COLORS.faint} count={`${cleanSources.length} sources`}>
       {cleanSources.map((s: any, i: number) => {
-        const url = typeof s === 'string' ? s : (s?.url || s?.source || '');
-        const title = typeof s === 'string' ? '' : (s?.title || s?.what_it_provided || '');
+        const url = typeof s === 'string' ? s : (s?.url || '');
+        const sourceTitle = typeof s === 'string' ? '' : (s?.source || s?.title || '');
+        const label = sourceTitle && sourceTitle !== 'Research source'
+          ? (sourceTitle.length > 60 ? sourceTitle.slice(0, 57) + '…' : sourceTitle)
+          : url ? (() => { try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return ''; } })()
+          : '';
+        const displayLabel = label || `Source ${i + 1}`;
         return (
           <div key={i} style={{
             fontSize: 13, padding: '6px 0',
@@ -2190,10 +2262,10 @@ function SourcesSection({ pov }: { pov: any }) {
             {url.startsWith('http') ? (
               <a href={url} target="_blank" rel="noopener noreferrer"
                 style={{ color: COLORS.purple, textDecoration: 'none' }}>
-                {title || url} <span style={{ fontSize: 10 }}>{'\u2197'}</span>
+                {displayLabel} <span style={{ fontSize: 10 }}>{'\u2197'}</span>
               </a>
             ) : (
-              <span style={{ color: COLORS.secondary }}>{url}</span>
+              <span style={{ color: COLORS.secondary }}>{displayLabel}</span>
             )}
           </div>
         );
@@ -2264,13 +2336,23 @@ function BriefContent({ pov, personas, hooksData, valuePyramid, sectionFeedback,
   void ProofPointsSection; // Retained but removed from render tree (2026-04-01 reframe)
 
   const [citationTooltip, setCitationTooltip] = useState<{
-    source: any; index: number; x: number; y: number;
+    source: any; index: number; x: number; y: number; snippet?: string | null;
   } | null>(null);
+
+  // Close popover on Escape key
+  useEffect(() => {
+    if (!citationTooltip) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setCitationTooltip(null); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [citationTooltip]);
 
   const handleCitationClick = (index: number, source: any, event: React.MouseEvent) => {
     if (!source) return;
     const rect = (event.target as HTMLElement).getBoundingClientRect();
-    setCitationTooltip({ source, index, x: rect.left, y: rect.bottom });
+    const url = typeof source === 'string' ? source : (source?.url || source?.source || '');
+    const snippet = extractSnippet(pov?.distilled_intel, url);
+    setCitationTooltip({ source, index, x: rect.left, y: rect.bottom, snippet });
   };
 
   const onCitationClick = (i: number, src: any, e: React.MouseEvent) => handleCitationClick(i, src, e);
@@ -2393,14 +2475,11 @@ export default function BriefView() {
   const [rerenderDone, setRerenderDone] = useState(false);
   const [overflowOpen, setOverflowOpen] = useState(false);
   const overflowRef = useRef<HTMLDivElement>(null);
-  const [rateOpen, setRateOpen] = useState(false);
-  const [rating, setRating] = useState<number | null>(null);
-  const [accuracy, setAccuracy] = useState<number | null>(null);
-  const [usefulness, setUsefulness] = useState<number | null>(null);
-  const [rateComment, setRateComment] = useState('');
-  const [rateSubmitted, setRateSubmitted] = useState(false);
-  const [rateSubmitting, setRateSubmitting] = useState(false);
-  const rateRef = useRef<HTMLDivElement>(null);
+  const [rateModalOpen, setRateModalOpen] = useState(false);
+  const [overallComment, setOverallComment] = useState('');
+  const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
+  const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
+  const [nudgeBannerVisible, setNudgeBannerVisible] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pendingAttachments, setPendingAttachments] = useState<ChatAttachment[]>([]);
   const [reviewMode, setReviewMode] = useState(false);
@@ -2411,12 +2490,6 @@ export default function BriefView() {
   const sectionFeedbackRef = useRef(sectionFeedback);
   sectionFeedbackRef.current = sectionFeedback;
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [feedbackBannerDismissed, setFeedbackBannerDismissed] = useState(() => {
-    const dismissed = localStorage.getItem('feedback_banner_dismissed');
-    return dismissed ? Date.now() - parseInt(dismissed) < 7 * 24 * 60 * 60 * 1000 : false;
-  });
-  const [timeOnPage, setTimeOnPage] = useState(0);
-  const [scrolledPastMid, setScrolledPastMid] = useState(false);
   const [emailCopied, setEmailCopied] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const reviewFileInputRef = useRef<HTMLInputElement>(null);
@@ -2532,36 +2605,48 @@ export default function BriefView() {
     return () => document.removeEventListener('mousedown', handler);
   }, [shareOpen]);
 
-  // Close rate popover on outside click
-  useEffect(() => {
-    if (!rateOpen) return;
-    const handler = (e: MouseEvent) => {
-      if (rateRef.current && !rateRef.current.contains(e.target as Node)) setRateOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [rateOpen]);
-
-  const handleRateSubmit = async () => {
-    if (!rating || !run_id) return;
-    setRateSubmitting(true);
+  // Modal submit — sends all section ratings + overall comment
+  const handleModalSubmit = async () => {
+    if (!run_id) return;
+    setFeedbackSubmitting(true);
+    const sectionRatings: Record<string, 'up' | 'down'> = {};
+    const sectionComments: Record<string, string> = {};
+    for (const [key, fb] of Object.entries(sectionFeedback)) {
+      if (fb.score === 1) sectionRatings[key] = 'up';
+      else if (fb.score === -1) sectionRatings[key] = 'down';
+      if (fb.comment) sectionComments[key] = fb.comment;
+    }
+    const ups = Object.values(sectionRatings).filter(r => r === 'up').length;
+    const downs = Object.values(sectionRatings).filter(r => r === 'down').length;
     try {
       await workerFetch(`/feedback/${run_id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rating, accuracy_rating: accuracy, usefulness_rating: usefulness, comment: rateComment || null }),
+        body: JSON.stringify({
+          rating: ups - downs,
+          section_feedback: sectionFeedback,
+          section_ratings: sectionRatings,
+          section_comments: sectionComments,
+          overall_comment: overallComment || null,
+          overall_score: Object.keys(sectionRatings).length > 0
+            ? ups / (ups + downs) : null,
+          source: 'modal',
+        }),
       });
-      setRateSubmitted(true);
+      setFeedbackSubmitted(true);
+      setTimeout(() => setRateModalOpen(false), 1800);
     } catch { /* silent */ }
-    setRateSubmitting(false);
+    setFeedbackSubmitting(false);
   };
 
-  // Section feedback handler — debounced auto-save
-  const handleSectionFeedback = (key: string, score: number, comment: string) => {
+  // Section feedback handler — debounced auto-save (inline) or state-only (modal)
+  const handleSectionFeedback = (key: string, score: number, comment: string, autoSave = true) => {
     const updated = { ...sectionFeedbackRef.current, [key]: { score, comment } };
     // Remove entries reset to 0 with no comment
     if (score === 0 && !comment) delete updated[key];
     setSectionFeedback(updated);
+
+    if (!autoSave) return; // Modal handles its own save on submit
 
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(async () => {
@@ -2576,35 +2661,21 @@ export default function BriefView() {
           body: JSON.stringify({
             section_feedback: updated,
             overall_score: overallScore,
-            rating: rating || null,
-            accuracy_rating: accuracy || null,
-            usefulness_rating: usefulness || null,
-            comment: rateComment || null,
+            source: 'inline',
           }),
         });
       } catch { /* silent */ }
     }, 1000);
   };
 
-  // Time-on-page counter for feedback banner
-  useEffect(() => {
-    const interval = setInterval(() => setTimeOnPage(t => t + 1), 1000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // Scroll-past-midpoint detection for feedback banner
-  useEffect(() => {
-    const handler = () => {
-      const scrolled = window.scrollY + window.innerHeight;
-      const mid = document.documentElement.scrollHeight / 2;
-      if (scrolled >= mid) setScrolledPastMid(true);
-    };
-    window.addEventListener('scroll', handler, { passive: true });
-    return () => window.removeEventListener('scroll', handler);
-  }, []);
-
   const hasAnyFeedback = Object.values(sectionFeedback).some(f => f.score !== 0);
-  const showFeedbackBanner = !feedbackBannerDismissed && !hasAnyFeedback && timeOnPage >= 120 && scrolledPastMid;
+
+  // Nudge banner timer — fires after 2 minutes if no ratings given
+  useEffect(() => {
+    if (hasAnyFeedback || feedbackSubmitted) return;
+    const timer = setTimeout(() => setNudgeBannerVisible(true), 2 * 60 * 1000);
+    return () => clearTimeout(timer);
+  }, [hasAnyFeedback, feedbackSubmitted]);
 
 
   // sparkle keyframes moved to inline <style> tag in JSX
@@ -2956,65 +3027,18 @@ export default function BriefView() {
               {/* Vertical divider */}
               <div style={{ width: 0.5, height: 18, background: 'var(--color-border-tertiary, #e7e5e4)' }} />
 
-              {/* Rate button + popover */}
+              {/* Rate button — opens feedback modal */}
               {session && (
-                <div ref={rateRef} style={{ position: 'relative' }}>
-                  <button onClick={() => setRateOpen(o => !o)} style={{
-                    display: 'flex', alignItems: 'center', gap: 6, padding: '6px 13px',
-                    borderRadius: 'var(--border-radius-md, 8px)',
-                    border: '0.5px solid var(--color-border-secondary, #d6d3d1)',
-                    fontSize: 13, cursor: 'pointer', fontFamily: FONTS.sans,
-                    background: 'transparent',
-                    color: rateSubmitted ? '#065f46' : COLORS.secondary,
-                  }}>
-                    <span style={{ fontSize: 14 }}>{rateSubmitted ? '\u2605' : '\u2606'}</span> {rateSubmitted ? 'Rated!' : 'Rate'}
-                  </button>
-                  {rateOpen && !rateSubmitted && (
-                    <div style={{
-                      position: 'absolute', left: 0, top: '100%', marginTop: 4,
-                      background: '#fff', border: `1px solid ${COLORS.border}`,
-                      borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-                      padding: 16, minWidth: 260, zIndex: 50,
-                    }}>
-                      {[
-                        { label: 'Overall', value: rating, onChange: setRating },
-                        { label: 'Accuracy', value: accuracy, onChange: setAccuracy },
-                        { label: 'Usefulness', value: usefulness, onChange: setUsefulness },
-                      ].map(row => (
-                        <div key={row.label} style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
-                          <div style={{ fontSize: 12, color: COLORS.secondary, width: 90, fontFamily: FONTS.sans }}>{row.label}</div>
-                          <div style={{ display: 'flex', gap: 4 }}>
-                            {[1, 2, 3, 4, 5].map(n => (
-                              <button key={n} onClick={() => row.onChange(n)} style={{
-                                background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, padding: 2,
-                                color: row.value && n <= row.value ? '#ca8a04' : COLORS.faint,
-                              }}>{row.value && n <= row.value ? '\u2605' : '\u2606'}</button>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                      <textarea
-                        value={rateComment} onChange={e => setRateComment(e.target.value)}
-                        placeholder="Optional comment..."
-                        style={{
-                          width: '100%', minHeight: 50, marginTop: 4, padding: 8, fontSize: 12,
-                          background: '#fdfcfa', border: `1px solid ${COLORS.border}`,
-                          borderRadius: 6, color: COLORS.body, resize: 'vertical',
-                          fontFamily: FONTS.sans,
-                        }}
-                      />
-                      <button onClick={handleRateSubmit} disabled={!rating || rateSubmitting} style={{
-                        marginTop: 8, background: rating ? COLORS.purple : '#f5f5f0',
-                        color: rating ? '#fff' : COLORS.faint,
-                        border: 'none', borderRadius: 6, padding: '6px 14px', fontSize: 12,
-                        fontWeight: 500, cursor: rating ? 'pointer' : 'default',
-                        fontFamily: FONTS.sans, width: '100%',
-                      }}>
-                        {rateSubmitting ? 'Sending...' : 'Submit'}
-                      </button>
-                    </div>
-                  )}
-                </div>
+                <button onClick={() => setRateModalOpen(true)} style={{
+                  display: 'flex', alignItems: 'center', gap: 6, padding: '6px 13px',
+                  borderRadius: 'var(--border-radius-md, 8px)',
+                  border: '0.5px solid var(--color-border-secondary, #d6d3d1)',
+                  fontSize: 13, cursor: 'pointer', fontFamily: FONTS.sans,
+                  background: 'transparent',
+                  color: feedbackSubmitted ? '#065f46' : COLORS.secondary,
+                }}>
+                  <span style={{ fontSize: 14 }}>{feedbackSubmitted ? '\u2605' : '\u2606'}</span> {feedbackSubmitted ? 'Rated!' : 'Rate'}
+                </button>
               )}
 
               {/* Overflow menu */}
@@ -3275,47 +3299,231 @@ export default function BriefView() {
       </div>
       </div>
 
-      {/* ============ Feedback prompt banner ============ */}
-      {showFeedbackBanner && (
+      {/* ============ Nudge banner (2-min timer) ============ */}
+      {nudgeBannerVisible && !feedbackSubmitted && (
         <div style={{
-          position: 'fixed', bottom: 20, left: '50%', transform: 'translateX(-50%)',
-          background: '#fffbeb', border: '1px solid #fbbf24', borderRadius: 10,
+          position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+          background: '#1a1a1a', border: '1px solid #333', borderRadius: 8,
           padding: '12px 20px', display: 'flex', alignItems: 'center', gap: 12,
-          boxShadow: '0 4px 16px rgba(0,0,0,0.08)', zIndex: 80,
-          fontFamily: FONTS.sans, fontSize: 14, color: '#92400e',
-          maxWidth: 520,
+          boxShadow: '0 8px 24px rgba(0,0,0,0.4)', zIndex: 40,
+          fontSize: 13, color: '#ccc', fontFamily: FONTS.sans,
         }}>
-          <span style={{ flex: 1 }}>Finding this brief useful? Let us know what's working.</span>
+          <span>How was this brief?</span>
           <button
-            onClick={() => {
-              // Scroll to first section with feedback thumbs
-              const firstSection = document.querySelector('[data-section-feedback]');
-              if (firstSection) firstSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              setFeedbackBannerDismissed(true);
-              localStorage.setItem('feedback_banner_dismissed', String(Date.now()));
-            }}
+            onClick={() => { setRateModalOpen(true); setNudgeBannerVisible(false); }}
             style={{
-              background: '#f59e0b', color: '#fff', border: 'none',
+              background: '#5e6ad2', color: '#fff', border: 'none',
               padding: '6px 14px', borderRadius: 6, cursor: 'pointer',
               fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap',
             }}
           >
-            Rate sections
+            Rate it &rarr;
           </button>
           <button
-            onClick={() => {
-              setFeedbackBannerDismissed(true);
-              localStorage.setItem('feedback_banner_dismissed', String(Date.now()));
-            }}
+            onClick={() => setNudgeBannerVisible(false)}
             style={{
               background: 'none', border: 'none', cursor: 'pointer',
-              color: '#92400e', padding: 4, fontSize: 16, lineHeight: 1,
+              color: '#888', padding: 4, fontSize: 16, lineHeight: 1,
             }}
           >
             <X size={14} />
           </button>
         </div>
       )}
+
+      {/* ============ Rate modal ============ */}
+      {rateModalOpen && (() => {
+        const ratedCount = Object.values(sectionFeedback).filter(f => f.score !== 0).length;
+        const ups = Object.values(sectionFeedback).filter(f => f.score === 1).length;
+        const downs = Object.values(sectionFeedback).filter(f => f.score === -1).length;
+        const netScore = ups - downs;
+        return (
+          <>
+            {/* Overlay */}
+            <div
+              onClick={() => setRateModalOpen(false)}
+              style={{
+                position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)',
+                backdropFilter: 'blur(4px)', zIndex: 200,
+              }}
+            />
+            {/* Modal */}
+            <div style={{
+              position: 'fixed', top: '50%', left: '50%',
+              transform: 'translate(-50%, -50%)',
+              width: 480, maxHeight: '85vh',
+              background: '#1a1a1a', border: '1px solid #2a2a2a',
+              borderRadius: 12, zIndex: 201,
+              display: 'flex', flexDirection: 'column',
+              fontFamily: FONTS.sans, color: '#e5e5e5',
+              boxShadow: '0 24px 48px rgba(0,0,0,0.5)',
+            }}>
+              {/* Header */}
+              <div style={{
+                padding: '18px 20px 14px', borderBottom: '1px solid #2a2a2a',
+                display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
+                flexShrink: 0,
+              }}>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 4 }}>Rate this brief</div>
+                  <div style={{ fontSize: 12, color: '#888' }}>
+                    {pov?.company_name || run?.company}
+                    {run?.created_at && <> &middot; {new Date(run.created_at).toLocaleDateString()}</>}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  {/* Live score badge */}
+                  {ratedCount > 0 && (
+                    <span style={{
+                      fontSize: 13, fontWeight: 600, padding: '3px 10px',
+                      borderRadius: 12,
+                      background: netScore > 0 ? 'rgba(34,197,94,0.12)' : netScore < 0 ? 'rgba(239,68,68,0.12)' : 'rgba(136,136,136,0.12)',
+                      color: netScore > 0 ? '#22c55e' : netScore < 0 ? '#ef4444' : '#888',
+                    }}>
+                      {netScore > 0 ? '+' : ''}{netScore} &middot; {ratedCount} rated
+                    </span>
+                  )}
+                  <button onClick={() => setRateModalOpen(false)} style={{
+                    background: 'none', border: 'none', cursor: 'pointer', color: '#888', padding: 4,
+                  }}>
+                    <X size={16} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Scrollable section list */}
+              <div style={{ flex: 1, overflowY: 'auto', padding: '8px 20px' }}>
+                {feedbackSubmitted ? (
+                  <div style={{
+                    display: 'flex', flexDirection: 'column', alignItems: 'center',
+                    justifyContent: 'center', padding: '48px 0', gap: 12,
+                  }}>
+                    <Check size={32} style={{ color: '#22c55e' }} />
+                    <div style={{ fontSize: 16, fontWeight: 500, color: '#e5e5e5' }}>Thanks for your feedback!</div>
+                    <div style={{ fontSize: 13, color: '#888' }}>Your ratings help us improve.</div>
+                  </div>
+                ) : (
+                  <>
+                    {FEEDBACK_SECTIONS.map(section => {
+                      const fb = sectionFeedback[section.id];
+                      const score = fb?.score ?? 0;
+                      const comment = fb?.comment ?? '';
+                      return (
+                        <div key={section.id} style={{ padding: '10px 0', borderBottom: '1px solid #222' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <span style={{ fontSize: 16, width: 24, textAlign: 'center', color: '#666' }}>{section.icon}</span>
+                            <span style={{ flex: 1, fontSize: 14, color: '#e5e5e5' }}>{section.label}</span>
+                            {/* Thumbs up */}
+                            <button
+                              onClick={() => handleSectionFeedback(section.id, score === 1 ? 0 : 1, score === 1 ? '' : comment, false)}
+                              style={{
+                                background: score === 1 ? 'rgba(34,197,94,0.12)' : 'transparent',
+                                border: score === 1 ? '1px solid rgba(34,197,94,0.3)' : '1px solid #333',
+                                borderRadius: 6, cursor: 'pointer', padding: '5px 10px',
+                                fontSize: 15, color: score === 1 ? '#22c55e' : '#666',
+                                transition: 'all 0.15s',
+                              }}
+                            >
+                              {'\uD83D\uDC4D'}
+                            </button>
+                            {/* Thumbs down */}
+                            <button
+                              onClick={() => handleSectionFeedback(section.id, score === -1 ? 0 : -1, '', false)}
+                              style={{
+                                background: score === -1 ? 'rgba(239,68,68,0.12)' : 'transparent',
+                                border: score === -1 ? '1px solid rgba(239,68,68,0.3)' : '1px solid #333',
+                                borderRadius: 6, cursor: 'pointer', padding: '5px 10px',
+                                fontSize: 15, color: score === -1 ? '#ef4444' : '#666',
+                                transition: 'all 0.15s',
+                              }}
+                            >
+                              {'\uD83D\uDC4E'}
+                            </button>
+                          </div>
+                          {/* Comment field when thumbs down */}
+                          {score === -1 && (
+                            <div style={{ marginTop: 8, marginLeft: 34 }}>
+                              <textarea
+                                value={comment}
+                                onChange={e => handleSectionFeedback(section.id, score, e.target.value, false)}
+                                placeholder="What was wrong with this section?"
+                                style={{
+                                  width: '100%', minHeight: 48, padding: '8px 10px',
+                                  fontSize: 12, fontFamily: FONTS.sans,
+                                  background: '#111', border: '1px solid #333',
+                                  borderRadius: 6, color: '#ccc', resize: 'vertical',
+                                  outline: 'none',
+                                }}
+                                onFocus={e => { e.currentTarget.style.borderColor = '#5e6ad2'; }}
+                                onBlur={e => { e.currentTarget.style.borderColor = '#333'; }}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+
+                    {/* Overall comments */}
+                    <div style={{ padding: '14px 0 8px' }}>
+                      <div style={{ fontSize: 13, color: '#888', marginBottom: 6 }}>Overall comments (optional)</div>
+                      <textarea
+                        value={overallComment}
+                        onChange={e => setOverallComment(e.target.value)}
+                        placeholder="Any other thoughts on this brief..."
+                        style={{
+                          width: '100%', minHeight: 60, padding: '8px 10px',
+                          fontSize: 13, fontFamily: FONTS.sans,
+                          background: '#111', border: '1px solid #333',
+                          borderRadius: 6, color: '#ccc', resize: 'vertical',
+                          outline: 'none',
+                        }}
+                        onFocus={e => { e.currentTarget.style.borderColor = '#5e6ad2'; }}
+                        onBlur={e => { e.currentTarget.style.borderColor = '#333'; }}
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Footer */}
+              {!feedbackSubmitted && (
+                <div style={{
+                  padding: '14px 20px', borderTop: '1px solid #2a2a2a',
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  flexShrink: 0,
+                }}>
+                  <span style={{ fontSize: 12, color: '#666' }}>
+                    {ratedCount} of {FEEDBACK_SECTIONS.length} sections rated
+                  </span>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button onClick={() => setRateModalOpen(false)} style={{
+                      background: 'transparent', border: '1px solid #333',
+                      borderRadius: 6, padding: '7px 16px', fontSize: 13,
+                      color: '#888', cursor: 'pointer', fontFamily: FONTS.sans,
+                    }}>
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleModalSubmit}
+                      disabled={ratedCount === 0 || feedbackSubmitting}
+                      style={{
+                        background: ratedCount > 0 ? '#5e6ad2' : '#333',
+                        border: 'none', borderRadius: 6, padding: '7px 20px',
+                        fontSize: 13, fontWeight: 500,
+                        color: ratedCount > 0 ? '#fff' : '#666',
+                        cursor: ratedCount > 0 ? 'pointer' : 'default',
+                        fontFamily: FONTS.sans,
+                      }}
+                    >
+                      {feedbackSubmitting ? 'Sending...' : 'Submit'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </>
+        );
+      })()}
 
       {/* ============ Chat panel ============ */}
       {chatOpen && (
