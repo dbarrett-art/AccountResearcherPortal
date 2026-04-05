@@ -20,13 +20,14 @@ interface TerritoryRow {
   trigger_count: number;
   contact_count: number;
   has_contacts: boolean;
+  whitespace: number | null;
   pdf_url: string | null;
   brief_id: string | null;
   user_id: string | null;
   user_email: string | null;
 }
 
-type SortKey = 'company' | 'icp_score' | 'trigger_count' | 'contact_count' | 'age';
+type SortKey = 'company' | 'icp_score' | 'trigger_count' | 'contact_count' | 'whitespace' | 'age';
 type SortDir = 'asc' | 'desc';
 type IcpFilter = 'all' | 'Strong' | 'Moderate' | 'Weak';
 type FreshnessFilter = 'all' | 'fresh' | 'review' | 'stale';
@@ -62,6 +63,32 @@ function freshnessCategory(days: number): 'fresh' | 'review' | 'stale' {
   if (days > 90) return 'stale';
   if (days > 30) return 'review';
   return 'fresh';
+}
+
+function getTotalWhitespace(pov: any): number | null {
+  const ws = pov?.whitespace_section;
+  if (!ws) return null;
+  if (typeof ws.total_whitespace === 'number') return ws.total_whitespace;
+  if (typeof ws.total_whitespace_value === 'number') return ws.total_whitespace_value;
+  const gaps = ws.key_gaps;
+  if (!gaps) return null;
+  let total = 0;
+  const add = (v: any) => { if (typeof v === 'number' && v > 0) total += v; };
+  if (Array.isArray(gaps)) {
+    gaps.forEach((g: any) => add(g.value || g.dollar_value));
+  } else if (typeof gaps === 'object') {
+    Object.values(gaps).forEach((g: any) => add((g as any)?.value || (g as any)?.dollar_value));
+    add(ws.governance_plus?.value);
+    add(ws.services_arr_floor);
+  }
+  return total > 0 ? total : null;
+}
+
+function formatWhitespace(value: number | null): string {
+  if (value === null) return '—';
+  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
+  if (value >= 1_000) return `$${Math.round(value / 1_000)}K`;
+  return `$${value}`;
 }
 
 /* ------------------------------------------------------------------ */
@@ -147,6 +174,7 @@ export default function Territory() {
           trigger_count: triggerCount,
           contact_count: contactCount,
           has_contacts: contactCount > 0,
+          whitespace: getTotalWhitespace(pov),
           pdf_url: run.pdf_url,
           brief_id: run.brief_id,
           user_id: run.user_id,
@@ -216,6 +244,15 @@ export default function Territory() {
       case 'contact_count':
         cmp = a.contact_count - b.contact_count;
         break;
+      case 'whitespace': {
+        const aW = a.whitespace;
+        const bW = b.whitespace;
+        if (aW === null && bW === null) { cmp = 0; break; }
+        if (aW === null) return 1;  // nulls always last
+        if (bW === null) return -1;
+        cmp = aW - bW;
+        break;
+      }
       case 'age':
         cmp = new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
         break;
@@ -450,6 +487,9 @@ export default function Territory() {
                       <th style={{ ...thStyle, textAlign: 'center' }} onClick={() => toggleSort('contact_count')}>
                         Contacts <SortIcon col="contact_count" />
                       </th>
+                      <th style={{ ...thStyle, textAlign: 'right', width: 100 }} onClick={() => toggleSort('whitespace')}>
+                        Whitespace <SortIcon col="whitespace" />
+                      </th>
                       <th style={thStyle} onClick={() => toggleSort('age')}>
                         Age <SortIcon col="age" />
                       </th>
@@ -504,6 +544,14 @@ export default function Territory() {
                           {/* Contacts */}
                           <td style={{ padding: '11px 16px', textAlign: 'center', fontSize: 13, color: 'var(--text-secondary)' }}>
                             {row.contact_count || '—'}
+                          </td>
+
+                          {/* Whitespace */}
+                          <td style={{
+                            padding: '11px 16px', textAlign: 'right', fontSize: 13, fontWeight: 500,
+                            color: row.whitespace !== null && row.whitespace >= 500_000 ? '#22c55e' : row.whitespace !== null ? 'var(--text-secondary)' : '#555',
+                          }}>
+                            {formatWhitespace(row.whitespace)}
                           </td>
 
                           {/* Age / Freshness */}
