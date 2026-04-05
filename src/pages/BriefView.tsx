@@ -1711,12 +1711,29 @@ function ValuePyramidSection({ pyramid, feedbackNode }: { pyramid: any; feedback
 /*  Section: Job Signals                                               */
 /* ------------------------------------------------------------------ */
 
+// Client-side safety net: exclude job signals from known third-party domains
+const EXCLUDED_JOB_SIGNAL_DOMAINS = [
+  'figma.com', 'ixdf.com', 'interaction-design.org', 'coursera.com',
+  'udemy.com', 'pluralsight.com', 'designjobs.careers', 'dribbble.com',
+  'behance.net', 'medium.com', 'substack.com', 'dev.to',
+  'techcrunch.com', 'wired.com', 'fastcompany.com',
+  'uxdesign.cc', 'smashingmagazine.com', 'nngroup.com',
+];
+
+function isExcludedJobSignalUrl(url: string | null | undefined): boolean {
+  if (!url) return false;
+  try {
+    const hostname = new URL(url).hostname.toLowerCase().replace(/^www\./, '');
+    return EXCLUDED_JOB_SIGNAL_DOMAINS.some(d => hostname === d || hostname.endsWith('.' + d));
+  } catch { return false; }
+}
+
 function JobSignalsSection({ pov }: { pov: any }) {
   const signals = pov?.job_signals;
   const extracted = pov?.job_signals_extracted;
   const hasExtracted = extracted && (extracted.signals?.length > 0 || extracted.roles?.length > 0);
-  const design = signals?.design_tool_signals || [];
-  const other = signals?.other_signals || [];
+  const design = (signals?.design_tool_signals || []).filter((s: any) => !isExcludedJobSignalUrl(s?.link));
+  const other = (signals?.other_signals || []).filter((s: any) => !isExcludedJobSignalUrl(s?.link));
   const signalCount = (hasExtracted ? (extracted.signals?.length || 0) : 0) + design.length + other.length;
 
   if (!hasExtracted && design.length === 0 && other.length === 0) return null;
