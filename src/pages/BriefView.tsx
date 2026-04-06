@@ -1778,36 +1778,54 @@ function ResearchDeepDiveSection({ pov, feedbackNode }: { pov: any; feedbackNode
 /* ------------------------------------------------------------------ */
 
 function PyramidItem({ item, field, color }: { item: any; field: string; color: string }) {
-  const [hovered, setHovered] = useState(false);
+  const [popoverOpen, setPopoverOpen] = useState(false);
+  const popoverRef = useRef<HTMLDivElement>(null);
   const headline = item[field] || item.objective || item.strategy || item.initiative || '';
   const source = item.source || item.evidence_source || null;
   const talkTrack = item.talk_track || '';
   const figmaProduct = item.figma_product || item.figma_relevance || null;
 
+  useEffect(() => {
+    if (!popoverOpen) return;
+    const handler = () => setPopoverOpen(false);
+    document.addEventListener('click', handler);
+    return () => document.removeEventListener('click', handler);
+  }, [popoverOpen]);
+
+  const sourceNode = source && (() => {
+    const match = String(source).match(/\[?(\d+)\]?/);
+    const num = match ? match[1] : null;
+    return num ? (
+      <span style={{ fontSize: 11, color: COLORS.faint, fontFamily: FONTS.sans }}>
+        · [{num}]
+      </span>
+    ) : (
+      <span style={{
+        fontSize: 11, color: COLORS.faint, fontFamily: FONTS.sans,
+        maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+      }} title={source}>
+        · {source.length > 40 ? source.slice(0, 40) + '…' : source}
+      </span>
+    );
+  })();
+
   return (
-    <div
-      style={{ marginBottom: 16, position: 'relative' }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-    >
+    <div style={{ marginBottom: 16, position: 'relative' }}>
       <div style={{ borderTop: `2px solid ${color}`, paddingTop: 10 }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
-          <div style={{
-            fontSize: 16, fontWeight: 600, color: COLORS.body,
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, flexWrap: 'wrap' }}>
+          <span style={{
+            fontSize: 15, fontWeight: 600, color: COLORS.body,
             fontFamily: FONTS.sans, lineHeight: 1.5,
           }}>
             {headline}
-          </div>
+          </span>
+          {sourceNode}
           {talkTrack && (
             <svg
-              width="14" height="14" viewBox="0 0 16 16"
-              style={{
-                flexShrink: 0, marginTop: 3,
-                color: COLORS.purple,
-                opacity: hovered ? 1 : 0,
-                transition: 'opacity 0.15s',
-              }}
+              width="13" height="13" viewBox="0 0 16 16"
               fill="none" stroke="currentColor" strokeWidth="1.5"
+              style={{ flexShrink: 0, marginTop: 3, color: COLORS.faint, cursor: 'pointer', marginLeft: 6 }}
+              onClick={(e) => { e.stopPropagation(); setPopoverOpen(o => !o); }}
             >
               <circle cx="8" cy="8" r="7" />
               <line x1="8" y1="7" x2="8" y2="11" />
@@ -1815,26 +1833,6 @@ function PyramidItem({ item, field, color }: { item: any; field: string; color: 
             </svg>
           )}
         </div>
-        {source && (() => {
-          const match = String(source).match(/\[?(\d+)\]?/);
-          const num = match ? match[1] : null;
-          return num ? (
-            <span style={{
-              fontSize: 11, color: COLORS.faint,
-              fontFamily: FONTS.sans, marginTop: 2, display: 'inline-block',
-            }}>
-              [{num}]
-            </span>
-          ) : (
-            <span style={{
-              fontSize: 11, color: COLORS.faint,
-              fontFamily: FONTS.sans, marginTop: 2, display: 'inline-block',
-              maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            }} title={source}>
-              {source.length > 40 ? source.slice(0, 40) + '…' : source}
-            </span>
-          );
-        })()}
 
         {figmaProduct && (
           <div style={{ marginTop: 6 }}>
@@ -1850,24 +1848,28 @@ function PyramidItem({ item, field, color }: { item: any; field: string; color: 
         )}
       </div>
 
-      {talkTrack && hovered && (
-        <div style={{
-          position: 'absolute',
-          top: '100%',
-          left: 0,
-          right: 0,
-          zIndex: 20,
-          background: '#1a1a2e',
-          border: `1px solid ${color}40`,
-          borderRadius: 6,
-          padding: '12px 14px',
-          fontSize: 14,
-          color: COLORS.secondary,
-          lineHeight: 1.65,
-          fontFamily: FONTS.sans,
-          boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
-          marginTop: 4,
-        }}>
+      {talkTrack && popoverOpen && (
+        <div
+          ref={popoverRef}
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            position: 'absolute',
+            top: '100%',
+            left: 0,
+            zIndex: 20,
+            background: '#ffffff',
+            border: '1px solid #e5e0d8',
+            borderRadius: 6,
+            padding: '12px 14px',
+            fontSize: 14,
+            color: COLORS.secondary,
+            lineHeight: 1.65,
+            fontFamily: FONTS.sans,
+            boxShadow: '0 4px 16px rgba(0,0,0,0.1)',
+            marginTop: 4,
+            maxWidth: 480,
+          }}
+        >
           {talkTrack}
         </div>
       )}
