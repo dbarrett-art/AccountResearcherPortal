@@ -13,7 +13,7 @@ import { ChevronRight, FileText } from 'lucide-react';
 interface TeamUser {
   id: string;
   email: string;
-  name: string;
+  name: string | null;
   role: string;
 }
 
@@ -58,12 +58,13 @@ function relativeTime(dateStr: string): string {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-function initials(name: string): string {
+function initials(name: string | null | undefined): string {
+  if (!name) return '?';
   return name
     .split(/\s+/)
     .slice(0, 2)
     .map(w => w[0]?.toUpperCase() || '')
-    .join('');
+    .join('') || '?';
 }
 
 /** Recursively count all runs in a subtree */
@@ -137,7 +138,7 @@ function ExpandChevron({ open, onClick }: { open: boolean; onClick: () => void }
 
 // ─── Avatar ─────────────────────────────────────────────────────────────────
 
-function Avatar({ name, isManager }: { name: string; isManager: boolean }) {
+function Avatar({ name, isManager }: { name: string | null | undefined; isManager: boolean }) {
   const bg = isManager ? 'rgba(139,92,246,0.18)' : 'rgba(59,130,246,0.15)';
   const color = isManager ? '#a78bfa' : '#60a5fa';
   return (
@@ -267,7 +268,7 @@ function UserRow({
         </span>
         <Avatar name={node.user.name} isManager={isManager} />
         <span style={{ fontSize: 13, fontWeight: 500, flex: 1 }}>
-          {node.user.name}
+          {node.user.name || node.user.email || 'Unknown'}
           <span style={{ fontWeight: 400, color: 'var(--text-secondary)', marginLeft: 6 }}>
             {node.user.role === 'manager' ? 'Manager' : node.user.role === 'admin' ? 'Admin' : 'AE'}
           </span>
