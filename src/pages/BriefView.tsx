@@ -438,6 +438,9 @@ function CitedProse({ text, sources, style, onCitationClick }: {
 }) {
   if (!text) return null;
 
+  // Strip [SOURCE: url] patterns (these come from distilled intel and should not render as raw text)
+  const cleanText = text.replace(/\s*\[SOURCE:\s*https?:\/\/[^\]]+\]/gi, '');
+
   // Split text on [N] citation markers and build React elements
   const parts: React.ReactNode[] = [];
   const regex = /\[(\d+)\]/g;
@@ -445,10 +448,10 @@ function CitedProse({ text, sources, style, onCitationClick }: {
   let match;
   let key = 0;
 
-  while ((match = regex.exec(text)) !== null) {
+  while ((match = regex.exec(cleanText)) !== null) {
     // Text before this citation
     if (match.index > lastIndex) {
-      parts.push(text.slice(lastIndex, match.index));
+      parts.push(cleanText.slice(lastIndex, match.index));
     }
     const n = parseInt(match[1], 10);
     // Look up by citation_number first (new pipeline), fall back to array index (legacy)
@@ -492,8 +495,8 @@ function CitedProse({ text, sources, style, onCitationClick }: {
   }
 
   // Remaining text after last citation
-  if (lastIndex < text.length) {
-    parts.push(text.slice(lastIndex));
+  if (lastIndex < cleanText.length) {
+    parts.push(cleanText.slice(lastIndex));
   }
 
   return (
@@ -586,12 +589,12 @@ function CitationTooltip({ tooltip }: {
         left: Math.min(tooltip.x, window.innerWidth - 340),
         top: useAbove ? posAbove : tooltip.y + 8,
         maxWidth: 320,
-        background: '#1e1e1e',
-        border: '1px solid #333',
+        background: '#ffffff',
+        border: '1px solid #e5e0d8',
         borderRadius: 6,
         padding: '14px 16px',
         zIndex: 1000,
-        boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+        boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
         fontFamily: 'DM Sans, sans-serif',
       }}
       onClick={e => e.stopPropagation()}
@@ -602,24 +605,24 @@ function CitationTooltip({ tooltip }: {
           {domain} · Source [{tooltip.index + 1}]
         </div>
       )}
-      <div style={{ fontSize: 13, fontWeight: 600, color: '#e5e5e5', marginBottom: 8, lineHeight: 1.4 }}>
+      <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.body, marginBottom: 8, lineHeight: 1.4 }}>
         {title.length > 80 ? title.slice(0, 80) + '…' : title}
       </div>
       {snippet ? (
-        <div style={{ fontSize: 13, color: '#a8a29e', lineHeight: 1.55, marginBottom: 12, fontStyle: 'italic' }}>
+        <div style={{ fontSize: 13, color: COLORS.secondary, lineHeight: 1.55, marginBottom: 12, fontStyle: 'italic' }}>
           {snippet.length > 280 ? snippet.slice(0, 280) + '…' : snippet}
         </div>
       ) : displayText && displayText !== title && displayText !== 'Research source' ? (
-        <div style={{ fontSize: 13, color: '#a8a29e', lineHeight: 1.5, marginBottom: 12 }}>
+        <div style={{ fontSize: 13, color: COLORS.secondary, lineHeight: 1.5, marginBottom: 12 }}>
           {displayText.length > 200 ? displayText.slice(0, 200) + '…' : displayText}
         </div>
       ) : (
-        <div style={{ fontSize: 12, color: '#666', lineHeight: 1.5, marginBottom: 12, fontStyle: 'italic' }}>
+        <div style={{ fontSize: 12, color: COLORS.faint, lineHeight: 1.5, marginBottom: 12, fontStyle: 'italic' }}>
           No preview available
         </div>
       )}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 10, borderTop: '1px solid #333' }}>
-        <div style={{ fontSize: 11, color: '#666' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 10, borderTop: '1px solid #e5e0d8' }}>
+        <div style={{ fontSize: 11, color: COLORS.faint }}>
           {source?.date || ''}
         </div>
         {url && (
@@ -628,9 +631,9 @@ function CitationTooltip({ tooltip }: {
             target="_blank"
             rel="noopener noreferrer"
             style={{
-              fontSize: 12, color: '#c4b5fd', fontWeight: 500, cursor: 'pointer',
+              fontSize: 12, color: COLORS.purple, fontWeight: 500, cursor: 'pointer',
               display: 'flex', alignItems: 'center', gap: 4,
-              background: 'rgba(124,58,237,0.15)', border: 'none',
+              background: 'rgba(124,58,237,0.08)', border: 'none',
               borderRadius: 8, padding: '5px 10px',
               textDecoration: 'none',
             }}
@@ -1405,7 +1408,7 @@ function WhyFigmaSection({ pov, sources, feedbackNode, onCitationClick }: { pov:
               borderRadius: '0 6px 6px 0',
             }}>
               <div style={{
-                fontStyle: 'italic', fontSize: 16,
+                fontStyle: 'italic', fontSize: 17,
                 color: COLORS.body, lineHeight: 1.6,
                 fontFamily: FONTS.serif,
               }}>
@@ -1699,7 +1702,7 @@ function WhitespaceSection({ pov, feedbackNode }: { pov: any; feedbackNode?: Rea
                 <span style={{ fontFamily: FONTS.serif, fontSize: 18, fontWeight: 500, color: COLORS.heading }}>$125K</span>
               </div>
               {s.evidence && (
-                <div style={{ fontSize: 14, fontStyle: 'italic', color: COLORS.tertiary, marginTop: 8, paddingTop: 8, borderTop: `1px solid #f5f3ef`, lineHeight: 1.6 }}>{s.evidence}</div>
+                <div style={{ fontSize: 14, fontStyle: 'italic', color: COLORS.tertiary, marginTop: 8, paddingTop: 8, borderTop: `1px solid #f5f3ef`, lineHeight: 1.6 }}>{s.evidence.replace(/\s*\[SOURCE:\s*https?:\/\/[^\]]+\]/gi, '')}</div>
               )}
             </div>
           ))}
