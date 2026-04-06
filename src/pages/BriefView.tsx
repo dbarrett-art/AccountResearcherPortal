@@ -1775,84 +1775,97 @@ function ResearchDeepDiveSection({ pov, feedbackNode }: { pov: any; feedbackNode
 /* ------------------------------------------------------------------ */
 
 function PyramidItem({ item, field, color }: { item: any; field: string; color: string }) {
-  const [talkOpen, setTalkOpen] = useState(false);
+  const [hovered, setHovered] = useState(false);
   const headline = item[field] || item.objective || item.strategy || item.initiative || '';
   const source = item.source || item.evidence_source || null;
-  const kpis: string[] = item.kpis || item.metrics || [];
   const talkTrack = item.talk_track || '';
   const figmaProduct = item.figma_product || item.figma_relevance || null;
 
   return (
-    <div style={{ marginBottom: 16 }}>
+    <div
+      style={{ marginBottom: 16, position: 'relative' }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
       <div style={{ borderTop: `2px solid ${color}`, paddingTop: 10 }}>
-        <div style={{
-          fontSize: 16, fontWeight: 600, color: COLORS.body,
-          fontFamily: FONTS.sans, lineHeight: 1.5,
-        }}>
-          {headline}
-        </div>
-        {source && (
-          <div style={{ fontSize: 12, color: COLORS.faint, fontFamily: FONTS.sans, marginTop: 2 }}>
-            {source}
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+          <div style={{
+            fontSize: 16, fontWeight: 600, color: COLORS.body,
+            fontFamily: FONTS.sans, lineHeight: 1.5,
+          }}>
+            {headline}
           </div>
-        )}
-        {kpis.length > 0 && (
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
-            {kpis.map((kpi: string, k: number) => (
-              <span key={k} style={{
-                fontSize: 11, padding: '2px 8px', borderRadius: 10,
-                background: color + '14', color: color,
-                border: `1px solid ${color}30`,
-                fontWeight: 500, fontFamily: FONTS.sans,
-              }}>
-                {kpi}
-              </span>
-            ))}
+          {talkTrack && (
+            <svg
+              width="14" height="14" viewBox="0 0 16 16"
+              style={{
+                flexShrink: 0, marginTop: 3,
+                color: COLORS.purple,
+                opacity: hovered ? 1 : 0,
+                transition: 'opacity 0.15s',
+              }}
+              fill="none" stroke="currentColor" strokeWidth="1.5"
+            >
+              <circle cx="8" cy="8" r="7" />
+              <line x1="8" y1="7" x2="8" y2="11" />
+              <circle cx="8" cy="5" r="0.5" fill="currentColor" />
+            </svg>
+          )}
+        </div>
+        {source && (() => {
+          const match = String(source).match(/\[?(\d+)\]?/);
+          const num = match ? match[1] : null;
+          return num ? (
+            <span style={{
+              fontSize: 11, color: COLORS.faint,
+              fontFamily: FONTS.sans, marginTop: 2, display: 'inline-block',
+            }}>
+              [{num}]
+            </span>
+          ) : (
+            <span style={{
+              fontSize: 11, color: COLORS.faint,
+              fontFamily: FONTS.sans, marginTop: 2, display: 'inline-block',
+              maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }} title={source}>
+              {source.length > 40 ? source.slice(0, 40) + '…' : source}
+            </span>
+          );
+        })()}
+
+        {figmaProduct && (
+          <div style={{ marginTop: 6 }}>
+            <span style={{
+              fontSize: 11, padding: '2px 8px', borderRadius: 10,
+              background: COLORS.purple + '14', color: COLORS.purple,
+              border: `1px solid ${COLORS.purple}30`,
+              fontWeight: 500, fontFamily: FONTS.sans,
+            }}>
+              {figmaProduct}
+            </span>
           </div>
         )}
       </div>
 
-      {talkTrack && (
-        <div style={{ marginTop: 8 }}>
-          <button
-            onClick={() => setTalkOpen(o => !o)}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 6,
-              background: 'none', border: 'none', cursor: 'pointer',
-              padding: 0, fontSize: 13, color: COLORS.purple,
-              fontFamily: FONTS.sans, fontWeight: 500,
-            }}
-          >
-            <svg width="8" height="8" viewBox="0 0 8 8" style={{
-              transform: talkOpen ? 'rotate(90deg)' : 'none',
-              transition: 'transform 0.15s',
-            }}>
-              <path d="M2 1L6 4L2 7" stroke={COLORS.purple} strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            Talk track
-          </button>
-          {talkOpen && (
-            <div style={{
-              fontSize: 15, color: COLORS.secondary, lineHeight: 1.65,
-              fontFamily: FONTS.sans, marginTop: 6, paddingLeft: 14,
-              borderLeft: `2px solid ${color}40`,
-            }}>
-              {talkTrack}
-            </div>
-          )}
-        </div>
-      )}
-
-      {figmaProduct && (
-        <div style={{ marginTop: 6 }}>
-          <span style={{
-            fontSize: 11, padding: '2px 8px', borderRadius: 10,
-            background: COLORS.purple + '14', color: COLORS.purple,
-            border: `1px solid ${COLORS.purple}30`,
-            fontWeight: 500, fontFamily: FONTS.sans,
-          }}>
-            {figmaProduct}
-          </span>
+      {talkTrack && hovered && (
+        <div style={{
+          position: 'absolute',
+          top: '100%',
+          left: 0,
+          right: 0,
+          zIndex: 20,
+          background: '#1a1a2e',
+          border: `1px solid ${color}40`,
+          borderRadius: 6,
+          padding: '12px 14px',
+          fontSize: 14,
+          color: COLORS.secondary,
+          lineHeight: 1.65,
+          fontFamily: FONTS.sans,
+          boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
+          marginTop: 4,
+        }}>
+          {talkTrack}
         </div>
       )}
     </div>
@@ -1868,10 +1881,10 @@ function ValuePyramidSection({ pyramid, feedbackNode }: { pyramid: any; feedback
 
   const totalItems = objectives.length + strategies.length + initiatives.length;
 
-  const layers: { label: string; color: string; items: any[]; field: string }[] = [
-    { label: 'CORPORATE OBJECTIVES', color: '#6366f1', items: objectives, field: 'objective' },
-    { label: 'BUSINESS STRATEGIES', color: '#8b5cf6', items: strategies, field: 'strategy' },
-    { label: 'TARGETED INITIATIVES', color: '#a78bfa', items: initiatives, field: 'initiative' },
+  const layers: { label: string; color: string; items: any[]; field: string; indent: number }[] = [
+    { label: 'CORPORATE OBJECTIVES', color: '#6366f1', items: objectives, field: 'objective', indent: 0 },
+    { label: 'BUSINESS STRATEGIES', color: '#8b5cf6', items: strategies, field: 'strategy', indent: 24 },
+    { label: 'TARGETED INITIATIVES', color: '#a78bfa', items: initiatives, field: 'initiative', indent: 48 },
   ];
 
   return (
@@ -1879,7 +1892,7 @@ function ValuePyramidSection({ pyramid, feedbackNode }: { pyramid: any; feedback
       {layers.map((layer, li) => {
         if (layer.items.length === 0) return null;
         return (
-          <div key={li} style={{ marginBottom: 24 }}>
+          <div key={li} style={{ marginBottom: 24, paddingLeft: layer.indent }}>
             <div style={{
               fontSize: 12, fontWeight: 700, color: layer.color,
               textTransform: 'uppercase', letterSpacing: '0.06em',
