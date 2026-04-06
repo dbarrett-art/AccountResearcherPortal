@@ -499,7 +499,7 @@ function CitedProse({ text, sources, style, onCitationClick }: {
   return (
     <p style={{
       fontSize: 17, lineHeight: 1.75, color: COLORS.body,
-      fontFamily: FONTS.sans, margin: 0,
+      fontFamily: FONTS.sans, margin: 0, fontWeight: 400,
       ...style,
     }}>
       {parts}
@@ -563,6 +563,7 @@ function extractAroundTag(text: string, _tagStart: number, tagEnd: number): stri
 function CitationTooltip({ tooltip }: {
   tooltip: { source: any; index: number; x: number; y: number; snippet?: string | null };
 }) {
+  const ref = useRef<HTMLDivElement>(null);
   const source = tooltip.source;
   const url = typeof source === 'string' ? source : (source?.url || source?.source || '');
   let domain: string | null = null;
@@ -572,19 +573,25 @@ function CitationTooltip({ tooltip }: {
   const fallbackSummary = source?.snippet || source?.description || source?.what_it_provided || null;
   const displayText = snippet || fallbackSummary;
 
+  // Position above badge by default, fall back to below if near top
+  const popoverHeight = 200; // approximate
+  const posAbove = tooltip.y - popoverHeight - 8;
+  const useAbove = posAbove > 10;
+
   return (
     <div
+      ref={ref}
       style={{
         position: 'fixed',
         left: Math.min(tooltip.x, window.innerWidth - 340),
-        top: tooltip.y + 8,
-        width: 320,
-        background: '#fff',
-        border: '0.5px solid #e5e5e0',
-        borderRadius: 12,
+        top: useAbove ? posAbove : tooltip.y + 8,
+        maxWidth: 320,
+        background: '#1e1e1e',
+        border: '1px solid #333',
+        borderRadius: 6,
         padding: '14px 16px',
         zIndex: 1000,
-        boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+        boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
         fontFamily: 'DM Sans, sans-serif',
       }}
       onClick={e => e.stopPropagation()}
@@ -595,24 +602,24 @@ function CitationTooltip({ tooltip }: {
           {domain} · Source [{tooltip.index + 1}]
         </div>
       )}
-      <div style={{ fontSize: 13, fontWeight: 500, color: COLORS.body, marginBottom: 8, lineHeight: 1.4 }}>
-        {title.length > 120 ? title.slice(0, 120) + '…' : title}
+      <div style={{ fontSize: 13, fontWeight: 600, color: '#e5e5e5', marginBottom: 8, lineHeight: 1.4 }}>
+        {title.length > 80 ? title.slice(0, 80) + '…' : title}
       </div>
       {snippet ? (
-        <div style={{ fontSize: 13, color: COLORS.secondary, lineHeight: 1.55, marginBottom: 12, fontStyle: 'italic' }}>
+        <div style={{ fontSize: 13, color: '#a8a29e', lineHeight: 1.55, marginBottom: 12, fontStyle: 'italic' }}>
           {snippet.length > 280 ? snippet.slice(0, 280) + '…' : snippet}
         </div>
       ) : displayText && displayText !== title && displayText !== 'Research source' ? (
-        <div style={{ fontSize: 13, color: COLORS.secondary, lineHeight: 1.5, marginBottom: 12 }}>
+        <div style={{ fontSize: 13, color: '#a8a29e', lineHeight: 1.5, marginBottom: 12 }}>
           {displayText.length > 200 ? displayText.slice(0, 200) + '…' : displayText}
         </div>
       ) : (
-        <div style={{ fontSize: 12, color: '#aaa', lineHeight: 1.5, marginBottom: 12, fontStyle: 'italic' }}>
+        <div style={{ fontSize: 12, color: '#666', lineHeight: 1.5, marginBottom: 12, fontStyle: 'italic' }}>
           No preview available
         </div>
       )}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 10, borderTop: '0.5px solid #f0f0ec' }}>
-        <div style={{ fontSize: 11, color: '#999' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 10, borderTop: '1px solid #333' }}>
+        <div style={{ fontSize: 11, color: '#666' }}>
           {source?.date || ''}
         </div>
         {url && (
@@ -621,9 +628,9 @@ function CitationTooltip({ tooltip }: {
             target="_blank"
             rel="noopener noreferrer"
             style={{
-              fontSize: 12, color: '#534AB7', fontWeight: 500, cursor: 'pointer',
+              fontSize: 12, color: '#c4b5fd', fontWeight: 500, cursor: 'pointer',
               display: 'flex', alignItems: 'center', gap: 4,
-              background: '#EEEDFE', border: 'none',
+              background: 'rgba(124,58,237,0.15)', border: 'none',
               borderRadius: 8, padding: '5px 10px',
               textDecoration: 'none',
             }}
@@ -1087,7 +1094,99 @@ function AboutSection({ pov, sources, feedbackNode, onCitationClick }: { pov: an
 
       {/* what_they_do prose (only content before ## headers, if who_they_are already shown) */}
       {about.who_they_are && cleanWhatTheyDo && (
-        <CitedProse text={cleanWhatTheyDo} sources={sources} onCitationClick={onCitationClick} />
+        <CitedProse text={cleanWhatTheyDo} sources={sources} style={{ fontWeight: 400 }} onCitationClick={onCitationClick} />
+      )}
+
+      {/* Strategy callout — if a dedicated strategy field exists */}
+      {(pov?.why_anything?.corporate_strategy && !about.strategy) ? null : about.strategy && (
+        <div style={{
+          background: '#eef2ff', borderRadius: 6,
+          padding: '14px 16px', marginTop: 12,
+        }}>
+          <div style={{
+            fontSize: 11, fontWeight: 700, color: '#3730a3',
+            textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6,
+            fontFamily: FONTS.sans,
+          }}>Strategy</div>
+          <CitedProse text={about.strategy} sources={sources} style={{ fontWeight: 400 }} onCitationClick={onCitationClick} />
+        </div>
+      )}
+    </Section>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Section: Organisational Structure                                  */
+/* ------------------------------------------------------------------ */
+
+function OrgStructureSection({ pov }: { pov: any }) {
+  const org = pov?.org_structure;
+  const hasOrgData = org && (org.structure_summary || (org.divisions && org.divisions.length > 0));
+
+  // Fallback: try to extract org language from what_they_do
+  let fallbackProse: string | null = null;
+  if (!hasOrgData && pov?.about?.what_they_do) {
+    const text = pov.about.what_they_do as string;
+    const orgKeywords = /\b(division|subsidiary|business unit|headquartered|operating segment|group compris|conglomerate)\b/i;
+    if (orgKeywords.test(text)) {
+      // Extract sentences containing org keywords
+      const sentences = text.split(/(?<=[.!?])\s+/);
+      const orgSentences = sentences.filter(s => orgKeywords.test(s)).slice(0, 3);
+      if (orgSentences.length > 0) fallbackProse = orgSentences.join(' ');
+    }
+  }
+
+  return (
+    <Section title="Organisational Structure" accent={SECTION_ACCENTS.about} defaultOpen={false}>
+      {hasOrgData ? (
+        <>
+          {org.structure_summary && (
+            <p style={{ fontSize: 17, lineHeight: 1.75, color: COLORS.body, fontFamily: FONTS.sans, margin: '0 0 12px', fontWeight: 400 }}>
+              {org.structure_summary}
+            </p>
+          )}
+          {org.structure_type && (
+            <span style={{
+              fontSize: 11, padding: '2px 8px', borderRadius: 10,
+              background: SECTION_ACCENTS.about + '18', color: SECTION_ACCENTS.about,
+              fontWeight: 600, fontFamily: FONTS.sans, marginBottom: 12, display: 'inline-block',
+            }}>
+              {org.structure_type}
+            </span>
+          )}
+          {org.divisions && org.divisions.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 }}>
+              {org.divisions.map((div: any, i: number) => (
+                <div key={i} style={{
+                  borderLeft: `3px solid ${SECTION_ACCENTS.about}`,
+                  padding: '10px 14px', borderRadius: '0 6px 6px 0',
+                }}>
+                  <div style={{ fontSize: 15, fontWeight: 600, color: COLORS.body, fontFamily: FONTS.sans }}>
+                    {typeof div === 'string' ? div : div.name}
+                  </div>
+                  {typeof div !== 'string' && div.description && (
+                    <div style={{ fontSize: 14, color: COLORS.secondary, fontFamily: FONTS.sans, marginTop: 2, lineHeight: 1.5 }}>
+                      {div.description}
+                    </div>
+                  )}
+                  {typeof div !== 'string' && div.estimated_headcount && (
+                    <div style={{ fontSize: 12, color: COLORS.faint, fontFamily: FONTS.sans, marginTop: 2 }}>
+                      {div.estimated_headcount}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      ) : fallbackProse ? (
+        <p style={{ fontSize: 17, lineHeight: 1.75, color: COLORS.body, fontFamily: FONTS.sans, margin: 0, fontWeight: 400 }}>
+          {fallbackProse}
+        </p>
+      ) : (
+        <p style={{ fontSize: 14, color: COLORS.faint, fontFamily: FONTS.sans, margin: 0, fontStyle: 'italic' }}>
+          Organisational structure data not available for this account — enrich via a fresh pipeline run.
+        </p>
       )}
     </Section>
   );
@@ -1259,29 +1358,24 @@ function WhyNowSection({ pov, sources, feedbackNode, onCitationClick }: { pov: a
 /*  Section: Why Figma                                                 */
 /* ------------------------------------------------------------------ */
 
-function ExpandableProduct({ product, sources, onCitationClick }: { product: any; sources?: any[]; onCitationClick?: (i: number, src: any, e: React.MouseEvent) => void }) {
-  const [open, setOpen] = useState(false);
+function ProductItem({ product, sources, onCitationClick }: { product: any; sources?: any[]; onCitationClick?: (i: number, src: any, e: React.MouseEvent) => void }) {
   const name = product?.product || '';
   const relevance = product?.relevance || '';
 
   return (
-    <div style={{ padding: '10px 0', borderBottom: `1px solid ${COLORS.borderLight}` }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-        {relevance && <ItemChevron open={open} onClick={() => setOpen(o => !o)} />}
-        <div style={{ flex: 1, cursor: relevance ? 'pointer' : undefined }} onClick={() => relevance && setOpen(o => !o)}>
-          <div style={{
-            fontSize: 16, fontWeight: 600, color: COLORS.purple,
-            fontFamily: FONTS.sans, marginBottom: open ? 4 : 0,
-          }}>
-            {name}
-          </div>
-          {open && relevance && (
-            <div style={{ marginTop: 6 }}>
-              <CitedProse text={relevance} sources={sources} style={{ fontSize: 15, color: COLORS.secondary, lineHeight: 1.6 }} onCitationClick={onCitationClick} />
-            </div>
-          )}
-        </div>
+    <div style={{
+      borderLeft: `2px solid ${COLORS.purple}`,
+      paddingLeft: 14, marginBottom: 12,
+    }}>
+      <div style={{
+        fontSize: 16, fontWeight: 600, color: COLORS.purple,
+        fontFamily: FONTS.sans, marginBottom: relevance ? 6 : 0,
+      }}>
+        {name}
       </div>
+      {relevance && (
+        <CitedProse text={relevance} sources={sources} style={{ fontSize: 15, color: COLORS.secondary, lineHeight: 1.6, fontWeight: 400 }} onCitationClick={onCitationClick} />
+      )}
     </div>
   );
 }
@@ -1292,6 +1386,7 @@ function WhyFigmaSection({ pov, sources, feedbackNode, onCitationClick }: { pov:
   const products = wf.primary_products || [];
   const di = wf.design_infrastructure;
   const painSignals = wf.pain_signals || wf.what_they_say || [];
+  const [showAllProducts, setShowAllProducts] = useState(products.length <= 6);
 
   return (
     <Section title="Why Figma" accent={SECTION_ACCENTS.whyFigma} count={products.length > 0 ? `${products.length} products` : undefined} feedbackNode={feedbackNode}>
@@ -1347,23 +1442,37 @@ function WhyFigmaSection({ pov, sources, feedbackNode, onCitationClick }: { pov:
             textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6,
             fontFamily: FONTS.sans,
           }}>Strongest Angle</div>
-          <CitedProse text={wf.strongest_angle} sources={sources} style={{ fontSize: 16, lineHeight: 1.7 }} onCitationClick={onCitationClick} />
+          <CitedProse text={wf.strongest_angle} sources={sources} style={{ fontSize: 16, lineHeight: 1.7, fontWeight: 400 }} onCitationClick={onCitationClick} />
         </div>
       )}
 
-      {/* Rationale */}
+      {/* Rationale — split into scannable paragraphs */}
       {wf.rationale && (
-        <div style={{ marginBottom: 16 }}>
-          <CitedProse text={wf.rationale} sources={sources} onCitationClick={onCitationClick} />
+        <div style={{ marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {wf.rationale.split(/\n\n+/).map((para: string, i: number) => (
+            <CitedProse key={i} text={para.trim()} sources={sources} style={{ fontWeight: 400 }} onCitationClick={onCitationClick} />
+          ))}
         </div>
       )}
 
-      {/* Products — expandable */}
+      {/* Products — always expanded, no accordion */}
       {products.length > 0 && (
-        <div style={{ marginBottom: 16 }}>
-          {products.map((p: any, i: number) => (
-            <ExpandableProduct key={i} product={p} sources={sources} onCitationClick={onCitationClick} />
+        <div style={{ marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {(showAllProducts ? products : products.slice(0, 6)).map((p: any, i: number) => (
+            <ProductItem key={i} product={p} sources={sources} onCitationClick={onCitationClick} />
           ))}
+          {!showAllProducts && products.length > 6 && (
+            <button
+              onClick={() => setShowAllProducts(true)}
+              style={{
+                fontSize: 13, color: COLORS.purple, background: 'none',
+                border: 'none', cursor: 'pointer', padding: '4px 0',
+                fontFamily: FONTS.sans, fontWeight: 500, textAlign: 'left',
+              }}
+            >
+              Show all {products.length} products
+            </button>
+          )}
         </div>
       )}
 
@@ -1619,7 +1728,17 @@ function WhitespaceSection({ pov, feedbackNode }: { pov: any; feedbackNode?: Rea
 function ResearchDeepDiveSection({ pov, feedbackNode }: { pov: any; feedbackNode?: React.ReactNode }) {
   const [expanded, setExpanded] = useState(false);
   const intel = pov?.distilled_intel || pov?.research_deep_dive;
-  if (!intel) return null;
+  console.log('[BriefView] distilled_intel length:', intel ? intel.length : 0);
+
+  if (!intel) {
+    return (
+      <Section title="Research Deep Dive" accent={SECTION_ACCENTS.researchDeepDive} feedbackNode={feedbackNode}>
+        <p style={{ fontSize: 14, color: COLORS.faint, fontFamily: FONTS.sans, margin: 0, fontStyle: 'italic' }}>
+          Research intelligence not available for this run. Re-run with --fresh to populate.
+        </p>
+      </Section>
+    );
+  }
 
   // Try to split into sections
   const cleanIntel = intel.split('---SOURCE_DECISIONS_START---')[0].trim();
@@ -1655,6 +1774,91 @@ function ResearchDeepDiveSection({ pov, feedbackNode }: { pov: any; feedbackNode
 /*  Section: Value Pyramid                                             */
 /* ------------------------------------------------------------------ */
 
+function PyramidItem({ item, field, color }: { item: any; field: string; color: string }) {
+  const [talkOpen, setTalkOpen] = useState(false);
+  const headline = item[field] || item.objective || item.strategy || item.initiative || '';
+  const source = item.source || item.evidence_source || null;
+  const kpis: string[] = item.kpis || item.metrics || [];
+  const talkTrack = item.talk_track || '';
+  const figmaProduct = item.figma_product || item.figma_relevance || null;
+
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ borderTop: `2px solid ${color}`, paddingTop: 10 }}>
+        <div style={{
+          fontSize: 16, fontWeight: 600, color: COLORS.body,
+          fontFamily: FONTS.sans, lineHeight: 1.5,
+        }}>
+          {headline}
+        </div>
+        {source && (
+          <div style={{ fontSize: 12, color: COLORS.faint, fontFamily: FONTS.sans, marginTop: 2 }}>
+            {source}
+          </div>
+        )}
+        {kpis.length > 0 && (
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+            {kpis.map((kpi: string, k: number) => (
+              <span key={k} style={{
+                fontSize: 11, padding: '2px 8px', borderRadius: 10,
+                background: color + '14', color: color,
+                border: `1px solid ${color}30`,
+                fontWeight: 500, fontFamily: FONTS.sans,
+              }}>
+                {kpi}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {talkTrack && (
+        <div style={{ marginTop: 8 }}>
+          <button
+            onClick={() => setTalkOpen(o => !o)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              background: 'none', border: 'none', cursor: 'pointer',
+              padding: 0, fontSize: 13, color: COLORS.purple,
+              fontFamily: FONTS.sans, fontWeight: 500,
+            }}
+          >
+            <svg width="8" height="8" viewBox="0 0 8 8" style={{
+              transform: talkOpen ? 'rotate(90deg)' : 'none',
+              transition: 'transform 0.15s',
+            }}>
+              <path d="M2 1L6 4L2 7" stroke={COLORS.purple} strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            Talk track
+          </button>
+          {talkOpen && (
+            <div style={{
+              fontSize: 15, color: COLORS.secondary, lineHeight: 1.65,
+              fontFamily: FONTS.sans, marginTop: 6, paddingLeft: 14,
+              borderLeft: `2px solid ${color}40`,
+            }}>
+              {talkTrack}
+            </div>
+          )}
+        </div>
+      )}
+
+      {figmaProduct && (
+        <div style={{ marginTop: 6 }}>
+          <span style={{
+            fontSize: 11, padding: '2px 8px', borderRadius: 10,
+            background: COLORS.purple + '14', color: COLORS.purple,
+            border: `1px solid ${COLORS.purple}30`,
+            fontWeight: 500, fontFamily: FONTS.sans,
+          }}>
+            {figmaProduct}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ValuePyramidSection({ pyramid, feedbackNode }: { pyramid: any; feedbackNode?: React.ReactNode }) {
   if (!pyramid) return null;
   const objectives = pyramid.corporate_objectives || [];
@@ -1665,9 +1869,9 @@ function ValuePyramidSection({ pyramid, feedbackNode }: { pyramid: any; feedback
   const totalItems = objectives.length + strategies.length + initiatives.length;
 
   const layers: { label: string; color: string; items: any[]; field: string }[] = [
-    { label: 'CORPORATE OBJECTIVES', color: '#059669', items: objectives, field: 'objective' },
-    { label: 'BUSINESS STRATEGIES', color: '#4361ee', items: strategies, field: 'strategy' },
-    { label: 'TARGETED INITIATIVES', color: COLORS.purple, items: initiatives, field: 'initiative' },
+    { label: 'CORPORATE OBJECTIVES', color: '#6366f1', items: objectives, field: 'objective' },
+    { label: 'BUSINESS STRATEGIES', color: '#8b5cf6', items: strategies, field: 'strategy' },
+    { label: 'TARGETED INITIATIVES', color: '#a78bfa', items: initiatives, field: 'initiative' },
   ];
 
   return (
@@ -1675,30 +1879,17 @@ function ValuePyramidSection({ pyramid, feedbackNode }: { pyramid: any; feedback
       {layers.map((layer, li) => {
         if (layer.items.length === 0) return null;
         return (
-          <div key={li} style={{
-            borderLeft: `3px solid ${layer.color}`,
-            paddingLeft: 14, marginBottom: 18,
-          }}>
+          <div key={li} style={{ marginBottom: 24 }}>
             <div style={{
               fontSize: 12, fontWeight: 700, color: layer.color,
               textTransform: 'uppercase', letterSpacing: '0.06em',
-              marginBottom: 8, fontFamily: FONTS.sans,
+              marginBottom: 12, fontFamily: FONTS.sans,
+              paddingBottom: 6, borderBottom: `2px solid ${layer.color}`,
             }}>
               {layer.label}
             </div>
             {layer.items.map((item: any, i: number) => (
-              <div key={i} style={{ fontSize: 16, color: COLORS.body, fontFamily: FONTS.sans, marginBottom: 6, lineHeight: 1.6 }}>
-                {item[layer.field] || item.objective || item.strategy || item.initiative}
-                {item.talk_track && (
-                  <div style={{
-                    fontSize: 15, color: COLORS.secondary, fontStyle: 'italic',
-                    borderLeft: `2px solid #a855f7`, paddingLeft: 8, marginTop: 4,
-                    fontFamily: FONTS.sans,
-                  }}>
-                    {item.talk_track}
-                  </div>
-                )}
-              </div>
+              <PyramidItem key={i} item={item} field={layer.field} color={layer.color} />
             ))}
           </div>
         );
@@ -2170,6 +2361,7 @@ function ContactsSection({ personas, hooksData, feedbackNode }: { personas: any;
 
 function KeyExecutivesSection({ pov }: { pov: any }) {
   const executives = pov?.executives || [];
+  console.log('[BriefView] executives:', executives.length);
   if (executives.length === 0) return null;
 
   return (
@@ -2194,6 +2386,7 @@ function KeyExecutivesSection({ pov }: { pov: any }) {
 
 function TechPartnersSection({ pov }: { pov: any }) {
   const partners = pov?.technology_partnerships || [];
+  console.log('[BriefView] partners:', partners.length);
   if (partners.length === 0) return null;
 
   return (
@@ -2385,6 +2578,9 @@ function BriefContent({ pov, personas, hooksData, valuePyramid, sectionFeedback,
 
       {/* 2. About */}
       <AboutSection pov={pov} sources={allSources} feedbackNode={fb('about')} onCitationClick={onCitationClick} />
+
+      {/* 2.5. Organisational Structure */}
+      <OrgStructureSection pov={pov} />
 
       {/* 3. Why Anything */}
       <WhyAnythingSection pov={pov} sources={allSources} feedbackNode={fb('why_anything')} onCitationClick={onCitationClick} />
