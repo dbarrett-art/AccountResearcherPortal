@@ -110,7 +110,7 @@ export default function MyBriefs() {
     if (!userProfile) return;
     const { data, error } = await supabase
       .from('runs')
-      .select('id, company, url, created_at, status, summary, pdf_url, error_message, brief_id, market, queued_at, queue_position, briefs!brief_id(pov_json->icp_fit->score)')
+      .select('id, company, url, created_at, status, summary, pdf_url, error_message, brief_id, market, queued_at, queue_position')
       .or(`user_id.eq.${userProfile.id},assigned_to.eq.${userProfile.id}`)
       .order('created_at', { ascending: false });
     if (error) {
@@ -119,11 +119,23 @@ export default function MyBriefs() {
       return;
     }
     if (data) {
-      // Extract icp_score from joined briefs data
+      // Fetch ICP scores from briefs table separately (briefs RLS may differ from runs)
+      const briefIds = data.map((r: any) => r.brief_id).filter(Boolean);
+      let icpMap: Record<string, string> = {};
+      if (briefIds.length > 0) {
+        const { data: briefs } = await supabase
+          .from('briefs')
+          .select('run_id, pov_json->icp_fit->score')
+          .in('run_id', data.map((r: any) => r.id));
+        if (briefs) {
+          for (const b of briefs as any[]) {
+            if (b.score) icpMap[b.run_id] = b.score;
+          }
+        }
+      }
       const mapped = data.map((row: any) => ({
         ...row,
-        icp_score: row.briefs?.score ?? null,
-        briefs: undefined,
+        icp_score: icpMap[row.id] ?? null,
       })) as Run[];
       setRuns(mapped);
     }
