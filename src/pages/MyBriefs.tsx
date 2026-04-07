@@ -108,12 +108,25 @@ export default function MyBriefs() {
 
   const fetchRuns = useCallback(async () => {
     if (!userProfile) return;
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('runs')
-      .select('id, company, url, created_at, status, summary, pdf_url, error_message, brief_id, icp_score, market, queued_at, queue_position')
+      .select('id, company, url, created_at, status, summary, pdf_url, error_message, brief_id, market, queued_at, queue_position, briefs!brief_id(pov_json->icp_fit->score)')
       .or(`user_id.eq.${userProfile.id},assigned_to.eq.${userProfile.id}`)
       .order('created_at', { ascending: false });
-    if (data) setRuns(data as Run[]);
+    if (error) {
+      console.error('MyBriefs fetch error:', error);
+      setLoading(false);
+      return;
+    }
+    if (data) {
+      // Extract icp_score from joined briefs data
+      const mapped = data.map((row: any) => ({
+        ...row,
+        icp_score: row.briefs?.score ?? null,
+        briefs: undefined,
+      })) as Run[];
+      setRuns(mapped);
+    }
     setLoading(false);
   }, [userProfile]);
 
