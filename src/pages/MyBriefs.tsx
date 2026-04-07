@@ -20,6 +20,7 @@ interface Run {
   pdf_url: string | null;
   error_message: string | null;
   brief_id: string | null;
+  icp_score: string | null;
   market: string | null;
   queued_at: string | null;
   queue_position: number | null;
@@ -72,6 +73,26 @@ function FreshnessBadge({ createdAt, status }: { createdAt: string; status: stri
   return null;
 }
 
+const icpColors: Record<string, { bg: string; text: string }> = {
+  Strong: { bg: 'rgba(22,163,74,0.12)', text: '#16a34a' },
+  Moderate: { bg: 'rgba(217,119,6,0.12)', text: '#d97706' },
+  Weak: { bg: 'rgba(220,38,38,0.10)', text: '#dc2626' },
+};
+
+function IcpBadge({ score }: { score: string | null }) {
+  if (!score) return <span style={{ color: 'var(--text-disabled)', fontSize: 12 }}>—</span>;
+  const c = icpColors[score] || { bg: 'rgba(100,100,100,0.1)', text: 'var(--text-secondary)' };
+  return (
+    <span style={{
+      display: 'inline-block', fontSize: 12, fontWeight: 600,
+      padding: '2px 8px', borderRadius: 4,
+      background: c.bg, color: c.text,
+    }}>
+      {score}
+    </span>
+  );
+}
+
 export default function MyBriefs() {
   usePageTitle('My Briefs');
   const { session, userProfile } = useAuth();
@@ -89,7 +110,7 @@ export default function MyBriefs() {
     if (!userProfile) return;
     const { data } = await supabase
       .from('runs')
-      .select('id, company, url, created_at, status, summary, pdf_url, error_message, brief_id, market, queued_at, queue_position')
+      .select('id, company, url, created_at, status, summary, pdf_url, error_message, brief_id, icp_score, market, queued_at, queue_position')
       .or(`user_id.eq.${userProfile.id},assigned_to.eq.${userProfile.id}`)
       .order('created_at', { ascending: false });
     if (data) setRuns(data as Run[]);
@@ -255,9 +276,8 @@ export default function MyBriefs() {
                 <th style={thStyle}>Company</th>
                 <th style={thStyle}>Submitted</th>
                 <th style={thStyle}>Status</th>
-                <th style={thStyle}>Summary</th>
-                <th style={{ ...thStyle, textAlign: 'center', width: 80 }}>Files</th>
-                {userProfile?.role === 'admin' && <th style={{ ...thStyle, width: 60 }}></th>}
+                <th style={thStyle}>ICP Fit</th>
+                <th style={{ ...thStyle, textAlign: 'center' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -311,27 +331,26 @@ export default function MyBriefs() {
                       </div>
                     )}
                   </td>
-                  <td style={{ padding: '11px 16px', fontSize: 13, color: 'var(--text-secondary)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={run.summary || ''}>
-                    {run.summary ? (run.summary.length > 72 ? run.summary.slice(0, 72) + '...' : run.summary) : '—'}
+                  <td style={{ padding: '11px 16px' }}>
+                    <IcpBadge score={run.icp_score} />
                   </td>
                   <td style={{ padding: '11px 16px', textAlign: 'center' }}>
-                    <div style={{ display: 'flex', justifyContent: 'center', gap: 8 }}>
+                    <div style={{ display: 'flex', justifyContent: 'center', gap: 4 }}>
                       {run.status === 'complete' && run.brief_id && (
                         <button
                           onClick={() => navigate(`/briefs/${run.id}`)}
                           title="View brief"
+                          className="action-btn"
                           style={{
-                            background: 'transparent',
-                            border: 'none',
-                            color: 'var(--text-secondary)',
-                            cursor: 'pointer',
-                            padding: '4px',
-                            borderRadius: '4px',
+                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                            width: 36, height: 36, borderRadius: 8,
+                            background: 'transparent', border: '0.5px solid var(--border-strong)',
+                            color: 'var(--text-secondary)', cursor: 'pointer', transition: 'all 100ms',
                           }}
-                          onMouseEnter={e => e.currentTarget.style.color = 'var(--text-primary)'}
-                          onMouseLeave={e => e.currentTarget.style.color = 'var(--text-secondary)'}
+                          onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-elevated)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
                         >
-                          <Eye size={15} />
+                          <Eye size={18} />
                         </button>
                       )}
                       {run.pdf_url ? (
@@ -348,51 +367,63 @@ export default function MyBriefs() {
                               window.open(signedUrl, '_blank');
                             } catch { /* noop */ } finally { btn.disabled = false; }
                           }}
-                          style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                            width: 36, height: 36, borderRadius: 8,
+                            background: 'transparent', border: '0.5px solid var(--border-strong)',
+                            color: 'var(--text-secondary)', cursor: 'pointer', transition: 'all 100ms',
+                          }}
+                          onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-elevated)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
                         >
-                          <FileText size={16} style={{ color: 'var(--text-secondary)' }} />
+                          <FileText size={18} />
                         </button>
                       ) : (
-                        <span title="PDF not available"><FileText size={16} style={{ color: 'var(--text-disabled)' }} /></span>
+                        <span title="PDF not available" style={{
+                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                          width: 36, height: 36, borderRadius: 8,
+                          border: '0.5px solid var(--border)', opacity: 0.3,
+                        }}>
+                          <FileText size={18} style={{ color: 'var(--text-disabled)' }} />
+                        </span>
                       )}
-                    </div>
-                  </td>
-                  {userProfile?.role === 'admin' && (
-                    <td style={{ padding: '11px 8px' }}>
-                      <div style={{ display: 'flex', gap: 4 }}>
-                        {run.status === 'complete' && run.url && (
-                          <button
-                            onClick={() => setRerunConfirm(run.id)}
-                            title="Re-run with fresh data"
-                            disabled={rerunning === run.id}
-                            style={{
-                              background: 'transparent', border: 'none',
-                              color: 'var(--text-tertiary)', cursor: 'pointer',
-                              padding: 4, borderRadius: 4, transition: '80ms',
-                              opacity: rerunning === run.id ? 0.4 : 1,
-                            }}
-                            onMouseEnter={e => (e.currentTarget.style.color = 'var(--accent)')}
-                            onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-tertiary)')}
-                          >
-                            <RotateCcw size={13} />
-                          </button>
-                        )}
+                      {userProfile?.role === 'admin' && run.status === 'complete' && run.url && (
+                        <button
+                          onClick={() => setRerunConfirm(run.id)}
+                          title="Re-run with fresh data"
+                          disabled={rerunning === run.id}
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                            width: 36, height: 36, borderRadius: 8,
+                            background: 'transparent', border: '0.5px solid var(--border-strong)',
+                            color: 'var(--text-secondary)', cursor: 'pointer', transition: 'all 100ms',
+                            opacity: rerunning === run.id ? 0.3 : 1,
+                            pointerEvents: rerunning === run.id ? 'none' : 'auto',
+                          }}
+                          onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-elevated)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
+                        >
+                          <RotateCcw size={18} />
+                        </button>
+                      )}
+                      {userProfile?.role === 'admin' && (
                         <button
                           onClick={() => setDeleteConfirm(run.id)}
                           title="Delete run"
                           style={{
-                            background: 'transparent', border: 'none',
-                            color: 'var(--text-tertiary)', cursor: 'pointer',
-                            padding: 4, borderRadius: 4, transition: '80ms',
+                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                            width: 36, height: 36, borderRadius: 8,
+                            background: 'transparent', border: '0.5px solid var(--border-strong)',
+                            color: 'var(--text-secondary)', cursor: 'pointer', transition: 'all 100ms',
                           }}
-                          onMouseEnter={e => (e.currentTarget.style.color = 'var(--status-failed)')}
-                          onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-tertiary)')}
+                          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(220,38,38,0.12)'; e.currentTarget.style.color = '#dc2626'; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
                         >
-                          <Trash2 size={13} />
+                          <Trash2 size={18} />
                         </button>
-                      </div>
-                    </td>
-                  )}
+                      )}
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>

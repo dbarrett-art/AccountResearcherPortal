@@ -40,7 +40,7 @@ export default function Sidebar() {
     >
       <div style={{ marginBottom: 24, padding: '0 12px' }}>
         <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)' }}>
-          M4S Research
+          Account Researcher
         </div>
         <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>
           Prospect Research
