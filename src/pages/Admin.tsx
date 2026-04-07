@@ -6,7 +6,7 @@ import StatusBadge from '../components/StatusBadge';
 import ProgressBar from '../components/ProgressBar';
 import TableSkeleton from '../components/TableSkeleton';
 import usePageTitle from '../hooks/usePageTitle';
-import { Users, Activity, Heart, BarChart3, ExternalLink, Cpu, FileText, X, RefreshCw, Trash2, UserPlus, Check, RotateCcw, Link, MessageSquare, Download } from 'lucide-react';
+import { Users, Activity, Heart, BarChart3, ExternalLink, Cpu, FileText, X, RefreshCw, Trash2, UserPlus, Check, RotateCcw, Link, MessageSquare, Download, Mail } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 type Tab = 'users' | 'runs' | 'health' | 'credits' | 'api-credits' | 'assign' | 'feedback';
@@ -122,6 +122,8 @@ function UsersTab({ adminId }: { adminId: string }) {
   const [newCredits, setNewCredits] = useState(5);
   const [creating, setCreating] = useState(false);
   const [createResult, setCreateResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [inviteStates, setInviteStates] = useState<Record<string, 'loading' | 'success' | 'error'>>({});
+  const [inviteErrors, setInviteErrors] = useState<Record<string, string>>({});
 
   const createUser = async () => {
     if (!newEmail.trim()) return;
@@ -216,6 +218,27 @@ function UsersTab({ adminId }: { adminId: string }) {
         setConfirm(null);
       },
     });
+  };
+
+  const inviteUser = async (userId: string, email: string) => {
+    setInviteStates(prev => ({ ...prev, [userId]: 'loading' }));
+    try {
+      const res = await workerFetch('/invite-user', {
+        method: 'POST',
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Invite failed');
+      setInviteStates(prev => ({ ...prev, [userId]: 'success' }));
+      setTimeout(() => setInviteStates(prev => { const n = { ...prev }; delete n[userId]; return n; }), 3000);
+    } catch (err: any) {
+      setInviteStates(prev => ({ ...prev, [userId]: 'error' }));
+      setInviteErrors(prev => ({ ...prev, [userId]: err.message }));
+      setTimeout(() => {
+        setInviteStates(prev => { const n = { ...prev }; delete n[userId]; return n; });
+        setInviteErrors(prev => { const n = { ...prev }; delete n[userId]; return n; });
+      }, 3000);
+    }
   };
 
   const selectStyle: React.CSSProperties = {
@@ -389,6 +412,24 @@ function UsersTab({ adminId }: { adminId: string }) {
                       onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-elevated)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
                       onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
                     >Grant</button>
+                    <button
+                      onClick={() => inviteUser(u.id, u.email)}
+                      disabled={inviteStates[u.id] === 'loading'}
+                      title={inviteStates[u.id] === 'error' ? inviteErrors[u.id] : 'Send magic link invite'}
+                      style={{
+                        background: inviteStates[u.id] === 'success' ? 'rgba(34,197,94,0.15)' : inviteStates[u.id] === 'error' ? 'rgba(220,38,38,0.15)' : 'transparent',
+                        color: inviteStates[u.id] === 'success' ? '#16a34a' : inviteStates[u.id] === 'error' ? '#dc2626' : 'var(--text-secondary)',
+                        border: '1px solid var(--border-strong)',
+                        padding: '4px 10px', fontSize: 12, borderRadius: 6,
+                        display: 'inline-flex', alignItems: 'center', gap: 4, cursor: inviteStates[u.id] === 'loading' ? 'wait' : 'pointer',
+                        opacity: inviteStates[u.id] === 'loading' ? 0.6 : 1,
+                      }}
+                      onMouseEnter={(e) => { if (!inviteStates[u.id]) { e.currentTarget.style.background = 'var(--bg-elevated)'; e.currentTarget.style.color = 'var(--text-primary)'; }}}
+                      onMouseLeave={(e) => { if (!inviteStates[u.id]) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; }}}
+                    >
+                      <Mail size={12} />
+                      {inviteStates[u.id] === 'loading' ? 'Sending…' : inviteStates[u.id] === 'success' ? 'Invited ✓' : inviteStates[u.id] === 'error' ? 'Failed' : 'Invite'}
+                    </button>
                   </div>
                 </td>
               </tr>
