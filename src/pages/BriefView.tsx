@@ -1810,42 +1810,51 @@ function PyramidItem({ item, field, color }: { item: any; field: string; color: 
   })();
 
   return (
-    <div style={{ marginBottom: 16, position: 'relative' }}>
-      <div style={{ borderTop: `2px solid ${color}`, paddingTop: 10 }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, flexWrap: 'wrap' }}>
-          <span style={{
-            fontSize: 15, fontWeight: 600, color: COLORS.body,
-            fontFamily: FONTS.sans, lineHeight: 1.5,
-          }}>
-            {headline}
-          </span>
-          {sourceNode}
-          {talkTrack && (
-            <svg
-              width="13" height="13" viewBox="0 0 16 16"
-              fill="none" stroke="currentColor" strokeWidth="1.5"
-              style={{ flexShrink: 0, marginTop: 3, color: COLORS.faint, cursor: 'pointer', marginLeft: 6 }}
-              onClick={(e) => { e.stopPropagation(); setPopoverOpen(o => !o); }}
-            >
-              <circle cx="8" cy="8" r="7" />
-              <line x1="8" y1="7" x2="8" y2="11" />
-              <circle cx="8" cy="5" r="0.5" fill="currentColor" />
-            </svg>
+    <div style={{ marginBottom: 8, position: 'relative' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, paddingTop: 6 }}>
+        <span style={{
+          flexShrink: 0,
+          width: 6, height: 6,
+          borderRadius: '50%',
+          background: color,
+          marginTop: 7,
+        }} />
+        <div style={{ flex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, flexWrap: 'wrap' }}>
+            <span style={{
+              fontSize: 15, fontWeight: 600, color: COLORS.body,
+              fontFamily: FONTS.sans, lineHeight: 1.5,
+            }}>
+              {headline}
+            </span>
+            {sourceNode}
+            {talkTrack && (
+              <svg
+                width="13" height="13" viewBox="0 0 16 16"
+                fill="none" stroke="currentColor" strokeWidth="1.5"
+                style={{ flexShrink: 0, marginTop: 3, color: COLORS.faint, cursor: 'pointer', marginLeft: 6 }}
+                onClick={(e) => { e.stopPropagation(); setPopoverOpen(o => !o); }}
+              >
+                <circle cx="8" cy="8" r="7" />
+                <line x1="8" y1="7" x2="8" y2="11" />
+                <circle cx="8" cy="5" r="0.5" fill="currentColor" />
+              </svg>
+            )}
+          </div>
+
+          {figmaProduct && (
+            <div style={{ marginTop: 6 }}>
+              <span style={{
+                fontSize: 11, padding: '2px 8px', borderRadius: 10,
+                background: COLORS.purple + '14', color: COLORS.purple,
+                border: `1px solid ${COLORS.purple}30`,
+                fontWeight: 500, fontFamily: FONTS.sans,
+              }}>
+                {figmaProduct}
+              </span>
+            </div>
           )}
         </div>
-
-        {figmaProduct && (
-          <div style={{ marginTop: 6 }}>
-            <span style={{
-              fontSize: 11, padding: '2px 8px', borderRadius: 10,
-              background: COLORS.purple + '14', color: COLORS.purple,
-              border: `1px solid ${COLORS.purple}30`,
-              fontWeight: 500, fontFamily: FONTS.sans,
-            }}>
-              {figmaProduct}
-            </span>
-          </div>
-        )}
       </div>
 
       {talkTrack && popoverOpen && (
@@ -1854,8 +1863,8 @@ function PyramidItem({ item, field, color }: { item: any; field: string; color: 
           onClick={(e) => e.stopPropagation()}
           style={{
             position: 'absolute',
-            top: '100%',
-            left: 0,
+            top: 0,
+            left: '105%',
             zIndex: 20,
             background: '#ffffff',
             border: '1px solid #e5e0d8',
@@ -1866,8 +1875,8 @@ function PyramidItem({ item, field, color }: { item: any; field: string; color: 
             lineHeight: 1.65,
             fontFamily: FONTS.sans,
             boxShadow: '0 4px 16px rgba(0,0,0,0.1)',
-            marginTop: 4,
-            maxWidth: 480,
+            minWidth: 280,
+            maxWidth: 360,
           }}
         >
           {talkTrack}
@@ -1897,7 +1906,7 @@ function ValuePyramidSection({ pyramid, feedbackNode }: { pyramid: any; feedback
       {layers.map((layer, li) => {
         if (layer.items.length === 0) return null;
         return (
-          <div key={li} style={{ marginBottom: 24, paddingLeft: layer.indent }}>
+          <div key={li} style={{ marginBottom: 12, paddingLeft: layer.indent }}>
             <div style={{
               fontSize: 12, fontWeight: 700, color: layer.color,
               textTransform: 'uppercase', letterSpacing: '0.06em',
