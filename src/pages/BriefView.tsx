@@ -2523,29 +2523,56 @@ function RunHistory({ currentRunId, company }: { currentRunId: string; company: 
       });
   }, [company]);
 
+  const [expanded, setExpanded] = useState(false);
+
   if (runs.length < 2) return null;
+
+  const activeRun = runs.find(r => r.id === currentRunId);
+  const activeDate = activeRun ? new Date(activeRun.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : null;
 
   return (
     <div style={{ marginBottom: 20 }}>
-      <div style={{ fontSize: 11, color: COLORS.faint, marginBottom: 6, fontFamily: FONTS.sans, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-        Run History ({runs.length} runs)
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <button
+          onClick={() => setExpanded(e => !e)}
+          style={{
+            background: 'none', border: 'none', cursor: 'pointer', padding: '2px 0',
+            fontSize: 11, color: COLORS.faint, fontFamily: FONTS.sans,
+            textTransform: 'uppercase', letterSpacing: '0.05em',
+            display: 'flex', alignItems: 'center', gap: 4,
+          }}
+        >
+          <span style={{
+            display: 'inline-block', transition: 'transform 150ms',
+            transform: expanded ? 'rotate(90deg)' : 'none',
+            fontSize: 13,
+          }}>{'\u203A'}</span>
+          {runs.length} runs
+        </button>
+        {!expanded && activeDate && (
+          <span style={{ fontSize: 11, color: COLORS.faint, fontFamily: FONTS.sans }}>
+            {'\u00B7'} viewing {activeDate}
+          </span>
+        )}
       </div>
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-        {runs.map((r) => {
-          const active = r.id === currentRunId;
-          const date = new Date(r.created_at);
-          return (
-            <button key={r.id} onClick={() => navigate(`/briefs/${r.id}`)} style={{
-              fontSize: 11, padding: '3px 8px', borderRadius: 4, fontFamily: FONTS.sans,
-              background: active ? COLORS.purple : '#f5f5f0',
-              color: active ? '#fff' : COLORS.secondary,
-              border: 'none', cursor: active ? 'default' : 'pointer',
-            }}>
-              {date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
-            </button>
-          );
-        })}
-      </div>
+      {expanded && (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+          {runs.map((r) => {
+            const active = r.id === currentRunId;
+            const date = new Date(r.created_at);
+            return (
+              <button key={r.id} onClick={() => navigate(`/briefs/${r.id}`)} style={{
+                fontSize: 11, padding: '3px 8px', borderRadius: 4, fontFamily: FONTS.sans,
+                background: active ? COLORS.purple : '#f5f5f0',
+                color: active ? '#fff' : COLORS.secondary,
+                border: 'none', cursor: active ? 'default' : 'pointer',
+              }}>
+                {date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
