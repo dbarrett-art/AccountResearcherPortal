@@ -507,6 +507,7 @@ function RunMonitorTab() {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [rerunConfirm, setRerunConfirm] = useState<string | null>(null);
   const [rerunning, setRerunning] = useState<string | null>(null);
+  const [retrying, setRetrying] = useState<string | null>(null);
   const [rerenderingPdf, setRerenderingPdf] = useState<string | null>(null);
   const [progressMap, setProgressMap] = useState<Record<string, { step: number; total: number; module: string | null; pct: number }>>({});
   const [queueState, setQueueState] = useState<QueueState | null>(null);
@@ -535,6 +536,26 @@ function RunMonitorTab() {
       alert('Re-run failed: ' + err.message);
     } finally {
       setRerunning(null);
+    }
+  };
+
+  const handleRetry = async (run: RunRow) => {
+    if (!session) return;
+    setRetrying(run.id);
+    try {
+      const res = await workerFetch('/retry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ run_id: run.id }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Retry failed' }));
+        alert(err.error || 'Retry failed');
+      }
+    } catch (err: any) {
+      alert('Retry failed: ' + err.message);
+    } finally {
+      setRetrying(null);
     }
   };
 
@@ -862,6 +883,23 @@ function RunMonitorTab() {
                             <RefreshCw size={13} style={rerenderingPdf === r.id ? { animation: 'spin 1s linear infinite' } : undefined} />
                           </button>
                         </>
+                      )}
+                      {r.status === 'failed' && (
+                        <button
+                          onClick={() => handleRetry(r)}
+                          title="Retry failed run (no credit cost)"
+                          disabled={retrying === r.id}
+                          style={{
+                            background: 'transparent', border: 'none',
+                            color: 'var(--text-tertiary)', cursor: 'pointer',
+                            padding: 4, borderRadius: 4, transition: '80ms',
+                            opacity: retrying === r.id ? 0.4 : 1,
+                          }}
+                          onMouseEnter={e => (e.currentTarget.style.color = 'var(--accent)')}
+                          onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-tertiary)')}
+                        >
+                          <RotateCcw size={13} style={retrying === r.id ? { animation: 'spin 1s linear infinite' } : undefined} />
+                        </button>
                       )}
                       <button
                         onClick={() => setDeleteConfirm(r.id)}
