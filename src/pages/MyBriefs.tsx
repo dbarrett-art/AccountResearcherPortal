@@ -362,34 +362,6 @@ export default function MyBriefs() {
                       <Eye size={18} />
                     </button>
                   )}
-                  {run.pdf_url ? (
-                    <button title="Download PDF" onClick={async (e) => {
-                      e.preventDefault();
-                      const btn = e.currentTarget;
-                      btn.disabled = true;
-                      try {
-                        const res = await workerFetch(`/pdf/${run.id}`);
-                        if (!res.ok) throw new Error();
-                        const { signedUrl } = await res.json();
-                        window.open(signedUrl, '_blank');
-                      } catch { /* noop */ } finally { btn.disabled = false; }
-                    }} style={{
-                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                      width: 36, height: 36, borderRadius: 8,
-                      background: 'transparent', border: '0.5px solid var(--border-strong)',
-                      color: 'var(--text-secondary)', cursor: 'pointer',
-                    }}>
-                      <FileText size={18} />
-                    </button>
-                  ) : (
-                    <span style={{
-                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                      width: 36, height: 36, borderRadius: 8,
-                      border: '0.5px solid var(--border)', opacity: 0.3,
-                    }}>
-                      <FileText size={18} style={{ color: 'var(--text-disabled)' }} />
-                    </span>
-                  )}
                   {userProfile?.role === 'admin' && run.status === 'complete' && run.url && (
                     <button onClick={() => setRerunConfirm(run.id)} title="Re-run" disabled={rerunning === run.id} style={{
                       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
@@ -504,40 +476,6 @@ export default function MyBriefs() {
                           >
                             <Eye size={18} />
                           </button>
-                        )}
-                        {run.pdf_url ? (
-                          <button
-                            title="Download PDF"
-                            onClick={async (e) => {
-                              e.preventDefault();
-                              const btn = e.currentTarget;
-                              btn.disabled = true;
-                              try {
-                                const res = await workerFetch(`/pdf/${run.id}`);
-                                if (!res.ok) throw new Error();
-                                const { signedUrl } = await res.json();
-                                window.open(signedUrl, '_blank');
-                              } catch { /* noop */ } finally { btn.disabled = false; }
-                            }}
-                            style={{
-                              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                              width: 36, height: 36, borderRadius: 8,
-                              background: 'transparent', border: '0.5px solid var(--border-strong)',
-                              color: 'var(--text-secondary)', cursor: 'pointer', transition: 'all 100ms',
-                            }}
-                            onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-elevated)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
-                            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
-                          >
-                            <FileText size={18} />
-                          </button>
-                        ) : (
-                          <span title="PDF not available" style={{
-                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                            width: 36, height: 36, borderRadius: 8,
-                            border: '0.5px solid var(--border)', opacity: 0.3,
-                          }}>
-                            <FileText size={18} style={{ color: 'var(--text-disabled)' }} />
-                          </span>
                         )}
                         {userProfile?.role === 'admin' && run.status === 'complete' && run.url && (
                           <button
