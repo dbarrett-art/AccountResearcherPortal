@@ -123,7 +123,7 @@ function UsersTab({ adminId }: { adminId: string }) {
   const [newCredits, setNewCredits] = useState(5);
   const [creating, setCreating] = useState(false);
   const [createResult, setCreateResult] = useState<{ ok: boolean; message: string } | null>(null);
-  const [inviteStates, setInviteStates] = useState<Record<string, 'loading' | 'success' | 'error'>>({});
+  const [inviteStates, setInviteStates] = useState<Record<string, 'loading' | 'success' | 'existing' | 'error'>>({});
   const [inviteErrors, setInviteErrors] = useState<Record<string, string>>({});
 
   const createUser = async () => {
@@ -230,7 +230,7 @@ function UsersTab({ adminId }: { adminId: string }) {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Invite failed');
-      setInviteStates(prev => ({ ...prev, [userId]: 'success' }));
+      setInviteStates(prev => ({ ...prev, [userId]: data.existing_user ? 'existing' : 'success' }));
       setTimeout(() => setInviteStates(prev => { const n = { ...prev }; delete n[userId]; return n; }), 3000);
     } catch (err: any) {
       setInviteStates(prev => ({ ...prev, [userId]: 'error' }));
@@ -418,8 +418,8 @@ function UsersTab({ adminId }: { adminId: string }) {
                       disabled={inviteStates[u.id] === 'loading'}
                       title={inviteStates[u.id] === 'error' ? inviteErrors[u.id] : 'Send magic link invite'}
                       style={{
-                        background: inviteStates[u.id] === 'success' ? 'rgba(34,197,94,0.15)' : inviteStates[u.id] === 'error' ? 'rgba(220,38,38,0.15)' : 'transparent',
-                        color: inviteStates[u.id] === 'success' ? '#16a34a' : inviteStates[u.id] === 'error' ? '#dc2626' : 'var(--text-secondary)',
+                        background: (inviteStates[u.id] === 'success' || inviteStates[u.id] === 'existing') ? 'rgba(34,197,94,0.15)' : inviteStates[u.id] === 'error' ? 'rgba(220,38,38,0.15)' : 'transparent',
+                        color: (inviteStates[u.id] === 'success' || inviteStates[u.id] === 'existing') ? '#16a34a' : inviteStates[u.id] === 'error' ? '#dc2626' : 'var(--text-secondary)',
                         border: '1px solid var(--border-strong)',
                         padding: '4px 10px', fontSize: 12, borderRadius: 6,
                         display: 'inline-flex', alignItems: 'center', gap: 4, cursor: inviteStates[u.id] === 'loading' ? 'wait' : 'pointer',
@@ -429,7 +429,7 @@ function UsersTab({ adminId }: { adminId: string }) {
                       onMouseLeave={(e) => { if (!inviteStates[u.id]) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; }}}
                     >
                       <Mail size={12} />
-                      {inviteStates[u.id] === 'loading' ? 'Sending…' : inviteStates[u.id] === 'success' ? 'Invited ✓' : inviteStates[u.id] === 'error' ? 'Failed' : 'Invite'}
+                      {inviteStates[u.id] === 'loading' ? 'Sending…' : inviteStates[u.id] === 'success' ? 'Invited ✓' : inviteStates[u.id] === 'existing' ? 'Link sent ✓' : inviteStates[u.id] === 'error' ? 'Failed' : 'Invite'}
                     </button>
                   </div>
                 </td>
