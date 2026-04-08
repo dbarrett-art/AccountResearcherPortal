@@ -911,8 +911,8 @@ function MetricsBar({ pov, isMobile }: { pov: any; hooksData?: any; personas?: a
   const items: { label: string; value: string }[] = [];
   if (revenue) items.push({ label: 'REVENUE', value: typeof revenue === 'string' ? revenue : `$${revenue}` });
   if (employees) items.push({ label: 'EMPLOYEES', value: typeof employees === 'number' ? employees.toLocaleString() : employees });
-  items.push({ label: 'ARR', value: fmtDollar(currentArr) });
-  items.push({ label: 'WHITESPACE', value: fmtDollar(totalWhitespace) });
+  if (currentArr != null) items.push({ label: 'ARR', value: fmtDollar(currentArr) });
+  if (totalWhitespace != null) items.push({ label: 'WHITESPACE', value: fmtDollar(totalWhitespace) });
 
   if (items.length === 0) return null;
 
@@ -1125,72 +1125,61 @@ function AboutSection({ pov, sources, feedbackNode, onCitationClick }: { pov: an
 
 function OrgStructureSection({ pov }: { pov: any }) {
   const org = pov?.org_structure;
-  const hasOrgData = org && (org.structure_summary || (org.divisions && org.divisions.length > 0));
 
-  // Fallback: try to extract org language from what_they_do
-  let fallbackProse: string | null = null;
-  if (!hasOrgData && pov?.about?.what_they_do) {
-    const text = pov.about.what_they_do as string;
-    const orgKeywords = /\b(division|subsidiary|business unit|headquartered|operating segment|group compris|conglomerate)\b/i;
-    if (orgKeywords.test(text)) {
-      // Extract sentences containing org keywords
-      const sentences = text.split(/(?<=[.!?])\s+/);
-      const orgSentences = sentences.filter(s => orgKeywords.test(s)).slice(0, 3);
-      if (orgSentences.length > 0) fallbackProse = orgSentences.join(' ');
-    }
-  }
+  // Filter divisions to only those with meaningful content
+  const meaningfulDivisions = (org?.divisions || []).filter((div: any) => {
+    if (typeof div === 'string') return div.trim().length > 0;
+    return (div.name && div.name.trim().length > 0) || (div.description && div.description.trim().length > 0);
+  });
+
+  // Only show section when there's enough content to be useful:
+  // - At least 2 meaningful divisions, OR
+  // - A substantial structure_summary (> 50 chars)
+  const hasMeaningfulContent =
+    meaningfulDivisions.length >= 2 ||
+    (org?.structure_summary && org.structure_summary.length > 50);
+
+  if (!hasMeaningfulContent) return null;
 
   return (
     <Section title="Organisational Structure" accent={SECTION_ACCENTS.about} defaultOpen={false}>
-      {hasOrgData ? (
-        <>
-          {org.structure_summary && (
-            <p style={{ fontSize: 17, lineHeight: 1.75, color: COLORS.body, fontFamily: FONTS.sans, margin: '0 0 12px', fontWeight: 400 }}>
-              {org.structure_summary}
-            </p>
-          )}
-          {org.structure_type && (
-            <span style={{
-              fontSize: 11, padding: '2px 8px', borderRadius: 10,
-              background: SECTION_ACCENTS.about + '18', color: SECTION_ACCENTS.about,
-              fontWeight: 600, fontFamily: FONTS.sans, marginBottom: 12, display: 'inline-block',
+      {org.structure_summary && (
+        <p style={{ fontSize: 17, lineHeight: 1.75, color: COLORS.body, fontFamily: FONTS.sans, margin: '0 0 12px', fontWeight: 400 }}>
+          {org.structure_summary}
+        </p>
+      )}
+      {org.structure_type && (
+        <span style={{
+          fontSize: 11, padding: '2px 8px', borderRadius: 10,
+          background: SECTION_ACCENTS.about + '18', color: SECTION_ACCENTS.about,
+          fontWeight: 600, fontFamily: FONTS.sans, marginBottom: 12, display: 'inline-block',
+        }}>
+          {org.structure_type}
+        </span>
+      )}
+      {meaningfulDivisions.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 }}>
+          {meaningfulDivisions.map((div: any, i: number) => (
+            <div key={i} style={{
+              borderLeft: `3px solid ${SECTION_ACCENTS.about}`,
+              padding: '10px 14px', borderRadius: '0 6px 6px 0',
             }}>
-              {org.structure_type}
-            </span>
-          )}
-          {org.divisions && org.divisions.length > 0 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 }}>
-              {org.divisions.map((div: any, i: number) => (
-                <div key={i} style={{
-                  borderLeft: `3px solid ${SECTION_ACCENTS.about}`,
-                  padding: '10px 14px', borderRadius: '0 6px 6px 0',
-                }}>
-                  <div style={{ fontSize: 15, fontWeight: 600, color: COLORS.body, fontFamily: FONTS.sans }}>
-                    {typeof div === 'string' ? div : div.name}
-                  </div>
-                  {typeof div !== 'string' && div.description && (
-                    <div style={{ fontSize: 14, color: COLORS.secondary, fontFamily: FONTS.sans, marginTop: 2, lineHeight: 1.5 }}>
-                      {div.description}
-                    </div>
-                  )}
-                  {typeof div !== 'string' && div.estimated_headcount && (
-                    <div style={{ fontSize: 12, color: COLORS.faint, fontFamily: FONTS.sans, marginTop: 2 }}>
-                      {div.estimated_headcount}
-                    </div>
-                  )}
+              <div style={{ fontSize: 15, fontWeight: 600, color: COLORS.body, fontFamily: FONTS.sans }}>
+                {typeof div === 'string' ? div : div.name}
+              </div>
+              {typeof div !== 'string' && div.description && (
+                <div style={{ fontSize: 14, color: COLORS.secondary, fontFamily: FONTS.sans, marginTop: 2, lineHeight: 1.5 }}>
+                  {div.description}
                 </div>
-              ))}
+              )}
+              {typeof div !== 'string' && div.estimated_headcount && (
+                <div style={{ fontSize: 12, color: COLORS.faint, fontFamily: FONTS.sans, marginTop: 2 }}>
+                  {div.estimated_headcount}
+                </div>
+              )}
             </div>
-          )}
-        </>
-      ) : fallbackProse ? (
-        <p style={{ fontSize: 17, lineHeight: 1.75, color: COLORS.body, fontFamily: FONTS.sans, margin: 0, fontWeight: 400 }}>
-          {fallbackProse}
-        </p>
-      ) : (
-        <p style={{ fontSize: 14, color: COLORS.faint, fontFamily: FONTS.sans, margin: 0, fontStyle: 'italic' }}>
-          Organisational structure data not available for this account — enrich via a fresh pipeline run.
-        </p>
+          ))}
+        </div>
       )}
     </Section>
   );
