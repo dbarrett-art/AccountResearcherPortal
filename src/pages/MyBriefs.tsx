@@ -311,7 +311,9 @@ export default function MyBriefs() {
                       <span style={{ marginLeft: 6, fontSize: 14 }}>{LANGUAGE_FLAGS[run.market]}</span>
                     )}
                   </span>
-                  <IcpBadge score={run.icp_score} />
+                  {(userProfile?.role === 'manager' || userProfile?.role === 'admin') && (
+                    <IcpBadge score={run.icp_score} />
+                  )}
                 </div>
 
                 {/* Row 2: Status + time */}
@@ -422,7 +424,9 @@ export default function MyBriefs() {
                   <th style={thStyle}>Company</th>
                   <th style={thStyle}>Submitted</th>
                   <th style={thStyle}>Status</th>
-                  <th style={thStyle}>ICP Fit</th>
+                  {(userProfile?.role === 'manager' || userProfile?.role === 'admin') && (
+                    <th style={thStyle}>ICP Fit</th>
+                  )}
                   <th style={{ ...thStyle, textAlign: 'center' }}>Actions</th>
                 </tr>
               </thead>
@@ -477,9 +481,11 @@ export default function MyBriefs() {
                         </div>
                       )}
                     </td>
-                    <td style={{ padding: '11px 16px' }}>
-                      <IcpBadge score={run.icp_score} />
-                    </td>
+                    {(userProfile?.role === 'manager' || userProfile?.role === 'admin') && (
+                      <td style={{ padding: '11px 16px' }}>
+                        <IcpBadge score={run.icp_score} />
+                      </td>
+                    )}
                     <td style={{ padding: '11px 16px', textAlign: 'center' }}>
                       <div style={{ display: 'flex', justifyContent: 'center', gap: 4 }}>
                         {run.status === 'complete' && run.brief_id && (

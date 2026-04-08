@@ -2565,10 +2565,11 @@ function RunHistory({ currentRunId, company }: { currentRunId: string; company: 
 /*  Brief content (all sections assembled)                             */
 /* ------------------------------------------------------------------ */
 
-function BriefContent({ pov, personas, hooksData, valuePyramid, sectionFeedback, onSectionFeedback }: {
+function BriefContent({ pov, personas, hooksData, valuePyramid, sectionFeedback, onSectionFeedback, userRole }: {
   pov: any; personas: any; hooksData?: any; valuePyramid?: any;
   sectionFeedback: Record<string, { score: number; comment: string }>;
   onSectionFeedback: (key: string, score: number, comment: string) => void;
+  userRole?: string;
 }) {
   const allSources = pov?.sources_used || [];
   void ProofPointsSection; // Retained but removed from render tree (2026-04-01 reframe)
@@ -2601,8 +2602,10 @@ function BriefContent({ pov, personas, hooksData, valuePyramid, sectionFeedback,
 
   return (
     <>
-      {/* 1. ICP Fit */}
-      <IcpSection pov={pov} sources={allSources} onCitationClick={onCitationClick} />
+      {/* 1. ICP Fit (manager/admin only) */}
+      {(userRole === 'manager' || userRole === 'admin') && (
+        <IcpSection pov={pov} sources={allSources} onCitationClick={onCitationClick} />
+      )}
 
       {/* 2. About */}
       <AboutSection pov={pov} sources={allSources} feedbackNode={fb('about')} onCitationClick={onCitationClick} />
@@ -3204,7 +3207,9 @@ export default function BriefView() {
               {pov?.company_name || run.company}
             </h1>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, marginBottom: 16 }}>
-              <IcpBadge score={pov?.icp_fit?.score} size="small" />
+              {(userProfile?.role === 'manager' || userProfile?.role === 'admin') && (
+                <IcpBadge score={pov?.icp_fit?.score} size="small" />
+              )}
               <AgeBadge createdAt={run.created_at} />
             </div>
 
@@ -3562,6 +3567,7 @@ export default function BriefView() {
             valuePyramid={brief?.value_pyramid || pov?.value_pyramid}
             sectionFeedback={sectionFeedback}
             onSectionFeedback={handleSectionFeedback}
+            userRole={userProfile?.role}
           />
         )}
       </div>
@@ -3672,7 +3678,7 @@ export default function BriefView() {
                   </div>
                 ) : (
                   <>
-                    {FEEDBACK_SECTIONS.map(section => {
+                    {FEEDBACK_SECTIONS.filter(s => s.id !== 'icp_fit' || userProfile?.role === 'manager' || userProfile?.role === 'admin').map(section => {
                       const fb = sectionFeedback[section.id];
                       const score = fb?.score ?? 0;
                       const comment = fb?.comment ?? '';
@@ -3761,7 +3767,7 @@ export default function BriefView() {
                   flexShrink: 0,
                 }}>
                   <span style={{ fontSize: 12, color: '#666' }}>
-                    {ratedCount} of {FEEDBACK_SECTIONS.length} sections rated
+                    {ratedCount} of {FEEDBACK_SECTIONS.filter(s => s.id !== 'icp_fit' || userProfile?.role === 'manager' || userProfile?.role === 'admin').length} sections rated
                   </span>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button onClick={() => setRateModalOpen(false)} style={{
