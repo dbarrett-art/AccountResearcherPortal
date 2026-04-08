@@ -5,6 +5,7 @@ import { supabase, workerFetch } from '../lib/supabase';
 import Layout from '../components/Layout';
 import TableSkeleton from '../components/TableSkeleton';
 import usePageTitle from '../hooks/usePageTitle';
+import useWindowWidth from '../hooks/useWindowWidth';
 import { Target, Eye, Map as MapIcon, Clock, ChevronUp, ChevronDown, RotateCcw, Users, Filter, Send } from 'lucide-react';
 
 /* ------------------------------------------------------------------ */
@@ -99,6 +100,7 @@ export default function Territory() {
   usePageTitle('Territory');
   const { userProfile, session } = useAuth();
   const navigate = useNavigate();
+  const isMobile = useWindowWidth() <= 768;
 
   const [rows, setRows] = useState<TerritoryRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -120,6 +122,9 @@ export default function Territory() {
   // Re-run state
   const [rerunConfirm, setRerunConfirm] = useState<string | null>(null);
   const [rerunning, setRerunning] = useState<string | null>(null);
+
+  // Mobile filter sheet
+  const [filterSheetOpen, setFilterSheetOpen] = useState(false);
 
   const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'manager';
 
@@ -404,7 +409,7 @@ export default function Territory() {
       ) : (
         <>
           {/* Summary cards */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12, marginBottom: 20 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12, marginBottom: 20 }}>
             <SummaryCard label="Total accounts" value={stats.total} color="var(--text-primary)" />
             <SummaryCard label="Strong ICP" value={stats.strong} color="#22c55e" />
             <SummaryCard label="Moderate ICP" value={stats.moderate} color="#f59e0b" />
@@ -412,217 +417,331 @@ export default function Territory() {
           </div>
 
           {/* Filter bar */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginBottom: 16, fontSize: 12 }}>
-            <Filter size={13} style={{ color: 'var(--text-tertiary)' }} />
-
-            <FilterChip label="All ICP" active={icpFilter === 'all'} onClick={() => setIcpFilter('all')} />
-            <FilterChip label="Strong" active={icpFilter === 'Strong'} onClick={() => setIcpFilter('Strong')} />
-            <FilterChip label="Moderate" active={icpFilter === 'Moderate'} onClick={() => setIcpFilter('Moderate')} />
-            <FilterChip label="Weak" active={icpFilter === 'Weak'} onClick={() => setIcpFilter('Weak')} />
-
-            <span style={{ width: 1, height: 16, background: 'var(--border)', margin: '0 4px' }} />
-
-            <FilterChip label="All ages" active={freshnessFilter === 'all'} onClick={() => setFreshnessFilter('all')} />
-            <FilterChip label="Fresh" active={freshnessFilter === 'fresh'} onClick={() => setFreshnessFilter('fresh')} />
-            <FilterChip label="Review" active={freshnessFilter === 'review'} onClick={() => setFreshnessFilter('review')} />
-            <FilterChip label="Stale" active={freshnessFilter === 'stale'} onClick={() => setFreshnessFilter('stale')} />
-
-            <span style={{ width: 1, height: 16, background: 'var(--border)', margin: '0 4px' }} />
-
-            <FilterChip label="All" active={contactFilter === 'all'} onClick={() => setContactFilter('all')} />
-            <FilterChip label="Has contacts" active={contactFilter === 'with'} onClick={() => setContactFilter('with')} />
-            <FilterChip label="No contacts" active={contactFilter === 'without'} onClick={() => setContactFilter('without')} />
-
-            {/* Admin: user filter */}
-            {teamView && isAdmin && allUsers.length > 0 && (
-              <>
-                <span style={{ width: 1, height: 16, background: 'var(--border)', margin: '0 4px' }} />
-                <select
-                  value={userFilter}
-                  onChange={e => setUserFilter(e.target.value)}
-                  style={{
-                    fontSize: 11, padding: '3px 8px', borderRadius: 4,
-                    border: '1px solid var(--border)', background: 'var(--bg-surface)',
-                    color: 'var(--text-secondary)', cursor: 'pointer',
-                  }}
-                >
-                  <option value="all">All users</option>
-                  {allUsers.map(u => (
-                    <option key={u.id} value={u.id}>{u.email}</option>
-                  ))}
-                </select>
-              </>
-            )}
-
-            {hasActiveFilters && (
-              <button onClick={() => { setIcpFilter('all'); setFreshnessFilter('all'); setContactFilter('all'); setUserFilter('all'); }} style={{
-                fontSize: 11, color: 'var(--accent)', background: 'transparent', border: 'none',
-                cursor: 'pointer', textDecoration: 'underline', padding: '3px 4px',
+          {isMobile ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+              <button onClick={() => setFilterSheetOpen(true)} style={{
+                display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px',
+                borderRadius: 6, border: '1px solid var(--border-strong)',
+                background: hasActiveFilters ? 'var(--accent-subtle)' : 'transparent',
+                color: hasActiveFilters ? 'var(--accent)' : 'var(--text-secondary)',
+                fontSize: 12, fontWeight: 500, cursor: 'pointer',
               }}>
-                Clear filters
+                <Filter size={13} /> Filter{hasActiveFilters ? ' (active)' : ''}
               </button>
-            )}
-          </div>
+              {hasActiveFilters && (
+                <button onClick={() => { setIcpFilter('all'); setFreshnessFilter('all'); setContactFilter('all'); setUserFilter('all'); }} style={{
+                  fontSize: 11, color: 'var(--accent)', background: 'transparent', border: 'none',
+                  cursor: 'pointer', textDecoration: 'underline', padding: '3px 4px',
+                }}>
+                  Clear
+                </button>
+              )}
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginBottom: 16, fontSize: 12 }}>
+              <Filter size={13} style={{ color: 'var(--text-tertiary)' }} />
+
+              <FilterChip label="All ICP" active={icpFilter === 'all'} onClick={() => setIcpFilter('all')} />
+              <FilterChip label="Strong" active={icpFilter === 'Strong'} onClick={() => setIcpFilter('Strong')} />
+              <FilterChip label="Moderate" active={icpFilter === 'Moderate'} onClick={() => setIcpFilter('Moderate')} />
+              <FilterChip label="Weak" active={icpFilter === 'Weak'} onClick={() => setIcpFilter('Weak')} />
+
+              <span style={{ width: 1, height: 16, background: 'var(--border)', margin: '0 4px' }} />
+
+              <FilterChip label="All ages" active={freshnessFilter === 'all'} onClick={() => setFreshnessFilter('all')} />
+              <FilterChip label="Fresh" active={freshnessFilter === 'fresh'} onClick={() => setFreshnessFilter('fresh')} />
+              <FilterChip label="Review" active={freshnessFilter === 'review'} onClick={() => setFreshnessFilter('review')} />
+              <FilterChip label="Stale" active={freshnessFilter === 'stale'} onClick={() => setFreshnessFilter('stale')} />
+
+              <span style={{ width: 1, height: 16, background: 'var(--border)', margin: '0 4px' }} />
+
+              <FilterChip label="All" active={contactFilter === 'all'} onClick={() => setContactFilter('all')} />
+              <FilterChip label="Has contacts" active={contactFilter === 'with'} onClick={() => setContactFilter('with')} />
+              <FilterChip label="No contacts" active={contactFilter === 'without'} onClick={() => setContactFilter('without')} />
+
+              {teamView && isAdmin && allUsers.length > 0 && (
+                <>
+                  <span style={{ width: 1, height: 16, background: 'var(--border)', margin: '0 4px' }} />
+                  <select
+                    value={userFilter}
+                    onChange={e => setUserFilter(e.target.value)}
+                    style={{
+                      fontSize: 11, padding: '3px 8px', borderRadius: 4,
+                      border: '1px solid var(--border)', background: 'var(--bg-surface)',
+                      color: 'var(--text-secondary)', cursor: 'pointer',
+                    }}
+                  >
+                    <option value="all">All users</option>
+                    {allUsers.map(u => (
+                      <option key={u.id} value={u.id}>{u.email}</option>
+                    ))}
+                  </select>
+                </>
+              )}
+
+              {hasActiveFilters && (
+                <button onClick={() => { setIcpFilter('all'); setFreshnessFilter('all'); setContactFilter('all'); setUserFilter('all'); }} style={{
+                  fontSize: 11, color: 'var(--accent)', background: 'transparent', border: 'none',
+                  cursor: 'pointer', textDecoration: 'underline', padding: '3px 4px',
+                }}>
+                  Clear filters
+                </button>
+              )}
+            </div>
+          )}
 
           {/* Table */}
           {filtered.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-tertiary)', fontSize: 13 }}>
               No accounts match the current filters.
             </div>
-          ) : (
-            <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 640 }}>
-                  <thead>
-                    <tr style={{ background: 'var(--bg-surface)', borderBottom: '1px solid var(--border)' }}>
-                      <th style={thStyle} onClick={() => toggleSort('company')}>
-                        Company <SortIcon col="company" />
-                      </th>
-                      <th style={{ ...thStyle, textAlign: 'center' }} onClick={() => toggleSort('icp_score')}>
-                        ICP Score <SortIcon col="icp_score" />
-                      </th>
-                      <th style={{ ...thStyle, textAlign: 'center' }} onClick={() => toggleSort('trigger_count')}>
-                        Triggers <SortIcon col="trigger_count" />
-                      </th>
-                      <th style={{ ...thStyle, textAlign: 'center' }} onClick={() => toggleSort('contact_count')}>
-                        Contacts <SortIcon col="contact_count" />
-                      </th>
-                      <th style={{ ...thStyle, textAlign: 'right', width: 100 }} onClick={() => toggleSort('whitespace')}>
-                        Whitespace <SortIcon col="whitespace" />
-                      </th>
-                      <th style={thStyle} onClick={() => toggleSort('age')}>
-                        Age <SortIcon col="age" />
-                      </th>
-                      {teamView && isAdmin && <th style={{ ...thStyle, cursor: 'default' }}>User</th>}
-                      <th style={{ ...thStyle, textAlign: 'center', cursor: 'default', width: 80 }}>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sorted.map(row => {
-                      const icpColor = ICP_COLORS[row.icp_score || ''] || { bg: 'rgba(74,74,74,0.15)', text: 'var(--text-tertiary)' };
-                      const age = ageDays(row.created_at);
-                      const freshness = freshnessLabel(age);
-
-                      return (
-                        <tr key={row.run_id}
-                          style={{ borderBottom: '1px solid var(--border)', transition: 'background 80ms' }}
-                          onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-elevated)')}
-                          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                        >
-                          {/* Company */}
-                          <td style={{ padding: '11px 16px', fontSize: 13, fontWeight: 500 }}>
-                            <span
-                              style={{ cursor: 'pointer', transition: 'color 80ms' }}
-                              onClick={() => navigate(`/briefs/${row.run_id}`)}
-                              onMouseEnter={e => (e.currentTarget.style.color = 'var(--accent)')}
-                              onMouseLeave={e => (e.currentTarget.style.color = 'inherit')}
-                            >
-                              {row.company}
-                            </span>
-                          </td>
-
-                          {/* ICP Score */}
-                          <td style={{ padding: '11px 16px', textAlign: 'center' }}>
-                            {row.icp_score ? (
-                              <span style={{
-                                display: 'inline-flex', alignItems: 'center', gap: 4,
-                                fontSize: 11, fontWeight: 600, padding: '2px 10px', borderRadius: 4,
-                                background: icpColor.bg, color: icpColor.text,
-                              }}>
-                                <Target size={10} /> {row.icp_score}
-                              </span>
-                            ) : (
-                              <span style={{ fontSize: 12, color: 'var(--text-disabled)' }}>—</span>
-                            )}
-                          </td>
-
-                          {/* Triggers */}
-                          <td style={{ padding: '11px 16px', textAlign: 'center', fontSize: 13, color: 'var(--text-secondary)' }}>
-                            {row.trigger_count || '—'}
-                          </td>
-
-                          {/* Contacts */}
-                          <td style={{ padding: '11px 16px', textAlign: 'center', fontSize: 13, color: 'var(--text-secondary)' }}>
-                            {row.contact_count || '—'}
-                          </td>
-
-                          {/* Whitespace */}
-                          <td style={{
-                            padding: '11px 16px', textAlign: 'right', fontSize: 13, fontWeight: 500,
-                            color: row.whitespace !== null && row.whitespace >= 500_000 ? '#22c55e' : row.whitespace !== null ? 'var(--text-secondary)' : '#555',
+          ) : isMobile ? (
+              /* ─── Mobile: Card list ─── */
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {sorted.map(row => {
+                  const icpColor = ICP_COLORS[row.icp_score || ''] || { bg: 'rgba(74,74,74,0.15)', text: 'var(--text-tertiary)' };
+                  const age = ageDays(row.created_at);
+                  const freshness = freshnessLabel(age);
+                  return (
+                    <div key={row.run_id} onClick={() => navigate(`/briefs/${row.run_id}`)} style={{
+                      borderRadius: 12, border: '0.5px solid var(--border)', padding: 14,
+                      background: 'var(--bg-surface)', cursor: 'pointer',
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                        <span style={{ fontSize: 15, fontWeight: 500, color: 'var(--text-primary)' }}>{row.company}</span>
+                        {row.icp_score ? (
+                          <span style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 4,
+                            fontSize: 11, fontWeight: 600, padding: '2px 10px', borderRadius: 4,
+                            background: icpColor.bg, color: icpColor.text,
                           }}>
-                            {formatWhitespace(row.whitespace)}
-                          </td>
+                            <Target size={10} /> {row.icp_score}
+                          </span>
+                        ) : (
+                          <span style={{ fontSize: 12, color: 'var(--text-disabled)' }}>{'\u2014'}</span>
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12, color: 'var(--text-secondary)' }}>
+                        <span>{row.trigger_count} trigger{row.trigger_count !== 1 ? 's' : ''}</span>
+                        <span>{row.contact_count} contact{row.contact_count !== 1 ? 's' : ''}</span>
+                        <span style={{ fontWeight: 500, color: row.whitespace !== null && row.whitespace >= 500_000 ? '#22c55e' : 'var(--text-secondary)' }}>
+                          {formatWhitespace(row.whitespace)}
+                        </span>
+                        {age > 30 ? (
+                          <span style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 3,
+                            fontSize: 11, fontWeight: 500, padding: '1px 6px', borderRadius: 3,
+                            color: freshness.color, background: freshness.bg,
+                          }}>
+                            <Clock size={10} /> {freshness.label}
+                          </span>
+                        ) : (
+                          <span style={{ color: 'var(--text-tertiary)' }}>{freshness.label}</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              /* ─── Desktop: Table ─── */
+              <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 640 }}>
+                    <thead>
+                      <tr style={{ background: 'var(--bg-surface)', borderBottom: '1px solid var(--border)' }}>
+                        <th style={thStyle} onClick={() => toggleSort('company')}>
+                          Company <SortIcon col="company" />
+                        </th>
+                        <th style={{ ...thStyle, textAlign: 'center' }} onClick={() => toggleSort('icp_score')}>
+                          ICP Score <SortIcon col="icp_score" />
+                        </th>
+                        <th style={{ ...thStyle, textAlign: 'center' }} onClick={() => toggleSort('trigger_count')}>
+                          Triggers <SortIcon col="trigger_count" />
+                        </th>
+                        <th style={{ ...thStyle, textAlign: 'center' }} onClick={() => toggleSort('contact_count')}>
+                          Contacts <SortIcon col="contact_count" />
+                        </th>
+                        <th style={{ ...thStyle, textAlign: 'right', width: 100 }} onClick={() => toggleSort('whitespace')}>
+                          Whitespace <SortIcon col="whitespace" />
+                        </th>
+                        <th style={thStyle} onClick={() => toggleSort('age')}>
+                          Age <SortIcon col="age" />
+                        </th>
+                        {teamView && isAdmin && <th style={{ ...thStyle, cursor: 'default' }}>User</th>}
+                        <th style={{ ...thStyle, textAlign: 'center', cursor: 'default', width: 80 }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sorted.map(row => {
+                        const icpColor = ICP_COLORS[row.icp_score || ''] || { bg: 'rgba(74,74,74,0.15)', text: 'var(--text-tertiary)' };
+                        const age = ageDays(row.created_at);
+                        const freshness = freshnessLabel(age);
 
-                          {/* Age / Freshness */}
-                          <td style={{ padding: '11px 16px' }}>
-                            {age > 30 ? (
-                              <span style={{
-                                display: 'inline-flex', alignItems: 'center', gap: 3,
-                                fontSize: 11, fontWeight: 500, padding: '1px 6px', borderRadius: 3,
-                                color: freshness.color, background: freshness.bg,
-                              }}>
-                                <Clock size={10} /> {freshness.label}
-                              </span>
-                            ) : (
-                              <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
-                                {freshness.label}
-                              </span>
-                            )}
-                          </td>
-
-                          {/* User (admin team view) */}
-                          {teamView && isAdmin && (
-                            <td style={{ padding: '11px 16px', fontSize: 12, color: 'var(--text-tertiary)', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                              title={row.user_email || ''}>
-                              {row.user_email ? row.user_email.split('@')[0] : '—'}
-                            </td>
-                          )}
-
-                          {/* Actions */}
-                          <td style={{ padding: '11px 16px', textAlign: 'center' }}>
-                            <div style={{ display: 'flex', justifyContent: 'center', gap: 6 }}>
-                              <button
+                        return (
+                          <tr key={row.run_id}
+                            style={{ borderBottom: '1px solid var(--border)', transition: 'background 80ms' }}
+                            onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-elevated)')}
+                            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                          >
+                            <td style={{ padding: '11px 16px', fontSize: 13, fontWeight: 500 }}>
+                              <span
+                                style={{ cursor: 'pointer', transition: 'color 80ms' }}
                                 onClick={() => navigate(`/briefs/${row.run_id}`)}
-                                title="View brief"
-                                style={{
-                                  background: 'transparent', border: 'none',
-                                  color: 'var(--text-secondary)', cursor: 'pointer',
-                                  padding: 4, borderRadius: 4,
-                                }}
                                 onMouseEnter={e => (e.currentTarget.style.color = 'var(--accent)')}
-                                onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-secondary)')}
+                                onMouseLeave={e => (e.currentTarget.style.color = 'inherit')}
                               >
-                                <Eye size={14} />
-                              </button>
-                              {row.url && (
+                                {row.company}
+                              </span>
+                            </td>
+                            <td style={{ padding: '11px 16px', textAlign: 'center' }}>
+                              {row.icp_score ? (
+                                <span style={{
+                                  display: 'inline-flex', alignItems: 'center', gap: 4,
+                                  fontSize: 11, fontWeight: 600, padding: '2px 10px', borderRadius: 4,
+                                  background: icpColor.bg, color: icpColor.text,
+                                }}>
+                                  <Target size={10} /> {row.icp_score}
+                                </span>
+                              ) : (
+                                <span style={{ fontSize: 12, color: 'var(--text-disabled)' }}>{'\u2014'}</span>
+                              )}
+                            </td>
+                            <td style={{ padding: '11px 16px', textAlign: 'center', fontSize: 13, color: 'var(--text-secondary)' }}>
+                              {row.trigger_count || '\u2014'}
+                            </td>
+                            <td style={{ padding: '11px 16px', textAlign: 'center', fontSize: 13, color: 'var(--text-secondary)' }}>
+                              {row.contact_count || '\u2014'}
+                            </td>
+                            <td style={{
+                              padding: '11px 16px', textAlign: 'right', fontSize: 13, fontWeight: 500,
+                              color: row.whitespace !== null && row.whitespace >= 500_000 ? '#22c55e' : row.whitespace !== null ? 'var(--text-secondary)' : '#555',
+                            }}>
+                              {formatWhitespace(row.whitespace)}
+                            </td>
+                            <td style={{ padding: '11px 16px' }}>
+                              {age > 30 ? (
+                                <span style={{
+                                  display: 'inline-flex', alignItems: 'center', gap: 3,
+                                  fontSize: 11, fontWeight: 500, padding: '1px 6px', borderRadius: 3,
+                                  color: freshness.color, background: freshness.bg,
+                                }}>
+                                  <Clock size={10} /> {freshness.label}
+                                </span>
+                              ) : (
+                                <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
+                                  {freshness.label}
+                                </span>
+                              )}
+                            </td>
+                            {teamView && isAdmin && (
+                              <td style={{ padding: '11px 16px', fontSize: 12, color: 'var(--text-tertiary)', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                                title={row.user_email || ''}>
+                                {row.user_email ? row.user_email.split('@')[0] : '\u2014'}
+                              </td>
+                            )}
+                            <td style={{ padding: '11px 16px', textAlign: 'center' }}>
+                              <div style={{ display: 'flex', justifyContent: 'center', gap: 6 }}>
                                 <button
-                                  onClick={() => setRerunConfirm(row.run_id)}
-                                  title="Re-run with fresh data"
-                                  disabled={rerunning === row.run_id}
+                                  onClick={() => navigate(`/briefs/${row.run_id}`)}
+                                  title="View brief"
                                   style={{
                                     background: 'transparent', border: 'none',
-                                    color: 'var(--text-tertiary)', cursor: 'pointer',
+                                    color: 'var(--text-secondary)', cursor: 'pointer',
                                     padding: 4, borderRadius: 4,
-                                    opacity: rerunning === row.run_id ? 0.4 : 1,
                                   }}
                                   onMouseEnter={e => (e.currentTarget.style.color = 'var(--accent)')}
-                                  onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-tertiary)')}
+                                  onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-secondary)')}
                                 >
-                                  <RotateCcw size={13} />
+                                  <Eye size={14} />
                                 </button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                                {row.url && (
+                                  <button
+                                    onClick={() => setRerunConfirm(row.run_id)}
+                                    title="Re-run with fresh data"
+                                    disabled={rerunning === row.run_id}
+                                    style={{
+                                      background: 'transparent', border: 'none',
+                                      color: 'var(--text-tertiary)', cursor: 'pointer',
+                                      padding: 4, borderRadius: 4,
+                                      opacity: rerunning === row.run_id ? 0.4 : 1,
+                                    }}
+                                    onMouseEnter={e => (e.currentTarget.style.color = 'var(--accent)')}
+                                    onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-tertiary)')}
+                                  >
+                                    <RotateCcw size={13} />
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+        </>
+      )}
+
+      {/* Mobile filter bottom sheet */}
+      {filterSheetOpen && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+          zIndex: 200, display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+        }} onClick={() => setFilterSheetOpen(false)}>
+          <div onClick={e => e.stopPropagation()} style={{
+            background: 'var(--bg-surface)', borderRadius: '16px 16px 0 0', width: '100%',
+            maxWidth: 480, padding: '16px 20px calc(16px + max(env(safe-area-inset-bottom), 8px))',
+          }}>
+            <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 16 }}>Filters</div>
+
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 6 }}>ICP Score</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {(['all', 'Strong', 'Moderate', 'Weak'] as IcpFilter[]).map(v => (
+                  <FilterChip key={v} label={v === 'all' ? 'All' : v} active={icpFilter === v} onClick={() => setIcpFilter(v)} />
+                ))}
               </div>
             </div>
-          )}
-        </>
+
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 6 }}>Freshness</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {(['all', 'fresh', 'review', 'stale'] as FreshnessFilter[]).map(v => (
+                  <FilterChip key={v} label={v === 'all' ? 'All' : v.charAt(0).toUpperCase() + v.slice(1)} active={freshnessFilter === v} onClick={() => setFreshnessFilter(v)} />
+                ))}
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 6 }}>Contacts</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {([['all', 'All'], ['with', 'Has contacts'], ['without', 'No contacts']] as [ContactFilter, string][]).map(([v, label]) => (
+                  <FilterChip key={v} label={label} active={contactFilter === v} onClick={() => setContactFilter(v)} />
+                ))}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => { setIcpFilter('all'); setFreshnessFilter('all'); setContactFilter('all'); setUserFilter('all'); }} style={{
+                flex: 1, padding: '10px 0', fontSize: 13, fontWeight: 500,
+                color: 'var(--text-secondary)', background: 'transparent',
+                border: '1px solid var(--border-strong)', borderRadius: 8, cursor: 'pointer',
+              }}>
+                Clear all
+              </button>
+              <button onClick={() => setFilterSheetOpen(false)} style={{
+                flex: 1, padding: '10px 0', fontSize: 13, fontWeight: 500,
+                color: '#fff', background: 'var(--accent)',
+                border: 'none', borderRadius: 8, cursor: 'pointer',
+              }}>
+                Apply
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Re-run confirmation modal */}

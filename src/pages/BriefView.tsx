@@ -5,7 +5,8 @@ import { useAuth } from '../context/AuthContext';
 import Layout from '../components/Layout';
 import TableSkeleton from '../components/TableSkeleton';
 import usePageTitle from '../hooks/usePageTitle';
-import { ArrowLeft, FileText, X, ChevronDown, ExternalLink, Send, Trash2, Activity, Share2, RefreshCw, Paperclip, ClipboardList, Copy, Check } from 'lucide-react';
+import useWindowWidth from '../hooks/useWindowWidth';
+import { ArrowLeft, FileText, X, ChevronDown, ExternalLink, Send, Trash2, Activity, Share2, RefreshCw, Paperclip, ClipboardList, Copy, Check, MoreHorizontal } from 'lucide-react';
 import SectionFeedback from '../components/SectionFeedback';
 // DOMPurify removed — CitedProse now renders React elements instead of innerHTML
 
@@ -876,7 +877,7 @@ function extractEmployeesFromProse(...texts: (string | undefined | null)[]): str
 
 /* extractDesignOrgFromProse removed — Design Org metric replaced by ARR/Whitespace in MetricsBar */
 
-function MetricsBar({ pov }: { pov: any; hooksData?: any; personas?: any }) {
+function MetricsBar({ pov, isMobile }: { pov: any; hooksData?: any; personas?: any; isMobile?: boolean }) {
   // Try structured fields first, then extract from prose
   const revenue = pov?.overview?.revenue || pov?.about?.revenue
     || extractMetricFromProse(pov?.about?.how_they_make_money, pov?.about?.what_they_do);
@@ -920,7 +921,7 @@ function MetricsBar({ pov }: { pov: any; hooksData?: any; personas?: any }) {
   return (
     <div style={{
       display: 'grid',
-      gridTemplateColumns: 'repeat(4, 1fr)',
+      gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)',
       gap: 8,
     }}>
       {items.map((item, i) => (
@@ -2667,6 +2668,7 @@ export default function BriefView() {
   const navigate = useNavigate();
   const { session, userProfile } = useAuth();
   usePageTitle('Brief');
+  const isMobile = useWindowWidth() <= 768;
 
   const [run, setRun] = useState<Run | null>(null);
   const [brief, setBrief] = useState<Brief | null>(null);
@@ -2714,6 +2716,7 @@ export default function BriefView() {
   const [rerendering, setRerendering] = useState(false);
   const [rerenderDone, setRerenderDone] = useState(false);
   const [overflowOpen, setOverflowOpen] = useState(false);
+  const [mobileActionsOpen, setMobileActionsOpen] = useState(false);
   const overflowRef = useRef<HTMLDivElement>(null);
   const [rateModalOpen, setRateModalOpen] = useState(false);
   const [overallComment, setOverallComment] = useState('');
@@ -3180,9 +3183,9 @@ export default function BriefView() {
         <div style={{
           background: '#fff',
           borderBottom: `1px solid ${COLORS.border}`,
-          margin: '-32px -40px 24px',
+          margin: isMobile ? '-16px -16px 16px' : '-32px -40px 24px',
         }}>
-          <div style={{ padding: '32px 40px 20px' }}>
+          <div style={{ padding: isMobile ? '16px 16px 14px' : '32px 40px 20px' }}>
             {/* Back link */}
             <button onClick={() => navigate('/my-briefs')} style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
@@ -3207,35 +3210,89 @@ export default function BriefView() {
 
             {/* Part 2 — Button row */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-              <button onClick={() => setChatOpen(prev => !prev)} style={{
-                display: 'flex', alignItems: 'center', gap: 6, padding: '6px 13px',
-                borderRadius: 'var(--border-radius-md, 8px)',
-                border: '0.5px solid var(--color-border-secondary, #d6d3d1)',
-                fontSize: 13, cursor: 'pointer', fontFamily: FONTS.sans,
-                background: chatOpen ? '#f3f0ff' : 'var(--color-background-secondary, #f5f5f0)',
-                color: chatOpen ? '#7c3aed' : COLORS.secondary,
-                ...(chatOpen ? { borderColor: '#7c3aed' } : {}),
-              }}>
-                <svg width="14" height="14" viewBox="0 0 20 20" fill="none" style={{ display: 'block', flexShrink: 0 }}>
-                  <path className="sparkle-main" d="M10 2.5 L11.3 7.2 L16.5 8.5 L11.3 9.8 L10 14.5 L8.7 9.8 L3.5 8.5 L8.7 7.2 Z" fill={chatOpen ? '#7c3aed' : '#7F77DD'}/>
-                  <circle className="sparkle-dot1" cx="16" cy="3" r="1.5" fill="#AFA9EC"/>
-                  <circle className="sparkle-dot2" cx="4" cy="15.5" r="1" fill="#CECBF6"/>
-                  <circle className="sparkle-dot3" cx="17.5" cy="12" r="1" fill="#AFA9EC"/>
-                </svg>
-                Chat
-              </button>
-              <button onClick={() => {
-                setChatOpen(true);
-                reviewFileInputRef.current?.click();
-              }} style={{
-                display: 'flex', alignItems: 'center', gap: 6, padding: '6px 13px',
-                borderRadius: 'var(--border-radius-md, 8px)',
-                border: '0.5px solid var(--color-border-secondary, #d6d3d1)',
-                fontSize: 13, cursor: 'pointer', fontFamily: FONTS.sans,
-                background: 'transparent', color: COLORS.secondary,
-              }}>
-                <ClipboardList size={14} /> Review PSP
-              </button>
+              {/* On mobile: PDF + overflow only. On desktop: all buttons. */}
+              {!isMobile && (
+                <>
+                  <button onClick={() => setChatOpen(prev => !prev)} style={{
+                    display: 'flex', alignItems: 'center', gap: 6, padding: '6px 13px',
+                    borderRadius: 'var(--border-radius-md, 8px)',
+                    border: '0.5px solid var(--color-border-secondary, #d6d3d1)',
+                    fontSize: 13, cursor: 'pointer', fontFamily: FONTS.sans,
+                    background: chatOpen ? '#f3f0ff' : 'var(--color-background-secondary, #f5f5f0)',
+                    color: chatOpen ? '#7c3aed' : COLORS.secondary,
+                    ...(chatOpen ? { borderColor: '#7c3aed' } : {}),
+                  }}>
+                    <svg width="14" height="14" viewBox="0 0 20 20" fill="none" style={{ display: 'block', flexShrink: 0 }}>
+                      <path className="sparkle-main" d="M10 2.5 L11.3 7.2 L16.5 8.5 L11.3 9.8 L10 14.5 L8.7 9.8 L3.5 8.5 L8.7 7.2 Z" fill={chatOpen ? '#7c3aed' : '#7F77DD'}/>
+                      <circle className="sparkle-dot1" cx="16" cy="3" r="1.5" fill="#AFA9EC"/>
+                      <circle className="sparkle-dot2" cx="4" cy="15.5" r="1" fill="#CECBF6"/>
+                      <circle className="sparkle-dot3" cx="17.5" cy="12" r="1" fill="#AFA9EC"/>
+                    </svg>
+                    Chat
+                  </button>
+                  <button onClick={() => {
+                    setChatOpen(true);
+                    reviewFileInputRef.current?.click();
+                  }} style={{
+                    display: 'flex', alignItems: 'center', gap: 6, padding: '6px 13px',
+                    borderRadius: 'var(--border-radius-md, 8px)',
+                    border: '0.5px solid var(--color-border-secondary, #d6d3d1)',
+                    fontSize: 13, cursor: 'pointer', fontFamily: FONTS.sans,
+                    background: 'transparent', color: COLORS.secondary,
+                  }}>
+                    <ClipboardList size={14} /> Review PSP
+                  </button>
+                  <button onClick={() => {
+                    setToastMessage('Coming soon — Generate PSP will be available once we\'ve reviewed example plans.');
+                    setTimeout(() => setToastMessage(null), 4000);
+                  }} style={{
+                    display: 'flex', alignItems: 'center', gap: 6, padding: '6px 13px',
+                    borderRadius: 'var(--border-radius-md, 8px)',
+                    border: '0.5px solid var(--color-border-secondary, #d6d3d1)',
+                    fontSize: 13, cursor: 'pointer', fontFamily: FONTS.sans,
+                    background: 'transparent', color: COLORS.secondary,
+                  }}>
+                    <FileText size={14} /> Generate PSP
+                  </button>
+                  <div style={{ width: 0.5, height: 18, background: 'var(--color-border-tertiary, #e7e5e4)' }} />
+                  {session && (
+                    <button onClick={() => setRateModalOpen(true)} style={{
+                      display: 'flex', alignItems: 'center', gap: 6, padding: '6px 13px',
+                      borderRadius: 'var(--border-radius-md, 8px)',
+                      border: '0.5px solid var(--color-border-secondary, #d6d3d1)',
+                      fontSize: 13, cursor: 'pointer', fontFamily: FONTS.sans,
+                      background: 'transparent',
+                      color: feedbackSubmitted ? '#065f46' : COLORS.secondary,
+                    }}>
+                      <span style={{ fontSize: 14 }}>{feedbackSubmitted ? '\u2605' : '\u2606'}</span> {feedbackSubmitted ? 'Rated!' : 'Rate'}
+                    </button>
+                  )}
+                </>
+              )}
+              {/* PDF button — always visible */}
+              {isMobile && run.pdf_url && (
+                <button onClick={handleDownloadPdf} disabled={pdfLoading} style={{
+                  display: 'flex', alignItems: 'center', gap: 6, padding: '6px 13px',
+                  borderRadius: 'var(--border-radius-md, 8px)',
+                  border: '0.5px solid var(--color-border-secondary, #d6d3d1)',
+                  fontSize: 13, cursor: 'pointer', fontFamily: FONTS.sans,
+                  background: 'transparent', color: COLORS.secondary,
+                }}>
+                  <FileText size={14} /> {pdfLoading ? 'Loading...' : 'PDF'}
+                </button>
+              )}
+              {/* Mobile overflow button → bottom sheet */}
+              {isMobile && (
+                <button onClick={() => setMobileActionsOpen(true)} style={{
+                  display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px',
+                  borderRadius: 'var(--border-radius-md, 8px)',
+                  border: '0.5px solid var(--color-border-secondary, #d6d3d1)',
+                  fontSize: 13, cursor: 'pointer', fontFamily: FONTS.sans,
+                  background: 'transparent', color: COLORS.secondary,
+                }}>
+                  <MoreHorizontal size={16} />
+                </button>
+              )}
               <input
                 ref={reviewFileInputRef}
                 type="file"
@@ -3251,35 +3308,6 @@ export default function BriefView() {
                   e.target.value = '';
                 }}
               />
-              <button onClick={() => {
-                setToastMessage('Coming soon — Generate PSP will be available once we\'ve reviewed example plans.');
-                setTimeout(() => setToastMessage(null), 4000);
-              }} style={{
-                display: 'flex', alignItems: 'center', gap: 6, padding: '6px 13px',
-                borderRadius: 'var(--border-radius-md, 8px)',
-                border: '0.5px solid var(--color-border-secondary, #d6d3d1)',
-                fontSize: 13, cursor: 'pointer', fontFamily: FONTS.sans,
-                background: 'transparent', color: COLORS.secondary,
-              }}>
-                <FileText size={14} /> Generate PSP
-              </button>
-
-              {/* Vertical divider */}
-              <div style={{ width: 0.5, height: 18, background: 'var(--color-border-tertiary, #e7e5e4)' }} />
-
-              {/* Rate button — opens feedback modal */}
-              {session && (
-                <button onClick={() => setRateModalOpen(true)} style={{
-                  display: 'flex', alignItems: 'center', gap: 6, padding: '6px 13px',
-                  borderRadius: 'var(--border-radius-md, 8px)',
-                  border: '0.5px solid var(--color-border-secondary, #d6d3d1)',
-                  fontSize: 13, cursor: 'pointer', fontFamily: FONTS.sans,
-                  background: 'transparent',
-                  color: feedbackSubmitted ? '#065f46' : COLORS.secondary,
-                }}>
-                  <span style={{ fontSize: 14 }}>{feedbackSubmitted ? '\u2605' : '\u2606'}</span> {feedbackSubmitted ? 'Rated!' : 'Rate'}
-                </button>
-              )}
 
               {/* Overflow menu */}
               <div ref={overflowRef} style={{ position: 'relative' }}>
@@ -3456,7 +3484,7 @@ export default function BriefView() {
             </div>
 
             {/* Part 3 — Stat cards */}
-            {pov && <MetricsBar pov={pov} hooksData={hooksData} personas={personas} />}
+            {pov && <MetricsBar pov={pov} hooksData={hooksData} personas={personas} isMobile={isMobile} />}
           </div>
         </div>
 
@@ -3765,23 +3793,62 @@ export default function BriefView() {
         );
       })()}
 
+      {/* ============ Mobile actions bottom sheet ============ */}
+      {mobileActionsOpen && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+          zIndex: 200, display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+        }} onClick={() => setMobileActionsOpen(false)}>
+          <div onClick={e => e.stopPropagation()} style={{
+            background: '#fff', borderRadius: '16px 16px 0 0', width: '100%',
+            maxWidth: 480, padding: '12px 0 calc(12px + max(env(safe-area-inset-bottom), 8px))',
+          }}>
+            {[
+              { label: 'Chat', icon: <svg width="16" height="16" viewBox="0 0 20 20" fill="none"><path d="M10 2.5 L11.3 7.2 L16.5 8.5 L11.3 9.8 L10 14.5 L8.7 9.8 L3.5 8.5 L8.7 7.2 Z" fill="#7F77DD"/></svg>, action: () => { setMobileActionsOpen(false); setChatOpen(true); } },
+              { label: 'Review PSP', icon: <ClipboardList size={16} />, action: () => { setMobileActionsOpen(false); setChatOpen(true); reviewFileInputRef.current?.click(); } },
+              { label: 'Generate PSP', icon: <FileText size={16} />, action: () => { setMobileActionsOpen(false); setToastMessage('Coming soon — Generate PSP will be available once we\'ve reviewed example plans.'); setTimeout(() => setToastMessage(null), 4000); } },
+              ...(session ? [{ label: feedbackSubmitted ? 'Rated!' : 'Rate', icon: <span style={{ fontSize: 16 }}>{feedbackSubmitted ? '\u2605' : '\u2606'}</span>, action: () => { setMobileActionsOpen(false); setRateModalOpen(true); } }] : []),
+            ].map((item, i) => (
+              <button key={i} onClick={item.action} style={{
+                display: 'flex', alignItems: 'center', gap: 12, width: '100%',
+                padding: '14px 20px', fontSize: 14, color: COLORS.body,
+                background: 'none', border: 'none', borderBottom: `1px solid ${COLORS.borderLight}`,
+                cursor: 'pointer', fontFamily: FONTS.sans, textAlign: 'left',
+              }}>
+                {item.icon} {item.label}
+              </button>
+            ))}
+            <button onClick={() => setMobileActionsOpen(false)} style={{
+              width: '100%', padding: '14px 20px', fontSize: 14, fontWeight: 500,
+              color: COLORS.tertiary, background: 'none', border: 'none', cursor: 'pointer',
+              fontFamily: FONTS.sans,
+            }}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ============ Chat panel ============ */}
       {chatOpen && (
         <div style={{
-          position: 'fixed', right: 0, top: 0, bottom: 0, width: chatWidth,
-          background: '#fff', borderLeft: `1px solid ${COLORS.border}`,
+          position: 'fixed',
+          ...(isMobile ? { inset: 0 } : { right: 0, top: 0, bottom: 0, width: chatWidth }),
+          background: '#fff', borderLeft: isMobile ? 'none' : `1px solid ${COLORS.border}`,
           display: 'flex', flexDirection: 'column', zIndex: 100,
           animation: 'slideIn 150ms ease-out',
           fontFamily: FONTS.sans,
         }}>
-          {/* Resize drag handle */}
-          <div
-            onMouseDown={handleChatResizeStart}
-            style={{
-              position: 'absolute', left: 0, top: 0, bottom: 0, width: 6,
-              cursor: 'col-resize', zIndex: 10,
-            }}
-          />
+          {/* Resize drag handle — desktop only */}
+          {!isMobile && (
+            <div
+              onMouseDown={handleChatResizeStart}
+              style={{
+                position: 'absolute', left: 0, top: 0, bottom: 0, width: 6,
+                cursor: 'col-resize', zIndex: 10,
+              }}
+            />
+          )}
           {/* Header */}
           <div style={{
             padding: '14px 18px', borderBottom: `1px solid ${COLORS.border}`,

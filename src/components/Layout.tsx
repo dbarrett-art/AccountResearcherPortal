@@ -1,25 +1,42 @@
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Sidebar from './Sidebar';
-import MobileNav from './MobileNav';
+import BottomTabBar from './BottomTabBar';
+import MobileTopBar from './MobileTopBar';
 import Banner from './Banner';
+import useWindowWidth from '../hooks/useWindowWidth';
+
+const ROUTE_TITLES: Record<string, string> = {
+  '/submit': 'Submit',
+  '/my-briefs': 'My Briefs',
+  '/territory': 'Territory',
+  '/team-view': 'Team View',
+  '/admin': 'Admin',
+};
 
 export default function Layout({ children, bgColor }: { children: React.ReactNode; bgColor?: string }) {
   const { authError, signOut } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const width = useWindowWidth();
+  const isMobile = width <= 768;
+
+  // Derive page title from route
+  const pageTitle = ROUTE_TITLES[location.pathname]
+    || (location.pathname.startsWith('/briefs/') ? 'Brief' : 'Account Researcher');
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh' }}>
-      <Sidebar />
-      <MobileNav />
+    <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', minHeight: '100vh' }}>
+      {!isMobile && <Sidebar />}
+      {isMobile && <MobileTopBar title={pageTitle} />}
       <main
         style={{
-          marginLeft: 220,
+          marginLeft: isMobile ? 0 : 220,
           flex: 1,
-          padding: '32px 40px',
+          padding: isMobile ? '16px 16px 80px' : '32px 40px',
           width: '100%',
           background: bgColor || 'var(--bg-app)',
-          minHeight: '100vh',
+          minHeight: isMobile ? undefined : '100vh',
         }}
       >
         {authError && (
@@ -39,6 +56,7 @@ export default function Layout({ children, bgColor }: { children: React.ReactNod
         )}
         {children}
       </main>
+      {isMobile && <BottomTabBar />}
     </div>
   );
 }

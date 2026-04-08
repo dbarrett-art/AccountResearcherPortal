@@ -8,6 +8,7 @@ import StatusBadge from '../components/StatusBadge';
 import ProgressBar from '../components/ProgressBar';
 import TableSkeleton from '../components/TableSkeleton';
 import usePageTitle from '../hooks/usePageTitle';
+import useWindowWidth from '../hooks/useWindowWidth';
 import { FileText, RefreshCw, Eye, Clock, Trash2, RotateCcw } from 'lucide-react';
 
 interface Run {
@@ -97,6 +98,7 @@ export default function MyBriefs() {
   usePageTitle('My Briefs');
   const { session, userProfile } = useAuth();
   const navigate = useNavigate();
+  const isMobile = useWindowWidth() <= 768;
   const [runs, setRuns] = useState<Run[]>([]);
   const [loading, setLoading] = useState(true);
   const [healthOk, setHealthOk] = useState(true);
@@ -293,168 +295,287 @@ export default function MyBriefs() {
             Submit request
           </button>
         </div>
-      ) : (
-        <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ background: 'var(--bg-surface)', borderBottom: '1px solid var(--border)' }}>
-                <th style={thStyle}>Company</th>
-                <th style={thStyle}>Submitted</th>
-                <th style={thStyle}>Status</th>
-                <th style={thStyle}>ICP Fit</th>
-                <th style={{ ...thStyle, textAlign: 'center' }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {runs.map((run) => (
-                <tr key={run.id}
-                  style={{ borderBottom: '1px solid var(--border)', transition: 'background 80ms' }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-elevated)')}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                >
-                  <td style={{ padding: '11px 16px', fontSize: 13, fontWeight: 500 }}>
+      ) : isMobile ? (
+          /* ─── Mobile: Card list ─── */
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {runs.map((run) => (
+              <div key={run.id} style={{
+                borderRadius: 12, border: '0.5px solid var(--border)',
+                padding: 14, background: 'var(--bg-surface)',
+              }}>
+                {/* Row 1: Company + ICP badge */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <span style={{ fontSize: 15, fontWeight: 500, color: 'var(--text-primary)' }}>
                     {run.company}
                     {run.market && run.market !== 'en' && run.market !== 'auto' && LANGUAGE_FLAGS[run.market] && (
-                      <span title={run.market.toUpperCase()} style={{ marginLeft: 6, fontSize: 14 }}>
-                        {LANGUAGE_FLAGS[run.market]}
-                      </span>
+                      <span style={{ marginLeft: 6, fontSize: 14 }}>{LANGUAGE_FLAGS[run.market]}</span>
                     )}
-                  </td>
-                  <td style={{ padding: '11px 16px', fontSize: 13, color: 'var(--text-secondary)' }} title={new Date(run.created_at).toLocaleString()}>
+                  </span>
+                  <IcpBadge score={run.icp_score} />
+                </div>
+
+                {/* Row 2: Status + time */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  <StatusBadge status={run.status} />
+                  <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
                     {relativeTime(run.created_at)}
-                    <FreshnessBadge createdAt={run.created_at} status={run.status} />
-                  </td>
-                  <td style={{ padding: '11px 16px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <StatusBadge status={run.status} />
-                      {run.status === 'queued' && run.queued_at && (
-                        <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                          Position #{run.queue_position || '?'}
-                        </span>
-                      )}
-                      {run.status === 'failed' && (
-                        <button
-                          onClick={() => handleRetry(run.id)}
-                          disabled={retrying === run.id}
-                          title={run.error_message || 'Retry this run'}
-                          style={{
-                            display: 'inline-flex', alignItems: 'center', gap: 4,
-                            background: 'transparent', color: 'var(--text-secondary)', border: '1px solid var(--border-strong)',
-                            padding: '2px 8px', fontSize: 12, borderRadius: 6, opacity: retrying === run.id ? 0.4 : 1,
-                          }}
-                          onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-elevated)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
-                          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
-                        >
-                          <RefreshCw size={12} />
-                          Retry
-                        </button>
-                      )}
-                    </div>
-                    {run.status === 'running' && progressMap[run.id] && (
-                      <div style={{ marginTop: 6, minWidth: 140 }}>
-                        <ProgressBar {...progressMap[run.id]} />
-                      </div>
-                    )}
-                  </td>
-                  <td style={{ padding: '11px 16px' }}>
-                    <IcpBadge score={run.icp_score} />
-                  </td>
-                  <td style={{ padding: '11px 16px', textAlign: 'center' }}>
-                    <div style={{ display: 'flex', justifyContent: 'center', gap: 4 }}>
-                      {run.status === 'complete' && run.brief_id && (
-                        <button
-                          onClick={() => navigate(`/briefs/${run.id}`)}
-                          title="View brief"
-                          className="action-btn"
-                          style={{
-                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                            width: 36, height: 36, borderRadius: 8,
-                            background: 'transparent', border: '0.5px solid var(--border-strong)',
-                            color: 'var(--text-secondary)', cursor: 'pointer', transition: 'all 100ms',
-                          }}
-                          onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-elevated)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
-                        >
-                          <Eye size={18} />
-                        </button>
-                      )}
-                      {run.pdf_url ? (
-                        <button
-                          title="Download PDF"
-                          onClick={async (e) => {
-                            e.preventDefault();
-                            const btn = e.currentTarget;
-                            btn.disabled = true;
-                            try {
-                              const res = await workerFetch(`/pdf/${run.id}`);
-                              if (!res.ok) throw new Error();
-                              const { signedUrl } = await res.json();
-                              window.open(signedUrl, '_blank');
-                            } catch { /* noop */ } finally { btn.disabled = false; }
-                          }}
-                          style={{
-                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                            width: 36, height: 36, borderRadius: 8,
-                            background: 'transparent', border: '0.5px solid var(--border-strong)',
-                            color: 'var(--text-secondary)', cursor: 'pointer', transition: 'all 100ms',
-                          }}
-                          onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-elevated)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
-                        >
-                          <FileText size={18} />
-                        </button>
-                      ) : (
-                        <span title="PDF not available" style={{
-                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                          width: 36, height: 36, borderRadius: 8,
-                          border: '0.5px solid var(--border)', opacity: 0.3,
-                        }}>
-                          <FileText size={18} style={{ color: 'var(--text-disabled)' }} />
-                        </span>
-                      )}
-                      {userProfile?.role === 'admin' && run.status === 'complete' && run.url && (
-                        <button
-                          onClick={() => setRerunConfirm(run.id)}
-                          title="Re-run with fresh data"
-                          disabled={rerunning === run.id}
-                          style={{
-                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                            width: 36, height: 36, borderRadius: 8,
-                            background: 'transparent', border: '0.5px solid var(--border-strong)',
-                            color: 'var(--text-secondary)', cursor: 'pointer', transition: 'all 100ms',
-                            opacity: rerunning === run.id ? 0.3 : 1,
-                            pointerEvents: rerunning === run.id ? 'none' : 'auto',
-                          }}
-                          onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-elevated)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
-                        >
-                          <RotateCcw size={18} />
-                        </button>
-                      )}
-                      {userProfile?.role === 'admin' && (
-                        <button
-                          onClick={() => setDeleteConfirm(run.id)}
-                          title="Delete run"
-                          style={{
-                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                            width: 36, height: 36, borderRadius: 8,
-                            background: 'transparent', border: '0.5px solid var(--border-strong)',
-                            color: 'var(--text-secondary)', cursor: 'pointer', transition: 'all 100ms',
-                          }}
-                          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(220,38,38,0.12)'; e.currentTarget.style.color = '#dc2626'; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
-                        >
-                          <Trash2 size={18} />
-                        </button>
-                      )}
-                    </div>
-                  </td>
+                  </span>
+                  <FreshnessBadge createdAt={run.created_at} status={run.status} />
+                  {run.status === 'queued' && run.queued_at && (
+                    <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                      #{run.queue_position || '?'}
+                    </span>
+                  )}
+                  {run.status === 'failed' && (
+                    <button
+                      onClick={() => handleRetry(run.id)}
+                      disabled={retrying === run.id}
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 4,
+                        background: 'transparent', color: 'var(--text-secondary)', border: '1px solid var(--border-strong)',
+                        padding: '2px 8px', fontSize: 12, borderRadius: 6, opacity: retrying === run.id ? 0.4 : 1,
+                      }}
+                    >
+                      <RefreshCw size={12} /> Retry
+                    </button>
+                  )}
+                </div>
+
+                {/* Progress bar if running */}
+                {run.status === 'running' && progressMap[run.id] && (
+                  <div style={{ marginBottom: 8 }}>
+                    <ProgressBar {...progressMap[run.id]} />
+                  </div>
+                )}
+
+                {/* Action icons row */}
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {run.status === 'complete' && run.brief_id && (
+                    <button onClick={() => navigate(`/briefs/${run.id}`)} title="View brief" style={{
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      width: 36, height: 36, borderRadius: 8,
+                      background: 'transparent', border: '0.5px solid var(--border-strong)',
+                      color: 'var(--text-secondary)', cursor: 'pointer',
+                    }}>
+                      <Eye size={18} />
+                    </button>
+                  )}
+                  {run.pdf_url ? (
+                    <button title="Download PDF" onClick={async (e) => {
+                      e.preventDefault();
+                      const btn = e.currentTarget;
+                      btn.disabled = true;
+                      try {
+                        const res = await workerFetch(`/pdf/${run.id}`);
+                        if (!res.ok) throw new Error();
+                        const { signedUrl } = await res.json();
+                        window.open(signedUrl, '_blank');
+                      } catch { /* noop */ } finally { btn.disabled = false; }
+                    }} style={{
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      width: 36, height: 36, borderRadius: 8,
+                      background: 'transparent', border: '0.5px solid var(--border-strong)',
+                      color: 'var(--text-secondary)', cursor: 'pointer',
+                    }}>
+                      <FileText size={18} />
+                    </button>
+                  ) : (
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      width: 36, height: 36, borderRadius: 8,
+                      border: '0.5px solid var(--border)', opacity: 0.3,
+                    }}>
+                      <FileText size={18} style={{ color: 'var(--text-disabled)' }} />
+                    </span>
+                  )}
+                  {userProfile?.role === 'admin' && run.status === 'complete' && run.url && (
+                    <button onClick={() => setRerunConfirm(run.id)} title="Re-run" disabled={rerunning === run.id} style={{
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      width: 36, height: 36, borderRadius: 8,
+                      background: 'transparent', border: '0.5px solid var(--border-strong)',
+                      color: 'var(--text-secondary)', cursor: 'pointer',
+                      opacity: rerunning === run.id ? 0.3 : 1,
+                    }}>
+                      <RotateCcw size={18} />
+                    </button>
+                  )}
+                  {userProfile?.role === 'admin' && (
+                    <button onClick={() => setDeleteConfirm(run.id)} title="Delete" style={{
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      width: 36, height: 36, borderRadius: 8,
+                      background: 'transparent', border: '0.5px solid var(--border-strong)',
+                      color: 'var(--text-secondary)', cursor: 'pointer',
+                    }}>
+                      <Trash2 size={18} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          /* ─── Desktop: Table ─── */
+          <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ background: 'var(--bg-surface)', borderBottom: '1px solid var(--border)' }}>
+                  <th style={thStyle}>Company</th>
+                  <th style={thStyle}>Submitted</th>
+                  <th style={thStyle}>Status</th>
+                  <th style={thStyle}>ICP Fit</th>
+                  <th style={{ ...thStyle, textAlign: 'center' }}>Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+              </thead>
+              <tbody>
+                {runs.map((run) => (
+                  <tr key={run.id}
+                    style={{ borderBottom: '1px solid var(--border)', transition: 'background 80ms' }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-elevated)')}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                  >
+                    <td style={{ padding: '11px 16px', fontSize: 13, fontWeight: 500 }}>
+                      {run.company}
+                      {run.market && run.market !== 'en' && run.market !== 'auto' && LANGUAGE_FLAGS[run.market] && (
+                        <span title={run.market.toUpperCase()} style={{ marginLeft: 6, fontSize: 14 }}>
+                          {LANGUAGE_FLAGS[run.market]}
+                        </span>
+                      )}
+                    </td>
+                    <td style={{ padding: '11px 16px', fontSize: 13, color: 'var(--text-secondary)' }} title={new Date(run.created_at).toLocaleString()}>
+                      {relativeTime(run.created_at)}
+                      <FreshnessBadge createdAt={run.created_at} status={run.status} />
+                    </td>
+                    <td style={{ padding: '11px 16px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <StatusBadge status={run.status} />
+                        {run.status === 'queued' && run.queued_at && (
+                          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                            Position #{run.queue_position || '?'}
+                          </span>
+                        )}
+                        {run.status === 'failed' && (
+                          <button
+                            onClick={() => handleRetry(run.id)}
+                            disabled={retrying === run.id}
+                            title={run.error_message || 'Retry this run'}
+                            style={{
+                              display: 'inline-flex', alignItems: 'center', gap: 4,
+                              background: 'transparent', color: 'var(--text-secondary)', border: '1px solid var(--border-strong)',
+                              padding: '2px 8px', fontSize: 12, borderRadius: 6, opacity: retrying === run.id ? 0.4 : 1,
+                            }}
+                            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-elevated)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
+                          >
+                            <RefreshCw size={12} />
+                            Retry
+                          </button>
+                        )}
+                      </div>
+                      {run.status === 'running' && progressMap[run.id] && (
+                        <div style={{ marginTop: 6, minWidth: 140 }}>
+                          <ProgressBar {...progressMap[run.id]} />
+                        </div>
+                      )}
+                    </td>
+                    <td style={{ padding: '11px 16px' }}>
+                      <IcpBadge score={run.icp_score} />
+                    </td>
+                    <td style={{ padding: '11px 16px', textAlign: 'center' }}>
+                      <div style={{ display: 'flex', justifyContent: 'center', gap: 4 }}>
+                        {run.status === 'complete' && run.brief_id && (
+                          <button
+                            onClick={() => navigate(`/briefs/${run.id}`)}
+                            title="View brief"
+                            className="action-btn"
+                            style={{
+                              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                              width: 36, height: 36, borderRadius: 8,
+                              background: 'transparent', border: '0.5px solid var(--border-strong)',
+                              color: 'var(--text-secondary)', cursor: 'pointer', transition: 'all 100ms',
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-elevated)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
+                          >
+                            <Eye size={18} />
+                          </button>
+                        )}
+                        {run.pdf_url ? (
+                          <button
+                            title="Download PDF"
+                            onClick={async (e) => {
+                              e.preventDefault();
+                              const btn = e.currentTarget;
+                              btn.disabled = true;
+                              try {
+                                const res = await workerFetch(`/pdf/${run.id}`);
+                                if (!res.ok) throw new Error();
+                                const { signedUrl } = await res.json();
+                                window.open(signedUrl, '_blank');
+                              } catch { /* noop */ } finally { btn.disabled = false; }
+                            }}
+                            style={{
+                              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                              width: 36, height: 36, borderRadius: 8,
+                              background: 'transparent', border: '0.5px solid var(--border-strong)',
+                              color: 'var(--text-secondary)', cursor: 'pointer', transition: 'all 100ms',
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-elevated)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
+                          >
+                            <FileText size={18} />
+                          </button>
+                        ) : (
+                          <span title="PDF not available" style={{
+                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                            width: 36, height: 36, borderRadius: 8,
+                            border: '0.5px solid var(--border)', opacity: 0.3,
+                          }}>
+                            <FileText size={18} style={{ color: 'var(--text-disabled)' }} />
+                          </span>
+                        )}
+                        {userProfile?.role === 'admin' && run.status === 'complete' && run.url && (
+                          <button
+                            onClick={() => setRerunConfirm(run.id)}
+                            title="Re-run with fresh data"
+                            disabled={rerunning === run.id}
+                            style={{
+                              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                              width: 36, height: 36, borderRadius: 8,
+                              background: 'transparent', border: '0.5px solid var(--border-strong)',
+                              color: 'var(--text-secondary)', cursor: 'pointer', transition: 'all 100ms',
+                              opacity: rerunning === run.id ? 0.3 : 1,
+                              pointerEvents: rerunning === run.id ? 'none' : 'auto',
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-elevated)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
+                          >
+                            <RotateCcw size={18} />
+                          </button>
+                        )}
+                        {userProfile?.role === 'admin' && (
+                          <button
+                            onClick={() => setDeleteConfirm(run.id)}
+                            title="Delete run"
+                            style={{
+                              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                              width: 36, height: 36, borderRadius: 8,
+                              background: 'transparent', border: '0.5px solid var(--border-strong)',
+                              color: 'var(--text-secondary)', cursor: 'pointer', transition: 'all 100ms',
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(220,38,38,0.12)'; e.currentTarget.style.color = '#dc2626'; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
 
       {/* Delete confirmation modal */}
       {deleteConfirm && (

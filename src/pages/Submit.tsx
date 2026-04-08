@@ -4,6 +4,7 @@ import Layout from '../components/Layout';
 import Banner from '../components/Banner';
 import { supabase, workerFetch } from '../lib/supabase';
 import usePageTitle from '../hooks/usePageTitle';
+import useWindowWidth from '../hooks/useWindowWidth';
 
 type BannerType = 'info' | 'warning' | 'error' | 'success';
 
@@ -35,6 +36,7 @@ function isValidUrl(input: string): boolean {
 export default function Submit() {
   usePageTitle('Submit');
   const { session, userProfile, refreshProfile } = useAuth();
+  const isMobile = useWindowWidth() <= 768;
   const LANGUAGES = [
     { code: 'auto', label: 'Auto-detect', flag: '\u{1F310}' },
     { code: 'en',   label: 'English',     flag: '\u{1F1EC}\u{1F1E7}' },
@@ -195,9 +197,11 @@ export default function Submit() {
       <div style={{ maxWidth: 560 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)', paddingBottom: 20, marginBottom: 24 }}>
           <h1 style={{ fontSize: 16, fontWeight: 600, margin: 0 }}>New Research Request</h1>
-          <span style={{ fontSize: 12, fontWeight: 500, color: creditsColor }}>
-            {credits} credit{credits !== 1 ? 's' : ''} remaining
-          </span>
+          {!isMobile && (
+            <span style={{ fontSize: 12, fontWeight: 500, color: creditsColor }}>
+              {credits} credit{credits !== 1 ? 's' : ''} remaining
+            </span>
+          )}
         </div>
 
         {duplicate && (
@@ -258,8 +262,10 @@ export default function Submit() {
           <button
             type="submit" disabled={submitting}
             style={{
-              width: '100%', background: 'var(--accent)', color: '#fff', padding: '8px 14px',
-              fontSize: 13, fontWeight: 500, borderRadius: 6, border: 'none',
+              width: '100%', background: 'var(--accent)', color: '#fff',
+              padding: isMobile ? '12px 14px' : '8px 14px',
+              height: isMobile ? 48 : undefined,
+              fontSize: isMobile ? 15 : 13, fontWeight: 500, borderRadius: 6, border: 'none',
               opacity: submitting ? 0.4 : 1, cursor: submitting ? 'not-allowed' : 'pointer',
               transition: 'background 120ms',
             }}
@@ -268,6 +274,13 @@ export default function Submit() {
           >
             {submitting ? 'Submitting...' : 'Run Research'}
           </button>
+          {isMobile && (
+            <div style={{ textAlign: 'center', marginTop: 8 }}>
+              <span style={{ fontSize: 12, fontWeight: 500, color: creditsColor }}>
+                {credits} credit{credits !== 1 ? 's' : ''} remaining
+              </span>
+            </div>
+          )}
         </form>
 
         {banner && (

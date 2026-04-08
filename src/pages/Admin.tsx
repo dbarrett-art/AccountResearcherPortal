@@ -6,6 +6,7 @@ import StatusBadge from '../components/StatusBadge';
 import ProgressBar from '../components/ProgressBar';
 import TableSkeleton from '../components/TableSkeleton';
 import usePageTitle from '../hooks/usePageTitle';
+import useWindowWidth from '../hooks/useWindowWidth';
 import { Users, Activity, Heart, BarChart3, ExternalLink, Cpu, FileText, X, RefreshCw, Trash2, UserPlus, Check, RotateCcw, Link, MessageSquare, Download, Mail } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
@@ -1854,6 +1855,7 @@ export default function Admin() {
   usePageTitle('Admin');
   const { userProfile } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>('users');
+  const isMobile = useWindowWidth() <= 768;
 
   return (
     <Layout>
@@ -1861,26 +1863,54 @@ export default function Admin() {
         <h1 style={{ fontSize: 16, fontWeight: 600, margin: 0 }}>Admin</h1>
       </div>
 
-      <div style={{ borderBottom: '1px solid var(--border)', marginBottom: 24, display: 'flex' }}>
-        {tabs.map((tab) => {
-          const active = activeTab === tab.id;
-          const Icon = tab.icon;
-          return (
-            <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
-              padding: '10px 16px', fontSize: 13, fontWeight: 500,
-              color: active ? 'var(--text-primary)' : 'var(--text-secondary)',
-              background: 'transparent', border: 'none',
-              borderBottom: active ? '2px solid var(--accent)' : '2px solid transparent',
-              marginBottom: -1, display: 'flex', alignItems: 'center', gap: 6, transition: 'color 80ms',
-            }}
-              onMouseEnter={(e) => { if (!active) e.currentTarget.style.color = 'var(--text-primary)'; }}
-              onMouseLeave={(e) => { if (!active) e.currentTarget.style.color = 'var(--text-secondary)'; }}
-            >
-              <Icon size={14} />{tab.label}
-            </button>
-          );
-        })}
-      </div>
+      {isMobile ? (
+        /* ─── Mobile: horizontal scrollable pill tabs ─── */
+        <div style={{
+          display: 'flex', gap: 8, marginBottom: 24,
+          overflowX: 'auto', whiteSpace: 'nowrap',
+          WebkitOverflowScrolling: 'touch',
+          paddingBottom: 4,
+          msOverflowStyle: 'none',
+          scrollbarWidth: 'none',
+        }}>
+          {tabs.map((tab) => {
+            const active = activeTab === tab.id;
+            return (
+              <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
+                padding: '7px 14px', fontSize: 12, fontWeight: 500,
+                borderRadius: 20, border: 'none', flexShrink: 0,
+                background: active ? '#6c47ff' : 'var(--bg-elevated)',
+                color: active ? '#fff' : 'var(--text-secondary)',
+                cursor: 'pointer', transition: 'all 100ms',
+              }}>
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        /* ─── Desktop: underline tabs ─── */
+        <div style={{ borderBottom: '1px solid var(--border)', marginBottom: 24, display: 'flex' }}>
+          {tabs.map((tab) => {
+            const active = activeTab === tab.id;
+            const Icon = tab.icon;
+            return (
+              <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
+                padding: '10px 16px', fontSize: 13, fontWeight: 500,
+                color: active ? 'var(--text-primary)' : 'var(--text-secondary)',
+                background: 'transparent', border: 'none',
+                borderBottom: active ? '2px solid var(--accent)' : '2px solid transparent',
+                marginBottom: -1, display: 'flex', alignItems: 'center', gap: 6, transition: 'color 80ms',
+              }}
+                onMouseEnter={(e) => { if (!active) e.currentTarget.style.color = 'var(--text-primary)'; }}
+                onMouseLeave={(e) => { if (!active) e.currentTarget.style.color = 'var(--text-secondary)'; }}
+              >
+                <Icon size={14} />{tab.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {activeTab === 'users' && <UsersTab adminId={userProfile?.id || ''} />}
       {activeTab === 'runs' && <RunMonitorTab />}

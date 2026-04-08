@@ -93,23 +93,11 @@ a { color: inherit; text-decoration: none; }
 
 /* ─── Mobile ─────────────────────────────────────────────────────── */
 @media (max-width: 768px) {
-  /* Hide desktop sidebar */
-  aside { display: none !important; }
+  /* Ensure no horizontal overflow on brief view sections */
+  .brief-section { overflow-x: hidden; }
 
-  /* Remove sidebar margin from main content */
-  main { margin-left: 0 !important; padding: 16px !important; padding-bottom: 80px !important; }
-
-  /* Brief view chat panel full-screen overlay */
-  .chat-panel-mobile { width: 100% !important; }
-
-  /* Table horizontal scroll */
-  table { display: block; overflow-x: auto; }
-
-  /* Grid columns stack */
-  [style*="gridTemplateColumns"] { grid-template-columns: 1fr !important; }
-
-  /* Show mobile nav */
-  .mobile-nav { display: flex !important; }
+  /* Hide scrollbar on pill tab rows */
+  .admin-pills::-webkit-scrollbar { display: none; }
 }
 
 @keyframes spin {
