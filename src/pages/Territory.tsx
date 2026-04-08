@@ -139,7 +139,7 @@ export default function Territory() {
       // Fetch completed runs with brief data in one query
       let query = supabase
         .from('runs')
-        .select('id, company, url, created_at, status, pdf_url, brief_id, user_id, briefs(pov_json, hooks_json)')
+        .select('id, company, url, created_at, status, pdf_url, brief_id, user_id, briefs!briefs_run_id_fkey(pov_json, hooks_json)')
         .eq('status', 'complete')
         .order('created_at', { ascending: false });
 
@@ -147,7 +147,8 @@ export default function Territory() {
         query = query.or(`user_id.eq.${userProfile.id},assigned_to.eq.${userProfile.id}`);
       }
 
-      const { data } = await query;
+      const { data, error } = await query;
+      if (error) console.error('Territory fetch error:', error);
       if (!data) { setRows([]); setLoading(false); return; }
 
       // Deduplicate by company — keep latest run per company
