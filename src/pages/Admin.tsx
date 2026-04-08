@@ -1423,7 +1423,10 @@ function ApiCreditsTab() {
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: 13, fontWeight: 600, color: 'var(--accent)',
             }}>A</div>
-            <span style={{ fontSize: 14, fontWeight: 500 }}>Apollo Monthly Usage</span>
+            <div>
+              <span style={{ fontSize: 14, fontWeight: 500 }}>Apollo Enrichment Credits</span>
+              <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 2 }}>Email lookup (bulk_match) — People Search is free</div>
+            </div>
             <span style={{ fontSize: 11, color: 'var(--text-tertiary)', marginLeft: 'auto' }}>{apolloUsage.month}</span>
           </div>
           <div style={{ fontSize: 22, fontWeight: 600, marginBottom: 8, color: apolloUsage.percent_used >= 100 ? 'var(--status-failed)' : apolloUsage.percent_used >= 80 ? 'var(--status-running-text)' : 'var(--text-primary)' }}>
