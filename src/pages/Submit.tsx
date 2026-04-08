@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useStatus } from '../context/StatusContext';
 import Layout from '../components/Layout';
 import Banner from '../components/Banner';
 import { supabase, workerFetch } from '../lib/supabase';
@@ -36,6 +37,8 @@ function isValidUrl(input: string): boolean {
 export default function Submit() {
   usePageTitle('Submit');
   const { session, userProfile, refreshProfile } = useAuth();
+  const { indicator } = useStatus();
+  const isDown = indicator === 'major' || indicator === 'critical';
   const isMobile = useWindowWidth() <= 768;
   const LANGUAGES = [
     { code: 'auto', label: 'Auto-detect', flag: '\u{1F310}' },
@@ -280,6 +283,11 @@ export default function Submit() {
                 {credits} credit{credits !== 1 ? 's' : ''} remaining
               </span>
             </div>
+          )}
+          {isDown && (
+            <p style={{ fontSize: 13, color: '#92400e', marginTop: 8 }}>
+              {'\u26A0'} Anthropic API is currently experiencing issues. Your brief will be queued and will complete once the API recovers.
+            </p>
           )}
         </form>
 

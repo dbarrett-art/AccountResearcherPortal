@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
 import { ThemeProvider } from './context/ThemeContext'
+import { StatusProvider } from './context/StatusContext'
 import ErrorBoundary from './components/ErrorBoundary'
 import './index.css'
 import App from './App'
@@ -24,9 +25,11 @@ createRoot(document.getElementById('root')!).render(
     <ErrorBoundary>
       <BrowserRouter basename="/AccountResearcherPortal">
         <ThemeProvider>
-          <AuthProvider>
-            <App />
-          </AuthProvider>
+          <StatusProvider>
+            <AuthProvider>
+              <App />
+            </AuthProvider>
+          </StatusProvider>
         </ThemeProvider>
       </BrowserRouter>
     </ErrorBoundary>

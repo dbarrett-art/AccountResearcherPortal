@@ -4,6 +4,7 @@ import Sidebar from './Sidebar';
 import BottomTabBar from './BottomTabBar';
 import MobileTopBar from './MobileTopBar';
 import Banner from './Banner';
+import StatusBanner from './StatusBanner';
 import useWindowWidth from '../hooks/useWindowWidth';
 
 const ROUTE_TITLES: Record<string, string> = {
@@ -39,6 +40,7 @@ export default function Layout({ children, bgColor }: { children: React.ReactNod
           minHeight: isMobile ? undefined : '100vh',
         }}
       >
+        <StatusBanner />
         {authError && (
           <Banner type="error" style={{ marginBottom: 16 }}>
             {authError}{' '}
