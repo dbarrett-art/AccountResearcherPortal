@@ -1595,19 +1595,31 @@ function AssignBriefsTab() {
 
   const handleAssign = async (runId: string) => {
     setUpdating(runId);
-    await supabase.from('runs').update({ assigned_to: selectedUser }).eq('id', runId);
-    setRuns(prev => prev.map(r => r.id === runId ? {
-      ...r,
-      assigned_to: selectedUser,
-      assigned_user_name: users.find(u => u.id === selectedUser)?.name || 'Unknown',
-    } : r));
+    const res = await workerFetch('/assign-brief', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ run_id: runId, user_id: selectedUser }),
+    });
+    if (res.ok) {
+      setRuns(prev => prev.map(r => r.id === runId ? {
+        ...r,
+        assigned_to: selectedUser,
+        assigned_user_name: users.find(u => u.id === selectedUser)?.name || 'Unknown',
+      } : r));
+    }
     setUpdating(null);
   };
 
   const handleUnassign = async (runId: string) => {
     setUpdating(runId);
-    await supabase.from('runs').update({ assigned_to: null }).eq('id', runId);
-    setRuns(prev => prev.map(r => r.id === runId ? { ...r, assigned_to: null, assigned_user_name: null } : r));
+    const res = await workerFetch('/assign-brief', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ run_id: runId, user_id: null }),
+    });
+    if (res.ok) {
+      setRuns(prev => prev.map(r => r.id === runId ? { ...r, assigned_to: null, assigned_user_name: null } : r));
+    }
     setUpdating(null);
   };
 

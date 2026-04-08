@@ -75,13 +75,14 @@ DROP POLICY IF EXISTS "Enable read access for all users" ON public.runs;
 
 ALTER TABLE public.runs ENABLE ROW LEVEL SECURITY;
 
--- Users can read their own runs + admins/managers can read all
+-- Users can read their own runs, runs assigned to them, + admins/managers can read all
 -- Duplicate check uses service key (Worker), so this doesn't affect it
-CREATE POLICY "runs_select_own_or_admin"
+CREATE POLICY "runs_select_own_or_assigned_or_admin"
   ON public.runs FOR SELECT
   TO authenticated
   USING (
     user_id = auth.uid()
+    OR assigned_to = auth.uid()
     OR EXISTS (
       SELECT 1 FROM public.users
       WHERE id = auth.uid() AND role IN ('admin', 'manager')
