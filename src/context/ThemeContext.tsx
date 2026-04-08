@@ -2,19 +2,21 @@ import { createContext, useContext, useEffect, useState } from 'react'
 
 type Theme = 'dark' | 'light'
 
+const THEME_KEY = 'theme_v2'
+
 const ThemeContext = createContext<{ theme: Theme; toggle: () => void }>({
-  theme: 'dark',
+  theme: 'light',
   toggle: () => {},
 })
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setTheme] = useState<Theme>(
-    () => (localStorage.getItem('m4s-theme') as Theme) || 'dark'
+    () => (localStorage.getItem(THEME_KEY) as Theme) || 'light'
   )
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
-    localStorage.setItem('m4s-theme', theme)
+    localStorage.setItem(THEME_KEY, theme)
   }, [theme])
 
   return (

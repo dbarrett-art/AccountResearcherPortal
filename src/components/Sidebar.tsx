@@ -1,6 +1,7 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Send, FileText, Users, Shield, LogOut, Map } from 'lucide-react';
+import { Send, FileText, Users, Shield, LogOut, Map, Sun, Moon } from 'lucide-react';
+import { useTheme } from '../context/ThemeContext';
 
 const navItems = [
   { path: '/submit', label: 'Submit', icon: Send },
@@ -12,6 +13,8 @@ const navItems = [
 
 export default function Sidebar() {
   const { userProfile, signOut } = useAuth();
+  const { theme, toggle: toggleTheme } = useTheme();
+  const isDark = theme === 'dark';
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -97,6 +100,38 @@ export default function Sidebar() {
           marginTop: 12,
         }}
       >
+        <button
+          onClick={toggleTheme}
+          title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            width: '100%',
+            padding: '6px 12px',
+            borderRadius: 6,
+            border: 'none',
+            background: 'transparent',
+            color: 'var(--text-secondary)',
+            fontSize: 13,
+            fontWeight: 500,
+            cursor: 'pointer',
+            textAlign: 'left' as const,
+            transition: 'all 80ms',
+            marginBottom: 8,
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = 'rgba(255,255,255,0.04)';
+            e.currentTarget.style.color = 'var(--text-primary)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = 'transparent';
+            e.currentTarget.style.color = 'var(--text-secondary)';
+          }}
+        >
+          {isDark ? <Sun size={16} /> : <Moon size={16} />}
+          {isDark ? 'Light mode' : 'Dark mode'}
+        </button>
         <div style={{ padding: '0 12px', marginBottom: 8 }}>
           <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>
             {userProfile?.name || 'User'}

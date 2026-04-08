@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
+import { Sun, Moon } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 
 function getInitials(name: string | undefined | null): string {
   if (!name) return '?';
@@ -12,6 +14,8 @@ function getInitials(name: string | undefined | null): string {
 
 export default function MobileTopBar({ title }: { title: string }) {
   const { userProfile, signOut } = useAuth();
+  const { theme, toggle: toggleTheme } = useTheme();
+  const isDark = theme === 'dark';
   const [sheetOpen, setSheetOpen] = useState(false);
   const sheetRef = useRef<HTMLDivElement>(null);
 
@@ -42,6 +46,24 @@ export default function MobileTopBar({ title }: { title: string }) {
         <span style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)' }}>
           {title}
         </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button
+            onClick={toggleTheme}
+            title={isDark ? 'Light mode' : 'Dark mode'}
+            style={{
+              width: 32,
+              height: 32,
+              border: 'none',
+              background: 'transparent',
+              color: 'var(--text-secondary)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            {isDark ? <Sun size={16} /> : <Moon size={16} />}
+          </button>
         <button
           onClick={() => setSheetOpen(true)}
           style={{
@@ -62,6 +84,7 @@ export default function MobileTopBar({ title }: { title: string }) {
         >
           {getInitials(userProfile?.name)}
         </button>
+        </div>
       </div>
 
       {/* Sign-out bottom sheet */}
