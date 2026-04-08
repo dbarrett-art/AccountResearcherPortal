@@ -66,22 +66,20 @@ function freshnessCategory(days: number): 'fresh' | 'review' | 'stale' {
   return 'fresh';
 }
 
+const FIGMA_PRICES = { fullSeat: 90, devSeat: 35 };
+
 function getTotalWhitespace(pov: any): number | null {
   const ws = pov?.whitespace_section;
   if (!ws) return null;
-  if (typeof ws.total_whitespace === 'number') return ws.total_whitespace;
-  if (typeof ws.total_whitespace_value === 'number') return ws.total_whitespace_value;
-  const gaps = ws.key_gaps;
-  if (!gaps) return null;
-  let total = 0;
-  const add = (v: any) => { if (typeof v === 'number' && v > 0) total += v; };
-  if (Array.isArray(gaps)) {
-    gaps.forEach((g: any) => add(g.value || g.dollar_value));
-  } else if (typeof gaps === 'object') {
-    Object.values(gaps).forEach((g: any) => add((g as any)?.value || (g as any)?.dollar_value));
-    add(ws.governance_plus?.value);
-    add(ws.services_arr_floor);
-  }
+  const gaps = ws.key_gaps || {};
+  const devGapVal = (gaps.dev_mode?.gap || 0) * FIGMA_PRICES.devSeat * 12;
+  const designerGapVal = (gaps.full_seats_designers?.gap || 0) * FIGMA_PRICES.fullSeat * 12;
+  const pmGapVal = (gaps.make_pm?.gap || 0) * FIGMA_PRICES.fullSeat * 12;
+  const govVal = gaps.governance_plus?.value || 0;
+  const euVal = gaps.enterprise_upgrade?.eligible ? (gaps.enterprise_upgrade?.value || 0) : 0;
+  const services: any[] = (ws.services_opportunities || []).filter((s: any) => s?.found);
+  const servicesTotal = services.length * 125000;
+  const total = devGapVal + designerGapVal + pmGapVal + govVal + euVal + servicesTotal;
   return total > 0 ? total : null;
 }
 
