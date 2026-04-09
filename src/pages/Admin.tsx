@@ -1396,7 +1396,7 @@ function ApiCreditsTab() {
   const [credits, setCredits] = useState<CreditInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchedAt, setFetchedAt] = useState('');
-  const [apolloUsage, setApolloUsage] = useState<{ credits_used: number; free_tier_limit: number; percent_used: number; month: string } | null>(null);
+  const [apolloUsage, setApolloUsage] = useState<{ credits_used: number; monthly_credit_limit: number; free_tier_limit?: number; percent_used: number; month: string } | null>(null);
 
   const fetchCredits = async () => {
     setLoading(true);
@@ -1468,7 +1468,7 @@ function ApiCreditsTab() {
             <span style={{ fontSize: 11, color: 'var(--text-tertiary)', marginLeft: 'auto' }}>{apolloUsage.month}</span>
           </div>
           <div style={{ fontSize: 22, fontWeight: 600, marginBottom: 8, color: apolloUsage.percent_used >= 100 ? 'var(--status-failed)' : apolloUsage.percent_used >= 80 ? 'var(--status-running-text)' : 'var(--text-primary)' }}>
-            {apolloUsage.credits_used} / {apolloUsage.free_tier_limit} credits ({apolloUsage.percent_used}%)
+            {apolloUsage.credits_used} / {apolloUsage.monthly_credit_limit ?? apolloUsage.free_tier_limit} credits ({apolloUsage.percent_used}%)
           </div>
           <div style={{ height: 8, background: 'var(--bg-elevated)', borderRadius: 4, overflow: 'hidden' }}>
             <div style={{
