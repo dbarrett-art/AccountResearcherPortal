@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { supabase, workerFetch, SUPABASE_URL, SUPABASE_ANON_KEY } from '../lib/supabase';
 import Layout from '../components/Layout';
@@ -8,7 +8,7 @@ import TableSkeleton from '../components/TableSkeleton';
 import usePageTitle from '../hooks/usePageTitle';
 import useWindowWidth from '../hooks/useWindowWidth';
 import { useNavigate } from 'react-router-dom';
-import { Users, Activity, Heart, BarChart3, ExternalLink, Cpu, FileText, X, RefreshCw, Trash2, UserPlus, Check, RotateCcw, Link, MessageSquare, Download, Mail, Eye } from 'lucide-react';
+import { Users, Activity, Heart, BarChart3, ExternalLink, Cpu, FileText, X, RefreshCw, Trash2, UserPlus, Check, RotateCcw, Link, MessageSquare, Download, Mail, Eye, UserCheck } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 type Tab = 'users' | 'runs' | 'health' | 'credits' | 'api-credits' | 'assign' | 'feedback';
@@ -535,6 +535,8 @@ function RunMonitorTab() {
   const [retrying, setRetrying] = useState<string | null>(null);
   const [progressMap, setProgressMap] = useState<Record<string, { step: number; total: number; module: string | null; pct: number }>>({});
   const [queueState, setQueueState] = useState<QueueState | null>(null);
+  const [reassigning, setReassigning] = useState<string | null>(null);
+  const [monitorUsers, setMonitorUsers] = useState<{ id: string; name: string; email: string }[]>([]);
 
   const handleRerun = async (run: RunRow) => {
     if (!session || !run.url) return;
@@ -629,6 +631,50 @@ function RunMonitorTab() {
       setLoading(false);
     })();
   }, []);
+
+  // Fetch users for reassign dropdown
+  useEffect(() => {
+    if (userProfile?.role !== 'admin') return;
+    (async () => {
+      const { data } = await supabase.from('users').select('id, name, email').order('name');
+      if (data) setMonitorUsers(data as { id: string; name: string; email: string }[]);
+    })();
+  }, [userProfile?.role]);
+
+  const handleReassign = async (runId: string, newUserId: string) => {
+    try {
+      const res = await workerFetch(`/admin/reassign-run/${runId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: newUserId }),
+      });
+      if (res.ok) {
+        const newUser = monitorUsers.find(u => u.id === newUserId);
+        setRuns(prev => prev.map(r => r.id === runId
+          ? { ...r, user_id: newUserId, users: newUser ? { name: newUser.name, email: newUser.email } : r.users }
+          : r
+        ));
+        setReassigning(null);
+      }
+    } catch (e) {
+      console.error('Reassign failed:', e);
+    }
+  };
+
+  // Close reassign dropdown on outside click
+  const closeReassign = useCallback((e: MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (reassigning && !target.closest('[data-reassign-dropdown]')) {
+      setReassigning(null);
+    }
+  }, [reassigning]);
+
+  useEffect(() => {
+    if (reassigning) {
+      document.addEventListener('mousedown', closeReassign);
+      return () => document.removeEventListener('mousedown', closeReassign);
+    }
+  }, [reassigning, closeReassign]);
 
   // Realtime for run monitor
   useEffect(() => {
@@ -911,6 +957,47 @@ function RunMonitorTab() {
                           <RotateCcw size={13} style={retrying === r.id ? { animation: 'spin 1s linear infinite' } : undefined} />
                         </button>
                       )}
+                      <div data-reassign-dropdown style={{ position: 'relative', display: 'inline-block' }}>
+                        <button
+                          onClick={() => setReassigning(reassigning === r.id ? null : r.id)}
+                          title="Reassign to different user"
+                          style={{
+                            background: 'transparent', border: 'none',
+                            color: 'var(--text-tertiary)', cursor: 'pointer',
+                            padding: 4, borderRadius: 4, transition: '80ms',
+                          }}
+                          onMouseEnter={e => (e.currentTarget.style.color = 'var(--accent)')}
+                          onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-tertiary)')}
+                        >
+                          <UserCheck size={13} />
+                        </button>
+                        {reassigning === r.id && (
+                          <div style={{
+                            position: 'absolute', right: 0, top: '100%', zIndex: 50,
+                            background: 'var(--bg-surface)', border: '1px solid var(--border)',
+                            borderRadius: 6, boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                            minWidth: 180, padding: 4, maxHeight: 240, overflowY: 'auto',
+                          }}>
+                            {monitorUsers.map(u => (
+                              <button
+                                key={u.id}
+                                onClick={() => handleReassign(r.id, u.id)}
+                                style={{
+                                  display: 'block', width: '100%', textAlign: 'left',
+                                  padding: '6px 10px', background: u.id === r.user_id ? 'var(--bg-elevated)' : 'none',
+                                  border: 'none', cursor: 'pointer', fontSize: 12,
+                                  color: 'var(--text-primary)', borderRadius: 4,
+                                  fontWeight: u.id === r.user_id ? 600 : 400,
+                                }}
+                                onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-elevated)')}
+                                onMouseLeave={e => (e.currentTarget.style.background = u.id === r.user_id ? 'var(--bg-elevated)' : 'none')}
+                              >
+                                {u.name || u.email}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                       <button
                         onClick={() => setDeleteConfirm(r.id)}
                         title="Delete run"
