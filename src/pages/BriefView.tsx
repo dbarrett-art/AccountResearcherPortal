@@ -1774,8 +1774,6 @@ function PyramidItem({ item, field, color }: { item: any; field: string; color: 
   const headline = item[field] || item.objective || item.strategy || item.initiative || '';
   const source = item.source || item.evidence_source || null;
   const talkTrack = item.talk_track || '';
-  const figmaProduct = item.figma_product || item.figma_relevance || null;
-
   useEffect(() => {
     if (!popoverOpen) return;
     const handler = (e: MouseEvent) => {
@@ -1803,10 +1801,6 @@ function PyramidItem({ item, field, color }: { item: any; field: string; color: 
       </span>
     );
   })();
-
-  const productBadges = figmaProduct
-    ? String(figmaProduct).split(/[,;]+/).map(s => s.trim()).filter(Boolean)
-    : [];
 
   return (
     <div style={{ marginBottom: 8, position: 'relative' }}>
@@ -1850,21 +1844,6 @@ function PyramidItem({ item, field, color }: { item: any; field: string; color: 
           </div>
         </div>
       </div>
-
-      {productBadges.length > 0 && (
-        <div style={{ marginTop: 6, marginLeft: 14, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-          {productBadges.map((badge, bi) => (
-            <span key={bi} style={{
-              fontSize: 11, padding: '2px 8px', borderRadius: 10,
-              background: COLORS.purple + '14', color: COLORS.purple,
-              border: `1px solid ${COLORS.purple}30`,
-              fontWeight: 500, fontFamily: FONTS.sans,
-            }}>
-              {badge}
-            </span>
-          ))}
-        </div>
-      )}
 
       {talkTrack && popoverOpen && (
         <div
