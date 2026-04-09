@@ -533,7 +533,6 @@ function RunMonitorTab() {
   const [rerunConfirm, setRerunConfirm] = useState<string | null>(null);
   const [rerunning, setRerunning] = useState<string | null>(null);
   const [retrying, setRetrying] = useState<string | null>(null);
-  const [rerenderingPdf, setRerenderingPdf] = useState<string | null>(null);
   const [progressMap, setProgressMap] = useState<Record<string, { step: number; total: number; module: string | null; pct: number }>>({});
   const [queueState, setQueueState] = useState<QueueState | null>(null);
 
@@ -584,20 +583,6 @@ function RunMonitorTab() {
     }
   };
 
-  const handleRegeneratePdf = async (runId: string) => {
-    setRerenderingPdf(runId);
-    try {
-      const res = await workerFetch(`/regenerate-pdf/${runId}`, { method: 'POST' });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: 'Re-render failed' }));
-        alert(err.error || 'Re-render failed');
-      }
-    } catch (err: any) {
-      alert('Re-render failed: ' + err.message);
-    } finally {
-      setRerenderingPdf(null);
-    }
-  };
 
   const handleDelete = async (runId: string) => {
     try {
@@ -906,21 +891,6 @@ function RunMonitorTab() {
                             onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-tertiary)')}
                           >
                             <RotateCcw size={13} />
-                          </button>
-                          <button
-                            onClick={() => handleRegeneratePdf(r.id)}
-                            title="Re-render PDF from cached data"
-                            disabled={rerenderingPdf === r.id}
-                            style={{
-                              background: 'transparent', border: 'none',
-                              color: 'var(--text-tertiary)', cursor: 'pointer',
-                              padding: 4, borderRadius: 4, transition: '80ms',
-                              opacity: rerenderingPdf === r.id ? 0.4 : 1,
-                            }}
-                            onMouseEnter={e => (e.currentTarget.style.color = 'var(--accent)')}
-                            onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-tertiary)')}
-                          >
-                            <RefreshCw size={13} style={rerenderingPdf === r.id ? { animation: 'spin 1s linear infinite' } : undefined} />
                           </button>
                         </>
                       )}
