@@ -1770,6 +1770,7 @@ function ResearchDeepDiveSection({ pov, feedbackNode }: { pov: any; feedbackNode
 function PyramidItem({ item, field, color }: { item: any; field: string; color: string }) {
   const [popoverOpen, setPopoverOpen] = useState(false);
   const popoverRef = useRef<HTMLDivElement>(null);
+  const toggleRef = useRef<HTMLButtonElement>(null);
   const headline = item[field] || item.objective || item.strategy || item.initiative || '';
   const source = item.source || item.evidence_source || null;
   const talkTrack = item.talk_track || '';
@@ -1777,9 +1778,13 @@ function PyramidItem({ item, field, color }: { item: any; field: string; color: 
 
   useEffect(() => {
     if (!popoverOpen) return;
-    const handler = () => setPopoverOpen(false);
-    document.addEventListener('click', handler);
-    return () => document.removeEventListener('click', handler);
+    const handler = (e: MouseEvent) => {
+      if (popoverRef.current?.contains(e.target as Node)) return;
+      if (toggleRef.current?.contains(e.target as Node)) return;
+      setPopoverOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
   }, [popoverOpen]);
 
   const sourceNode = source && (() => {
@@ -1798,6 +1803,10 @@ function PyramidItem({ item, field, color }: { item: any; field: string; color: 
       </span>
     );
   })();
+
+  const productBadges = figmaProduct
+    ? String(figmaProduct).split(/[,;]+/).map(s => s.trim()).filter(Boolean)
+    : [];
 
   return (
     <div style={{ marginBottom: 8, position: 'relative' }}>
@@ -1819,33 +1828,43 @@ function PyramidItem({ item, field, color }: { item: any; field: string; color: 
             </span>
             {sourceNode}
             {talkTrack && (
-              <svg
-                width="13" height="13" viewBox="0 0 16 16"
-                fill="none" stroke="currentColor" strokeWidth="1.5"
-                style={{ flexShrink: 0, marginTop: 3, color: COLORS.faint, cursor: 'pointer', marginLeft: 6 }}
+              <button
+                ref={toggleRef}
                 onClick={(e) => { e.stopPropagation(); setPopoverOpen(o => !o); }}
+                style={{
+                  flexShrink: 0, marginTop: 2, marginLeft: 4, padding: 2,
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  color: COLORS.faint, display: 'inline-flex', alignItems: 'center',
+                  borderRadius: 4,
+                }}
               >
-                <circle cx="8" cy="8" r="7" />
-                <line x1="8" y1="7" x2="8" y2="11" />
-                <circle cx="8" cy="5" r="0.5" fill="currentColor" />
-              </svg>
+                <svg width="15" height="15" viewBox="0 0 16 16"
+                  fill="none" stroke="currentColor" strokeWidth="1.5"
+                >
+                  <circle cx="8" cy="8" r="7" />
+                  <line x1="8" y1="7" x2="8" y2="11" />
+                  <circle cx="8" cy="5" r="0.5" fill="currentColor" />
+                </svg>
+              </button>
             )}
           </div>
-
-          {figmaProduct && (
-            <div style={{ marginTop: 6 }}>
-              <span style={{
-                fontSize: 11, padding: '2px 8px', borderRadius: 10,
-                background: COLORS.purple + '14', color: COLORS.purple,
-                border: `1px solid ${COLORS.purple}30`,
-                fontWeight: 500, fontFamily: FONTS.sans,
-              }}>
-                {figmaProduct}
-              </span>
-            </div>
-          )}
         </div>
       </div>
+
+      {productBadges.length > 0 && (
+        <div style={{ marginTop: 6, marginLeft: 14, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+          {productBadges.map((badge, bi) => (
+            <span key={bi} style={{
+              fontSize: 11, padding: '2px 8px', borderRadius: 10,
+              background: COLORS.purple + '14', color: COLORS.purple,
+              border: `1px solid ${COLORS.purple}30`,
+              fontWeight: 500, fontFamily: FONTS.sans,
+            }}>
+              {badge}
+            </span>
+          ))}
+        </div>
+      )}
 
       {talkTrack && popoverOpen && (
         <div
@@ -1853,9 +1872,9 @@ function PyramidItem({ item, field, color }: { item: any; field: string; color: 
           onClick={(e) => e.stopPropagation()}
           style={{
             position: 'absolute',
-            top: 0,
-            left: '105%',
-            zIndex: 20,
+            top: '100%',
+            left: 14,
+            zIndex: 50,
             background: '#ffffff',
             border: '1px solid #e5e0d8',
             borderRadius: 6,
@@ -1866,7 +1885,8 @@ function PyramidItem({ item, field, color }: { item: any; field: string; color: 
             fontFamily: FONTS.sans,
             boxShadow: '0 4px 16px rgba(0,0,0,0.1)',
             minWidth: 280,
-            maxWidth: 360,
+            maxWidth: 400,
+            marginTop: 4,
           }}
         >
           {talkTrack}
@@ -1887,8 +1907,8 @@ function ValuePyramidSection({ pyramid, feedbackNode }: { pyramid: any; feedback
 
   const layers: { label: string; color: string; items: any[]; field: string; indent: number }[] = [
     { label: 'CORPORATE OBJECTIVES', color: '#6366f1', items: objectives, field: 'objective', indent: 0 },
-    { label: 'BUSINESS STRATEGIES', color: '#8b5cf6', items: strategies, field: 'strategy', indent: 24 },
-    { label: 'TARGETED INITIATIVES', color: '#a78bfa', items: initiatives, field: 'initiative', indent: 48 },
+    { label: 'BUSINESS STRATEGIES', color: '#8b5cf6', items: strategies, field: 'strategy', indent: 48 },
+    { label: 'TARGETED INITIATIVES', color: '#a78bfa', items: initiatives, field: 'initiative', indent: 96 },
   ];
 
   return (
