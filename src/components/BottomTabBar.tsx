@@ -11,14 +11,14 @@ const tabs = [
 ];
 
 export default function BottomTabBar() {
-  const { userProfile } = useAuth();
+  const { realUserProfile } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
 
   const visibleTabs = tabs.filter((tab) => {
     if (!tab.role) return true;
-    if (tab.role === 'manager') return userProfile?.role === 'manager' || userProfile?.role === 'admin';
-    if (tab.role === 'admin') return userProfile?.role === 'admin';
+    if (tab.role === 'manager') return realUserProfile?.role === 'manager' || realUserProfile?.role === 'admin';
+    if (tab.role === 'admin') return realUserProfile?.role === 'admin';
     return false;
   });
 

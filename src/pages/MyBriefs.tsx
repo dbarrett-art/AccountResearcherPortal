@@ -25,6 +25,7 @@ interface Run {
   market: string | null;
   queued_at: string | null;
   queue_position: number | null;
+  users?: { name: string; email?: string } | null;
 }
 
 const LANGUAGE_FLAGS: Record<string, string> = {
@@ -107,14 +108,21 @@ export default function MyBriefs() {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [rerunConfirm, setRerunConfirm] = useState<string | null>(null);
   const [rerunning, setRerunning] = useState<string | null>(null);
+  const [showAll, setShowAll] = useState(false);
 
   const fetchRuns = useCallback(async () => {
     if (!userProfile) return;
-    const { data, error } = await supabase
+    const selectCols = showAll
+      ? 'id, company, url, created_at, status, summary, pdf_url, error_message, brief_id, market, queued_at, queue_position, users!runs_user_id_fkey(name, email)'
+      : 'id, company, url, created_at, status, summary, pdf_url, error_message, brief_id, market, queued_at, queue_position';
+    let query = supabase
       .from('runs')
-      .select('id, company, url, created_at, status, summary, pdf_url, error_message, brief_id, market, queued_at, queue_position')
-      .or(`user_id.eq.${userProfile.id},assigned_to.eq.${userProfile.id}`)
+      .select(selectCols)
       .order('created_at', { ascending: false });
+    if (!showAll) {
+      query = query.or(`user_id.eq.${userProfile.id},assigned_to.eq.${userProfile.id}`);
+    }
+    const { data, error } = await query;
     if (error) {
       console.error('MyBriefs fetch error:', error);
       setLoading(false);
@@ -142,7 +150,7 @@ export default function MyBriefs() {
       setRuns(mapped);
     }
     setLoading(false);
-  }, [userProfile]);
+  }, [userProfile, showAll]);
 
   useEffect(() => { fetchRuns(); }, [fetchRuns]);
 
@@ -264,11 +272,25 @@ export default function MyBriefs() {
     <Layout>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)', paddingBottom: 20, marginBottom: 24 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <h1 style={{ fontSize: 16, fontWeight: 600, margin: 0 }}>My Briefs</h1>
+          <h1 style={{ fontSize: 16, fontWeight: 600, margin: 0 }}>{showAll ? 'All Briefs' : 'My Briefs'}</h1>
           {!loading && runs.length > 0 && (
             <span style={{ fontSize: 12, color: 'var(--text-tertiary)', background: 'var(--bg-surface)', padding: '2px 8px', borderRadius: 4 }}>
               {runs.length} brief{runs.length !== 1 ? 's' : ''}
             </span>
+          )}
+          {userProfile?.role === 'admin' && (
+            <button
+              onClick={() => { setShowAll(s => !s); setLoading(true); }}
+              style={{
+                fontSize: 12, padding: '4px 10px', borderRadius: 6,
+                border: '1px solid var(--border)',
+                background: showAll ? 'var(--accent)' : 'transparent',
+                color: showAll ? 'white' : 'var(--text-secondary)',
+                cursor: 'pointer', fontWeight: 500,
+              }}
+            >
+              {showAll ? 'All briefs' : 'My briefs'}
+            </button>
           )}
         </div>
       </div>
@@ -315,6 +337,13 @@ export default function MyBriefs() {
                     <IcpBadge score={run.icp_score} />
                   )}
                 </div>
+
+                {/* Team member subtitle when showing all */}
+                {showAll && run.users?.name && (
+                  <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 4 }}>
+                    {run.users.name}
+                  </div>
+                )}
 
                 {/* Row 2: Status + time */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
@@ -394,6 +423,7 @@ export default function MyBriefs() {
               <thead>
                 <tr style={{ background: 'var(--bg-surface)', borderBottom: '1px solid var(--border)' }}>
                   <th style={thStyle}>Company</th>
+                  {showAll && <th style={thStyle}>Team member</th>}
                   <th style={thStyle}>Submitted</th>
                   <th style={thStyle}>Status</th>
                   {(userProfile?.role === 'manager' || userProfile?.role === 'admin') && (
@@ -417,6 +447,11 @@ export default function MyBriefs() {
                         </span>
                       )}
                     </td>
+                    {showAll && (
+                      <td style={{ padding: '11px 16px', fontSize: 13, color: 'var(--text-secondary)' }}>
+                        {run.users?.name || '—'}
+                      </td>
+                    )}
                     <td style={{ padding: '11px 16px', fontSize: 13, color: 'var(--text-secondary)' }} title={new Date(run.created_at).toLocaleString()}>
                       {relativeTime(run.created_at)}
                       <FreshnessBadge createdAt={run.created_at} status={run.status} />

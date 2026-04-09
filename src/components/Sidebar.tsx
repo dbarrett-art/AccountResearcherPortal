@@ -12,7 +12,7 @@ const navItems = [
 ];
 
 export default function Sidebar() {
-  const { userProfile, signOut } = useAuth();
+  const { realUserProfile, signOut } = useAuth();
   const { theme, toggle: toggleTheme } = useTheme();
   const isDark = theme === 'dark';
   const location = useLocation();
@@ -20,8 +20,8 @@ export default function Sidebar() {
 
   const visibleItems = navItems.filter((item) => {
     if (!item.role) return true;
-    if (item.role === 'manager') return userProfile?.role === 'manager' || userProfile?.role === 'admin';
-    if (item.role === 'admin') return userProfile?.role === 'admin';
+    if (item.role === 'manager') return realUserProfile?.role === 'manager' || realUserProfile?.role === 'admin';
+    if (item.role === 'admin') return realUserProfile?.role === 'admin';
     return false;
   });
 
@@ -134,10 +134,10 @@ export default function Sidebar() {
         </button>
         <div style={{ padding: '0 12px', marginBottom: 8 }}>
           <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>
-            {userProfile?.name || 'User'}
+            {realUserProfile?.name || 'User'}
           </div>
           <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 1 }}>
-            {userProfile?.email}
+            {realUserProfile?.email}
           </div>
         </div>
         <button

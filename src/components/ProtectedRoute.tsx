@@ -7,7 +7,7 @@ interface Props {
 }
 
 export default function ProtectedRoute({ children, requireRole }: Props) {
-  const { session, userProfile, loading } = useAuth();
+  const { session, realUserProfile, loading } = useAuth();
 
   if (loading) {
     return (
@@ -30,8 +30,8 @@ export default function ProtectedRoute({ children, requireRole }: Props) {
 
   if (requireRole) {
     const allowed = requireRole === 'manager'
-      ? userProfile?.role === 'manager' || userProfile?.role === 'admin'
-      : userProfile?.role === 'admin';
+      ? realUserProfile?.role === 'manager' || realUserProfile?.role === 'admin'
+      : realUserProfile?.role === 'admin';
     if (!allowed) {
       return <Navigate to="/" replace />;
     }

@@ -7,7 +7,8 @@ import ProgressBar from '../components/ProgressBar';
 import TableSkeleton from '../components/TableSkeleton';
 import usePageTitle from '../hooks/usePageTitle';
 import useWindowWidth from '../hooks/useWindowWidth';
-import { Users, Activity, Heart, BarChart3, ExternalLink, Cpu, FileText, X, RefreshCw, Trash2, UserPlus, Check, RotateCcw, Link, MessageSquare, Download, Mail } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Users, Activity, Heart, BarChart3, ExternalLink, Cpu, FileText, X, RefreshCw, Trash2, UserPlus, Check, RotateCcw, Link, MessageSquare, Download, Mail, Eye } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 type Tab = 'users' | 'runs' | 'health' | 'credits' | 'api-credits' | 'assign' | 'feedback';
@@ -109,6 +110,7 @@ function ConfirmDialog({ message, onConfirm, onCancel }: {
 
 // --- Tab: Users ---
 function UsersTab({ adminId }: { adminId: string }) {
+  const { impersonate } = useAuth();
   const [users, setUsers] = useState<UserRow[]>([]);
   const [managers, setManagers] = useState<UserRow[]>([]);
   const [grantAmounts, setGrantAmounts] = useState<Record<string, number>>({});
@@ -431,6 +433,28 @@ function UsersTab({ adminId }: { adminId: string }) {
                       <Mail size={12} />
                       {inviteStates[u.id] === 'loading' ? 'Sending…' : inviteStates[u.id] === 'success' ? 'Invited ✓' : inviteStates[u.id] === 'existing' ? 'Link sent ✓' : inviteStates[u.id] === 'error' ? 'Failed' : 'Invite'}
                     </button>
+                    {u.id !== adminId && (
+                      <button
+                        onClick={() => impersonate({
+                          id: u.id, name: u.name, email: u.email,
+                          role: u.role as 'ae' | 'manager' | 'admin',
+                          credits_remaining: u.credits_remaining,
+                          manager_id: u.manager_id,
+                        })}
+                        title={`View portal as ${u.name}`}
+                        style={{
+                          background: 'transparent', color: 'var(--text-secondary)',
+                          border: '1px solid var(--border-strong)',
+                          padding: '4px 10px', fontSize: 12, borderRadius: 6,
+                          display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'pointer',
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-elevated)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
+                      >
+                        <Eye size={12} />
+                        View as
+                      </button>
+                    )}
                   </div>
                 </td>
               </tr>
@@ -496,6 +520,7 @@ const MAX_CONCURRENT_DISPLAY = 2;
 
 function RunMonitorTab() {
   const { session, userProfile } = useAuth();
+  const navigate = useNavigate();
   const [runs, setRuns] = useState<RunRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('all');
@@ -850,6 +875,21 @@ function RunMonitorTab() {
                 {userProfile?.role === 'admin' && (
                   <td style={{ padding: '11px 8px' }}>
                     <div style={{ display: 'flex', gap: 4 }}>
+                      {r.status === 'complete' && (
+                        <button
+                          onClick={() => navigate(`/briefs/${r.id}`)}
+                          title="View brief"
+                          style={{
+                            background: 'transparent', border: 'none',
+                            color: 'var(--text-tertiary)', cursor: 'pointer',
+                            padding: 4, borderRadius: 4, transition: '80ms',
+                          }}
+                          onMouseEnter={e => (e.currentTarget.style.color = 'var(--accent)')}
+                          onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-tertiary)')}
+                        >
+                          <Eye size={13} />
+                        </button>
+                      )}
                       {r.status === 'complete' && r.url && (
                         <>
                           <button

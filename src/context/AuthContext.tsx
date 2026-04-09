@@ -15,11 +15,15 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   userProfile: UserProfile | null;
+  realUserProfile: UserProfile | null;
+  isImpersonating: boolean;
   loading: boolean;
   authError: string | null;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
   clearAuthError: () => void;
+  impersonate: (profile: UserProfile) => void;
+  stopImpersonating: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -68,8 +72,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [impersonatedProfile, setImpersonatedProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
+
+  const impersonate = useCallback((profile: UserProfile) => {
+    setImpersonatedProfile(profile);
+  }, []);
+
+  const stopImpersonating = useCallback(() => {
+    setImpersonatedProfile(null);
+  }, []);
 
   const applySession = useCallback(async (sess: Session | null) => {
     if (sess?.user) {
@@ -127,6 +140,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setSession(null);
     setUserProfile(null);
+    setImpersonatedProfile(null);
     setAuthError(null);
   }, []);
 
@@ -141,8 +155,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider value={{
-      user, session, userProfile, loading, authError,
+      user, session,
+      userProfile: impersonatedProfile || userProfile,
+      realUserProfile: userProfile,
+      isImpersonating: !!impersonatedProfile,
+      loading, authError,
       signOut, refreshProfile, clearAuthError,
+      impersonate, stopImpersonating,
     }}>
       {children}
     </AuthContext.Provider>

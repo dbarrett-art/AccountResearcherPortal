@@ -16,7 +16,7 @@ const ROUTE_TITLES: Record<string, string> = {
 };
 
 export default function Layout({ children, bgColor }: { children: React.ReactNode; bgColor?: string }) {
-  const { authError, signOut } = useAuth();
+  const { authError, signOut, isImpersonating, userProfile, stopImpersonating } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const width = useWindowWidth();
@@ -40,6 +40,22 @@ export default function Layout({ children, bgColor }: { children: React.ReactNod
           minHeight: isMobile ? undefined : '100vh',
         }}
       >
+        {isImpersonating && (
+          <div style={{
+            background: '#f97316', color: 'white',
+            padding: '8px 16px', fontSize: 13, fontWeight: 600,
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            borderRadius: 8, marginBottom: 12,
+          }}>
+            <span>Viewing as {userProfile?.name} ({userProfile?.email}) — {userProfile?.role}</span>
+            <button onClick={stopImpersonating} style={{
+              background: 'white', color: '#f97316', border: 'none',
+              borderRadius: 4, padding: '2px 10px', cursor: 'pointer', fontWeight: 600, fontSize: 12,
+            }}>
+              Exit
+            </button>
+          </div>
+        )}
         <StatusBanner />
         {authError && (
           <Banner type="error" style={{ marginBottom: 16 }}>
