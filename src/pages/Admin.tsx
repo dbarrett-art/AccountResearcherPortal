@@ -11,7 +11,7 @@ import { useNavigate } from 'react-router-dom';
 import { Users, Activity, Heart, BarChart3, ExternalLink, Cpu, FileText, X, RefreshCw, Trash2, UserPlus, Check, RotateCcw, Link, MessageSquare, Download, Mail, Eye, UserCheck } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
-type Tab = 'users' | 'runs' | 'health' | 'credits' | 'api-credits' | 'assign' | 'feedback';
+type Tab = 'users' | 'runs' | 'health' | 'credits' | 'api-credits' | 'assign' | 'feedback' | 'prompts';
 
 interface UserRow {
   id: string; name: string; email: string; role: string;
@@ -1822,6 +1822,170 @@ const SECTION_LABELS: Record<string, string> = {
   contact_matrix: 'Contact Matrix', research_deep_dive: 'Research Deep Dive',
 };
 
+// --- Tab: Prompts ---
+const PROMPT_FILE_LABELS: Record<string, { label: string; path: string }> = {
+  module1_system: { label: 'M1 System Prompt', path: 'prompts/module1_system.txt' },
+  figma_expertise: { label: 'Figma Expertise', path: 'config/figma_expertise.md' },
+  company_pov: { label: 'POV Framework', path: 'config/company_pov.md' },
+  hook_research: { label: 'Hook Research', path: 'config/hook_research.md' },
+  persona_discovery: { label: 'Persona Discovery', path: 'config/persona_discovery.md' },
+};
+
+function PromptsTab() {
+  const [selectedFile, setSelectedFile] = useState<string>('module1_system');
+  const [content, setContent] = useState('');
+  const [loadedContent, setLoadedContent] = useState('');
+  const [sha, setSha] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [errorMsg, setErrorMsg] = useState('');
+
+  const loadFile = useCallback(async (filename: string) => {
+    setLoading(true);
+    setSaveStatus('idle');
+    setErrorMsg('');
+    try {
+      const res = await workerFetch(`/admin/prompt/${filename}`);
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to load');
+      const data = await res.json();
+      setContent(data.content);
+      setLoadedContent(data.content);
+      setSha(data.sha);
+    } catch (err: any) {
+      setErrorMsg(err.message);
+      setContent('');
+      setLoadedContent('');
+      setSha('');
+    }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { loadFile(selectedFile); }, [selectedFile, loadFile]);
+
+  const hasChanges = content !== loadedContent;
+
+  const save = async () => {
+    setSaveStatus('saving');
+    setErrorMsg('');
+    try {
+      const res = await workerFetch(`/admin/prompt/${selectedFile}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content, sha }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || 'Save failed');
+      const data = await res.json();
+      setSha(data.sha);
+      setLoadedContent(content);
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus('idle'), 3000);
+    } catch (err: any) {
+      setSaveStatus('error');
+      setErrorMsg(err.message);
+    }
+  };
+
+  const charCount = content.length;
+  const tokenEst = Math.round(charCount / 4);
+  const meta = PROMPT_FILE_LABELS[selectedFile];
+
+  return (
+    <>
+      {/* File selector pills */}
+      <div style={{
+        display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap',
+      }}>
+        {Object.entries(PROMPT_FILE_LABELS).map(([key, { label }]) => {
+          const active = selectedFile === key;
+          const dirty = active && hasChanges;
+          return (
+            <button key={key} onClick={() => { if (!active) setSelectedFile(key); }} style={{
+              padding: '7px 14px', fontSize: 12, fontWeight: 500,
+              borderRadius: 20, border: 'none',
+              background: active ? '#6c47ff' : 'var(--bg-elevated)',
+              color: active ? '#fff' : 'var(--text-secondary)',
+              cursor: active ? 'default' : 'pointer',
+              transition: 'all 100ms',
+              position: 'relative',
+            }}>
+              {label}
+              {dirty && (
+                <span style={{
+                  display: 'inline-block', width: 6, height: 6, borderRadius: '50%',
+                  background: '#f59e0b', marginLeft: 6, verticalAlign: 'middle',
+                }} />
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Toolbar */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 16, marginBottom: 12,
+        fontSize: 12, color: 'var(--text-secondary)',
+      }}>
+        <span style={{ fontFamily: 'var(--font-mono, monospace)', opacity: 0.7 }}>{meta?.path}</span>
+        <span>{charCount.toLocaleString()} chars</span>
+        <span>~{tokenEst.toLocaleString()} tokens</span>
+        <div style={{ flex: 1 }} />
+        {hasChanges && (
+          <button onClick={() => { setContent(loadedContent); setSaveStatus('idle'); }} style={{
+            background: 'transparent', border: 'none', color: 'var(--text-secondary)',
+            fontSize: 12, cursor: 'pointer', textDecoration: 'underline',
+          }}>
+            Discard
+          </button>
+        )}
+        <button onClick={save} disabled={saveStatus === 'saving' || !hasChanges} style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+          background: hasChanges ? 'var(--accent)' : 'var(--bg-elevated)',
+          color: hasChanges ? '#fff' : 'var(--text-secondary)',
+          border: 'none', padding: '6px 14px', borderRadius: 6,
+          fontSize: 12, fontWeight: 500, cursor: hasChanges ? 'pointer' : 'default',
+          opacity: saveStatus === 'saving' ? 0.7 : 1,
+        }}>
+          {saveStatus === 'saving' ? 'Saving...' : saveStatus === 'saved' ? 'Saved \u2713' : 'Save'}
+        </button>
+      </div>
+
+      {/* Error message */}
+      {errorMsg && (
+        <div style={{
+          background: 'rgba(220,38,38,0.1)', color: '#dc2626',
+          padding: '8px 12px', borderRadius: 6, fontSize: 12, marginBottom: 12,
+        }}>
+          {errorMsg}
+        </div>
+      )}
+
+      {/* Editor */}
+      {loading ? (
+        <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>
+          Loading...
+        </div>
+      ) : (
+        <textarea
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          spellCheck={false}
+          style={{
+            width: '100%', minHeight: 'calc(100vh - 320px)',
+            fontFamily: 'var(--font-mono, "SF Mono", "Fira Code", "Consolas", monospace)',
+            fontSize: 12, lineHeight: 1.6,
+            padding: 16, border: '1px solid var(--border)',
+            borderRadius: 8, background: 'var(--bg-surface)',
+            color: 'var(--text-primary)', resize: 'vertical',
+            outline: 'none', tabSize: 2,
+          }}
+          onFocus={(e) => e.currentTarget.style.borderColor = 'var(--accent)'}
+          onBlur={(e) => e.currentTarget.style.borderColor = 'var(--border)'}
+        />
+      )}
+    </>
+  );
+}
+
 function FeedbackTab() {
   const [feedback, setFeedback] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1999,6 +2163,7 @@ const tabs: { id: Tab; label: string; icon: any }[] = [
   { id: 'api-credits', label: 'API Credits', icon: Cpu },
   { id: 'assign', label: 'Assign Briefs', icon: Link },
   { id: 'feedback', label: 'Feedback', icon: MessageSquare },
+  { id: 'prompts', label: 'Prompts', icon: FileText },
 ];
 
 export default function Admin() {
@@ -2069,6 +2234,7 @@ export default function Admin() {
       {activeTab === 'api-credits' && <ApiCreditsTab />}
       {activeTab === 'assign' && <AssignBriefsTab />}
       {activeTab === 'feedback' && <FeedbackTab />}
+      {activeTab === 'prompts' && <PromptsTab />}
     </Layout>
   );
 }
