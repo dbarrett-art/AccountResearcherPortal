@@ -2980,12 +2980,9 @@ export default function BriefView() {
       if (cancelled) return;
       if (briefResult.data) setBrief(briefResult.data as Brief);
 
-      // Seed chat messages from persisted history
-      const chatMessages = chatData.messages || [];
-      if (chatMessages.length > 0) {
-        setChatMessages(chatMessages);
-        setChatTotal(chatData.total ?? 0);
-      }
+      // Seed chat messages from persisted history (always set — clears stale state on navigation)
+      setChatMessages(chatData.messages || []);
+      setChatTotal(chatData.total ?? 0);
 
       if (!cancelled) setLoading(false);
     }
