@@ -32,7 +32,6 @@ interface Brief {
   hooks_json: Record<string, any> | null;
   value_pyramid: Record<string, any> | null;
   schema_version: number | null;
-  chat_history?: ChatMessage[];
 }
 
 interface ChatAttachment {
@@ -2961,29 +2960,37 @@ export default function BriefView() {
       if (runErr || !runData) { setError('Run not found.'); setLoading(false); return; }
       setRun(runData as Run);
 
-      if (runData.brief_id) {
-        const { data: briefData } = await supabase
-          .from('briefs')
-          .select('pov_json, personas_json, hooks_json, value_pyramid, schema_version, chat_history')
-          .eq('id', runData.brief_id)
-          .single();
-        if (!cancelled && briefData) setBrief(briefData as Brief);
+      // Fire brief + chat history in parallel — chat_history no longer bundled with brief
+      const briefPromise = runData.brief_id
+        ? supabase
+            .from('briefs')
+            .select('pov_json, personas_json, hooks_json, value_pyramid, schema_version')
+            .eq('id', runData.brief_id)
+            .single()
+        : Promise.resolve({ data: null });
+
+      const chatPromise = workerFetch(`/chat/${run_id}/history?offset=0&limit=100`)
+        .then(r => r.json())
+        .catch(() => ({ messages: [], total: 0 }));
+
+      const [briefResult, chatData] = await Promise.all([briefPromise, chatPromise]);
+
+      if (cancelled) return;
+      if (briefResult.data) setBrief(briefResult.data as Brief);
+
+      // Seed chat messages from persisted history
+      const chatMessages = chatData.messages || [];
+      if (chatMessages.length > 0) {
+        setChatMessages(chatMessages);
+        setChatTotal(chatData.total ?? 0);
       }
+
       if (!cancelled) setLoading(false);
     }
 
     load();
     return () => { cancelled = true; };
   }, [run_id]);
-
-  // Seed chat messages from persisted history when brief loads
-  useEffect(() => {
-    if (brief?.chat_history && brief.chat_history.length > 0) {
-      const last100 = brief.chat_history.slice(-100);
-      setChatMessages(last100);
-      setChatTotal(brief.chat_history.length);
-    }
-  }, [run_id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadEarlierMessages = async () => {
     if (!run_id || loadingEarlier) return;
