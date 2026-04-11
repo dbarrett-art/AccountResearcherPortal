@@ -2149,9 +2149,9 @@ function ContactCard({ contact }: { contact: any }) {
 
   return (
     <div style={{
-      border: '0.5px solid var(--color-border-tertiary, #e7e5e4)',
-      borderRadius: 'var(--border-radius-lg, 10px)',
-      background: 'var(--color-background-primary, #fff)',
+      border: `0.5px solid ${COLORS.border}`,
+      borderRadius: 10,
+      background: 'var(--brief-card)',
       marginBottom: 8,
       overflow: 'hidden',
     }}>
@@ -2167,8 +2167,8 @@ function ContactCard({ contact }: { contact: any }) {
         {/* Avatar */}
         <div style={{
           width: 36, height: 36, borderRadius: '50%',
-          background: isDeparted ? '#e7e5e4' : isEB ? 'var(--color-background-info, #dbeafe)' : '#EEF2FF',
-          color: isDeparted ? '#a8a29e' : isEB ? 'var(--color-text-info, #1e40af)' : '#3730a3',
+          background: isDeparted ? 'var(--brief-surface)' : isEB ? 'var(--badge-indigo-bg)' : 'var(--badge-indigo-bg)',
+          color: isDeparted ? '#a8a29e' : isEB ? 'var(--badge-indigo-text, #1e40af)' : 'var(--badge-indigo-text, #3730a3)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontSize: 14, fontWeight: 600, fontFamily: FONTS.sans, flexShrink: 0,
           marginTop: 2,
@@ -2227,7 +2227,7 @@ function ContactCard({ contact }: { contact: any }) {
 
       {/* Body — expanded only */}
       {open && (
-        <div style={{ padding: '0 16px 16px 62px', borderTop: `1px solid var(--color-border-tertiary, #e7e5e4)` }}>
+        <div style={{ padding: '0 16px 16px 62px', borderTop: `1px solid ${COLORS.border}` }}>
           {/* Outreach context — rendered ONCE */}
           {oc && (
             <div style={{ marginTop: 12, marginBottom: 12 }}>
