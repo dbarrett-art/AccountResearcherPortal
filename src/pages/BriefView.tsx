@@ -3413,7 +3413,7 @@ export default function BriefView() {
                       {shareOpen && (
                         <div style={{
                           position: 'absolute', right: '100%', top: 0, marginRight: 4,
-                          background: '#1a1a1a', border: '1px solid #333', borderRadius: 8,
+                          background: 'var(--brief-card)', border: '1px solid var(--brief-input-border)', borderRadius: 8,
                           padding: 16, width: 300, zIndex: 50, boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
                         }}>
                           {shareStatus === 'sent' ? (
@@ -3422,7 +3422,7 @@ export default function BriefView() {
                             </div>
                           ) : (
                             <>
-                              <div style={{ fontSize: 12, fontWeight: 600, color: '#ccc', marginBottom: 8 }}>
+                              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--brief-body)', marginBottom: 8 }}>
                                 Share with a Figma colleague
                               </div>
                               <input
@@ -3434,8 +3434,8 @@ export default function BriefView() {
                                 onClick={e => e.stopPropagation()}
                                 style={{
                                   width: '100%', padding: '8px 10px', fontSize: 13,
-                                  background: '#111', border: '1px solid #444', borderRadius: 6,
-                                  color: '#e5e5e5', outline: 'none', boxSizing: 'border-box',
+                                  background: 'var(--brief-input-bg)', border: '1px solid var(--brief-input-border)', borderRadius: 6,
+                                  color: 'var(--brief-heading)', outline: 'none', boxSizing: 'border-box',
                                 }}
                               />
                               {shareStatus === 'error' && (
@@ -3643,10 +3643,10 @@ export default function BriefView() {
       {nudgeBannerVisible && !feedbackSubmitted && (
         <div style={{
           position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
-          background: '#1a1a1a', border: '1px solid #333', borderRadius: 8,
+          background: 'var(--brief-card)', border: '1px solid var(--brief-input-border)', borderRadius: 8,
           padding: '12px 20px', display: 'flex', alignItems: 'center', gap: 12,
           boxShadow: '0 8px 24px rgba(0,0,0,0.4)', zIndex: 40,
-          fontSize: 13, color: '#ccc', fontFamily: FONTS.sans,
+          fontSize: 13, color: 'var(--brief-body)', fontFamily: FONTS.sans,
         }}>
           <span>How was this brief?</span>
           <button
@@ -3663,7 +3663,7 @@ export default function BriefView() {
             onClick={() => setNudgeBannerVisible(false)}
             style={{
               background: 'none', border: 'none', cursor: 'pointer',
-              color: '#888', padding: 4, fontSize: 16, lineHeight: 1,
+              color: 'var(--brief-tertiary)', padding: 4, fontSize: 16, lineHeight: 1,
             }}
           >
             <X size={14} />
@@ -3692,21 +3692,21 @@ export default function BriefView() {
               position: 'fixed', top: '50%', left: '50%',
               transform: 'translate(-50%, -50%)',
               width: 480, maxHeight: '85vh',
-              background: '#1a1a1a', border: '1px solid #2a2a2a',
+              background: 'var(--brief-card)', border: '1px solid var(--brief-border)',
               borderRadius: 12, zIndex: 201,
               display: 'flex', flexDirection: 'column',
-              fontFamily: FONTS.sans, color: '#e5e5e5',
+              fontFamily: FONTS.sans, color: 'var(--brief-heading)',
               boxShadow: '0 24px 48px rgba(0,0,0,0.5)',
             }}>
               {/* Header */}
               <div style={{
-                padding: '18px 20px 14px', borderBottom: '1px solid #2a2a2a',
+                padding: '18px 20px 14px', borderBottom: '1px solid var(--brief-border)',
                 display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
                 flexShrink: 0,
               }}>
                 <div>
                   <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 4 }}>Rate this brief</div>
-                  <div style={{ fontSize: 12, color: '#888' }}>
+                  <div style={{ fontSize: 12, color: 'var(--brief-tertiary)' }}>
                     {pov?.company_name || run?.company}
                     {run?.created_at && <> &middot; {new Date(run.created_at).toLocaleDateString()}</>}
                   </div>
@@ -3718,13 +3718,13 @@ export default function BriefView() {
                       fontSize: 13, fontWeight: 600, padding: '3px 10px',
                       borderRadius: 12,
                       background: netScore > 0 ? 'rgba(34,197,94,0.12)' : netScore < 0 ? 'rgba(239,68,68,0.12)' : 'rgba(136,136,136,0.12)',
-                      color: netScore > 0 ? '#22c55e' : netScore < 0 ? '#ef4444' : '#888',
+                      color: netScore > 0 ? '#22c55e' : netScore < 0 ? '#ef4444' : 'var(--brief-tertiary)',
                     }}>
                       {netScore > 0 ? '+' : ''}{netScore} &middot; {ratedCount} rated
                     </span>
                   )}
                   <button onClick={() => setRateModalOpen(false)} style={{
-                    background: 'none', border: 'none', cursor: 'pointer', color: '#888', padding: 4,
+                    background: 'none', border: 'none', cursor: 'pointer', color: 'var(--brief-tertiary)', padding: 4,
                   }}>
                     <X size={16} />
                   </button>
@@ -3739,8 +3739,8 @@ export default function BriefView() {
                     justifyContent: 'center', padding: '48px 0', gap: 12,
                   }}>
                     <Check size={32} style={{ color: '#22c55e' }} />
-                    <div style={{ fontSize: 16, fontWeight: 500, color: '#e5e5e5' }}>Thanks for your feedback!</div>
-                    <div style={{ fontSize: 13, color: '#888' }}>Your ratings help us improve.</div>
+                    <div style={{ fontSize: 16, fontWeight: 500, color: 'var(--brief-heading)' }}>Thanks for your feedback!</div>
+                    <div style={{ fontSize: 13, color: 'var(--brief-tertiary)' }}>Your ratings help us improve.</div>
                   </div>
                 ) : (
                   <>
@@ -3749,18 +3749,18 @@ export default function BriefView() {
                       const score = fb?.score ?? 0;
                       const comment = fb?.comment ?? '';
                       return (
-                        <div key={section.id} style={{ padding: '10px 0', borderBottom: '1px solid #222' }}>
+                        <div key={section.id} style={{ padding: '10px 0', borderBottom: '1px solid var(--brief-border)' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                            <span style={{ fontSize: 16, width: 24, textAlign: 'center', color: '#666' }}>{section.icon}</span>
-                            <span style={{ flex: 1, fontSize: 14, color: '#e5e5e5' }}>{section.label}</span>
+                            <span style={{ fontSize: 16, width: 24, textAlign: 'center', color: 'var(--brief-faint)' }}>{section.icon}</span>
+                            <span style={{ flex: 1, fontSize: 14, color: 'var(--brief-heading)' }}>{section.label}</span>
                             {/* Thumbs up */}
                             <button
                               onClick={() => handleSectionFeedback(section.id, score === 1 ? 0 : 1, score === 1 ? '' : comment, false)}
                               style={{
                                 background: score === 1 ? 'rgba(34,197,94,0.12)' : 'transparent',
-                                border: score === 1 ? '1px solid rgba(34,197,94,0.3)' : '1px solid #333',
+                                border: score === 1 ? '1px solid rgba(34,197,94,0.3)' : '1px solid var(--brief-input-border)',
                                 borderRadius: 6, cursor: 'pointer', padding: '5px 10px',
-                                fontSize: 15, color: score === 1 ? '#22c55e' : '#666',
+                                fontSize: 15, color: score === 1 ? '#22c55e' : 'var(--brief-faint)',
                                 transition: 'all 0.15s',
                               }}
                             >
@@ -3771,9 +3771,9 @@ export default function BriefView() {
                               onClick={() => handleSectionFeedback(section.id, score === -1 ? 0 : -1, '', false)}
                               style={{
                                 background: score === -1 ? 'rgba(239,68,68,0.12)' : 'transparent',
-                                border: score === -1 ? '1px solid rgba(239,68,68,0.3)' : '1px solid #333',
+                                border: score === -1 ? '1px solid rgba(239,68,68,0.3)' : '1px solid var(--brief-input-border)',
                                 borderRadius: 6, cursor: 'pointer', padding: '5px 10px',
-                                fontSize: 15, color: score === -1 ? '#ef4444' : '#666',
+                                fontSize: 15, color: score === -1 ? '#ef4444' : 'var(--brief-faint)',
                                 transition: 'all 0.15s',
                               }}
                             >
@@ -3790,12 +3790,12 @@ export default function BriefView() {
                                 style={{
                                   width: '100%', minHeight: 48, padding: '8px 10px',
                                   fontSize: 12, fontFamily: FONTS.sans,
-                                  background: '#111', border: '1px solid #333',
-                                  borderRadius: 6, color: '#ccc', resize: 'vertical',
+                                  background: 'var(--brief-input-bg)', border: '1px solid var(--brief-input-border)',
+                                  borderRadius: 6, color: 'var(--brief-body)', resize: 'vertical',
                                   outline: 'none',
                                 }}
                                 onFocus={e => { e.currentTarget.style.borderColor = '#5e6ad2'; }}
-                                onBlur={e => { e.currentTarget.style.borderColor = '#333'; }}
+                                onBlur={e => { e.currentTarget.style.borderColor = ''; }}
                               />
                             </div>
                           )}
@@ -3805,7 +3805,7 @@ export default function BriefView() {
 
                     {/* Overall comments */}
                     <div style={{ padding: '14px 0 8px' }}>
-                      <div style={{ fontSize: 13, color: '#888', marginBottom: 6 }}>Overall comments (optional)</div>
+                      <div style={{ fontSize: 13, color: 'var(--brief-tertiary)', marginBottom: 6 }}>Overall comments (optional)</div>
                       <textarea
                         value={overallComment}
                         onChange={e => setOverallComment(e.target.value)}
@@ -3813,12 +3813,12 @@ export default function BriefView() {
                         style={{
                           width: '100%', minHeight: 60, padding: '8px 10px',
                           fontSize: 13, fontFamily: FONTS.sans,
-                          background: '#111', border: '1px solid #333',
-                          borderRadius: 6, color: '#ccc', resize: 'vertical',
+                          background: 'var(--brief-input-bg)', border: '1px solid var(--brief-input-border)',
+                          borderRadius: 6, color: 'var(--brief-body)', resize: 'vertical',
                           outline: 'none',
                         }}
                         onFocus={e => { e.currentTarget.style.borderColor = '#5e6ad2'; }}
-                        onBlur={e => { e.currentTarget.style.borderColor = '#333'; }}
+                        onBlur={e => { e.currentTarget.style.borderColor = ''; }}
                       />
                     </div>
                   </>
@@ -3828,18 +3828,18 @@ export default function BriefView() {
               {/* Footer */}
               {!feedbackSubmitted && (
                 <div style={{
-                  padding: '14px 20px', borderTop: '1px solid #2a2a2a',
+                  padding: '14px 20px', borderTop: '1px solid var(--brief-border)',
                   display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                   flexShrink: 0,
                 }}>
-                  <span style={{ fontSize: 12, color: '#666' }}>
+                  <span style={{ fontSize: 12, color: 'var(--brief-faint)' }}>
                     {ratedCount} of {FEEDBACK_SECTIONS.filter(s => s.id !== 'icp_fit' || userProfile?.role === 'manager' || userProfile?.role === 'admin').length} sections rated
                   </span>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button onClick={() => setRateModalOpen(false)} style={{
-                      background: 'transparent', border: '1px solid #333',
+                      background: 'transparent', border: '1px solid var(--brief-input-border)',
                       borderRadius: 6, padding: '7px 16px', fontSize: 13,
-                      color: '#888', cursor: 'pointer', fontFamily: FONTS.sans,
+                      color: 'var(--brief-tertiary)', cursor: 'pointer', fontFamily: FONTS.sans,
                     }}>
                       Cancel
                     </button>
@@ -3847,10 +3847,10 @@ export default function BriefView() {
                       onClick={handleModalSubmit}
                       disabled={ratedCount === 0 || feedbackSubmitting}
                       style={{
-                        background: ratedCount > 0 ? '#5e6ad2' : '#333',
+                        background: ratedCount > 0 ? '#5e6ad2' : 'var(--brief-input-border)',
                         border: 'none', borderRadius: 6, padding: '7px 20px',
                         fontSize: 13, fontWeight: 500,
-                        color: ratedCount > 0 ? '#fff' : '#666',
+                        color: ratedCount > 0 ? '#fff' : 'var(--brief-faint)',
                         cursor: ratedCount > 0 ? 'pointer' : 'default',
                         fontFamily: FONTS.sans,
                       }}
@@ -4175,7 +4175,7 @@ export default function BriefView() {
       {toastMessage && (
         <div style={{
           position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
-          background: '#1a1a1a', color: '#fff', padding: '10px 20px',
+          background: 'var(--brief-card)', color: 'var(--brief-heading)', padding: '10px 20px',
           borderRadius: 8, fontSize: 13, fontFamily: FONTS.sans,
           boxShadow: '0 4px 12px rgba(0,0,0,0.3)', zIndex: 200,
           maxWidth: 400, textAlign: 'center',
