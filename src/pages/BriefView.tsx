@@ -2723,6 +2723,8 @@ export default function BriefView() {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [streaming, setStreaming] = useState(false);
+  const [chatError, setChatError] = useState<string | null>(null);
+  const [chatErrorCode, setChatErrorCode] = useState<string | null>(null);
   const [chatTotal, setChatTotal] = useState(0);
   const [loadingEarlier, setLoadingEarlier] = useState(false);
   const chatScrollRef = useRef<HTMLDivElement>(null);
@@ -3092,6 +3094,8 @@ export default function BriefView() {
     setChatInput('');
     setPendingAttachments([]);
     setReviewMode(false);
+    setChatError(null);
+    setChatErrorCode(null);
     setStreaming(true);
 
     const assistantMessage: ChatMessage = { role: 'assistant', content: '', reviewMode: currentReviewMode || undefined };
@@ -3128,8 +3132,11 @@ export default function BriefView() {
       });
 
       if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: 'Unknown error' }));
-        throw new Error(err.error || `HTTP ${res.status}`);
+        const errData = await res.json().catch(() => ({}));
+        setChatError(errData.error || `HTTP ${res.status}`);
+        setChatErrorCode(errData.error_code || null);
+        setChatMessages(prev => prev.slice(0, -1)); // remove placeholder
+        return;
       }
 
       const reader = res.body!.getReader();
@@ -3164,14 +3171,11 @@ export default function BriefView() {
       // Optimistically bump chat total — worker saves asynchronously
       setChatTotal(prev => prev + 2);
     } catch (err: any) {
-      setChatMessages(prev => {
-        const updated = [...prev];
-        updated[updated.length - 1] = {
-          role: 'assistant',
-          content: `Sorry, something went wrong: ${err.message}. Please try again.`
-        };
-        return updated;
-      });
+      if (!chatError) {
+        setChatError(err.message || 'Something went wrong. Please try again.');
+        setChatErrorCode(null);
+      }
+      setChatMessages(prev => prev.slice(0, -1)); // remove placeholder
     } finally {
       setStreaming(false);
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -4073,6 +4077,36 @@ export default function BriefView() {
               </div>
             )}
           </div>
+
+          {/* API error banner */}
+          {chatError && (
+            <div style={{
+              margin: '0 18px 0', padding: '10px 14px',
+              background: 'var(--badge-yellow-bg)',
+              border: '0.5px solid var(--badge-yellow-text)',
+              borderRadius: 8, fontSize: 13, lineHeight: 1.5,
+              color: 'var(--badge-yellow-text)',
+            }}>
+              {chatErrorCode === 'anthropic_overloaded' || chatErrorCode === 'anthropic_error' ? (
+                <>
+                  <strong style={{ display: 'block', marginBottom: 4 }}>Claude is experiencing availability issues</strong>
+                  {"Anthropic's API is currently degraded. This isn't a problem with the portal. "}
+                  <a href="https://status.claude.com" target="_blank" rel="noopener noreferrer"
+                    style={{ color: 'inherit', textDecoration: 'underline' }}>
+                    Check the Anthropic status page
+                  </a>
+                  {' for updates, and try again in a few minutes.'}
+                </>
+              ) : chatErrorCode === 'anthropic_rate_limited' ? (
+                <>
+                  <strong style={{ display: 'block', marginBottom: 4 }}>Rate limit reached</strong>
+                  Too many requests — please wait a moment before sending another message.
+                </>
+              ) : (
+                chatError
+              )}
+            </div>
+          )}
 
           {/* Input */}
           <div style={{ padding: '12px 18px', borderTop: `1px solid ${COLORS.border}`, flexShrink: 0 }}>
