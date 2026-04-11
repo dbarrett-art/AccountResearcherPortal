@@ -2981,6 +2981,7 @@ export default function BriefView() {
       if (briefResult.data) setBrief(briefResult.data as Brief);
 
       // Seed chat messages from persisted history (always set — clears stale state on navigation)
+      console.log('[chat-debug] chatData:', JSON.stringify(chatData).slice(0, 500));
       setChatMessages(chatData.messages || []);
       setChatTotal(chatData.total ?? 0);
 
@@ -3944,6 +3945,10 @@ export default function BriefView() {
 
           {/* Messages */}
           <div ref={chatScrollRef} style={{ flex: 1, overflowY: 'auto', padding: '16px 18px' }}>
+            {/* TEMP DEBUG — remove after diagnosis */}
+            <div style={{ fontSize: 10, color: '#f00', marginBottom: 8, fontFamily: 'monospace' }}>
+              msgs={chatMessages.length} total={chatTotal} type={typeof chatMessages} isArr={String(Array.isArray(chatMessages))}
+            </div>
             {chatMessages.length === 0 ? (
               <div>
                 <p style={{ fontSize: 12, color: COLORS.tertiary, marginBottom: 12 }}>
