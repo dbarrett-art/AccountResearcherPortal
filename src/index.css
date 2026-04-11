@@ -29,6 +29,44 @@
   --status-failed-text: #f87171;
   --font: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', 'Menlo', monospace;
+
+  /* Brief page tokens (dark) */
+  --brief-bg: #1a1a1a;
+  --brief-surface: #242424;
+  --brief-card: #222222;
+  --brief-border: rgba(255,255,255,0.10);
+  --brief-border-light: rgba(255,255,255,0.06);
+  --brief-bar: rgba(255,255,255,0.08);
+  --brief-heading: #e8e8e8;
+  --brief-body: #ccc;
+  --brief-secondary: #aaa;
+  --brief-tertiary: #888;
+  --brief-faint: #666;
+  --brief-input-bg: #1e1e1e;
+  --brief-input-border: rgba(255,255,255,0.14);
+
+  /* Semantic badge tokens (dark) */
+  --badge-green-bg: rgba(5,150,105,0.15);
+  --badge-green-text: #34d399;
+  --badge-blue-bg: rgba(99,102,241,0.15);
+  --badge-blue-text: #818cf8;
+  --badge-indigo-bg: rgba(99,102,241,0.15);
+  --badge-indigo-text: #a5b4fc;
+  --badge-yellow-bg: rgba(202,138,4,0.15);
+  --badge-yellow-text: #fbbf24;
+  --badge-red-bg: rgba(220,38,38,0.15);
+  --badge-red-text: #f87171;
+  --badge-muted-bg: rgba(255,255,255,0.06);
+  --badge-muted-text: #888;
+  --badge-purple-bg: rgba(124,58,237,0.15);
+  --badge-purple-text: #a78bfa;
+
+  /* Trigger type tokens (dark) */
+  --trigger-business-text: #7b8ae8;
+  --trigger-leadership-text: #a78bfa;
+  --trigger-regulatory-text: #f87171;
+  --trigger-competitive-text: #fbbf24;
+  --trigger-product-text: #34d399;
 }
 
 [data-theme="light"] {
@@ -54,6 +92,44 @@
   --status-running-text: #b45309;
   --status-complete-text: #15803d;
   --status-failed-text: #b91c1c;
+
+  /* Brief page tokens (light) */
+  --brief-bg: #fdfcfa;
+  --brief-surface: #f5f5f0;
+  --brief-card: #ffffff;
+  --brief-border: #f0ede8;
+  --brief-border-light: #f5f3ef;
+  --brief-bar: #f0ede8;
+  --brief-heading: #1a1a1a;
+  --brief-body: #44403c;
+  --brief-secondary: #57534e;
+  --brief-tertiary: #78716c;
+  --brief-faint: #a8a29e;
+  --brief-input-bg: #fafaf8;
+  --brief-input-border: #e5e3de;
+
+  /* Semantic badge tokens (light) */
+  --badge-green-bg: #ecfdf5;
+  --badge-green-text: #065f46;
+  --badge-blue-bg: #eef2ff;
+  --badge-blue-text: #3730a3;
+  --badge-indigo-bg: #eef2ff;
+  --badge-indigo-text: #3730a3;
+  --badge-yellow-bg: #fefce8;
+  --badge-yellow-text: #854d0e;
+  --badge-red-bg: #fef2f2;
+  --badge-red-text: #991b1b;
+  --badge-muted-bg: #f5f5f0;
+  --badge-muted-text: #78716c;
+  --badge-purple-bg: #f5f3ff;
+  --badge-purple-text: #7c3aed;
+
+  /* Trigger type tokens (light) */
+  --trigger-business-text: #2b3a8e;
+  --trigger-leadership-text: #5521a6;
+  --trigger-regulatory-text: #991b1b;
+  --trigger-competitive-text: #854d0e;
+  --trigger-product-text: #065f46;
 }
 
 body {

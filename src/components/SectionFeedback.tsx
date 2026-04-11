@@ -76,12 +76,12 @@ export default function SectionFeedback({ sectionKey, feedback, onChange }: Sect
             style={{
               width: 220, minHeight: 48, padding: '6px 8px',
               fontSize: 12, fontFamily: FONTS.sans,
-              border: '1px solid #e5e3de', borderRadius: 6,
-              background: '#fafaf8', color: '#44403c',
+              border: '1px solid var(--brief-input-border)', borderRadius: 6,
+              background: 'var(--brief-input-bg)', color: 'var(--brief-body)',
               resize: 'vertical', outline: 'none',
             }}
             onFocus={e => { e.currentTarget.style.borderColor = '#7c3aed'; }}
-            onBlur={e => { e.currentTarget.style.borderColor = '#e5e3de'; }}
+            onBlur={e => { e.currentTarget.style.borderColor = 'var(--brief-input-border)'; }}
           />
           <div style={{ fontSize: 10, color: '#a8a29e', textAlign: 'right', marginTop: 2 }}>
             {comment.length}/280

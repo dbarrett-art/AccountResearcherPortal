@@ -2117,7 +2117,7 @@ function FeedbackTab() {
                       {isExpanded && (
                         <div style={{
                           position: 'absolute', right: 40, marginTop: 8,
-                          background: '#fff', border: '1px solid var(--border)',
+                          background: 'var(--bg-elevated)', border: '1px solid var(--border)',
                           borderRadius: 8, padding: 16, minWidth: 320, zIndex: 20,
                           boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
                         }}>

@@ -92,14 +92,14 @@ const FONTS = {
 };
 
 const COLORS = {
-  bg: '#fdfcfa',
-  border: '#f0ede8',
-  borderLight: '#f5f3ef',
-  faint: '#a8a29e',
-  body: '#44403c',
-  heading: '#1a1a1a',
-  secondary: '#57534e',
-  tertiary: '#78716c',
+  bg: 'var(--brief-bg)',
+  border: 'var(--brief-border)',
+  borderLight: 'var(--brief-border-light)',
+  faint: 'var(--brief-faint)',
+  body: 'var(--brief-body)',
+  heading: 'var(--brief-heading)',
+  secondary: 'var(--brief-secondary)',
+  tertiary: 'var(--brief-tertiary)',
   purple: '#7c3aed',
 };
 
@@ -119,12 +119,12 @@ const SECTION_ACCENTS: Record<string, string> = {
 };
 
 const TRIGGER_COLORS: Record<string, { border: string; text: string }> = {
-  BUSINESS:    { border: '#4361ee', text: '#2b3a8e' },
-  LEADERSHIP:  { border: '#7c3aed', text: '#5521a6' },
-  REGULATORY:  { border: '#dc2626', text: '#991b1b' },
-  COMPETITIVE: { border: '#ca8a04', text: '#854d0e' },
-  MARKET:      { border: '#ca8a04', text: '#854d0e' },
-  PRODUCT:     { border: '#059669', text: '#065f46' },
+  BUSINESS:    { border: '#4361ee', text: 'var(--trigger-business-text)' },
+  LEADERSHIP:  { border: '#7c3aed', text: 'var(--trigger-leadership-text)' },
+  REGULATORY:  { border: '#dc2626', text: 'var(--trigger-regulatory-text)' },
+  COMPETITIVE: { border: '#ca8a04', text: 'var(--trigger-competitive-text)' },
+  MARKET:      { border: '#ca8a04', text: 'var(--trigger-competitive-text)' },
+  PRODUCT:     { border: '#059669', text: 'var(--trigger-product-text)' },
 };
 
 const SIGNAL_CATEGORY_COLOURS: Record<string, string> = {
@@ -171,12 +171,12 @@ const FEEDBACK_SECTIONS = [
 ];
 
 const TIER_COLORS: Record<string, { bg: string; text: string }> = {
-  eb: { bg: '#ecfdf5', text: '#065f46' },
-  EB: { bg: '#ecfdf5', text: '#065f46' },
-  champion: { bg: '#eef2ff', text: '#3730a3' },
-  Champion: { bg: '#eef2ff', text: '#3730a3' },
-  coach: { bg: '#f5f5f0', text: '#78716c' },
-  Coach: { bg: '#f5f5f0', text: '#78716c' },
+  eb: { bg: 'var(--badge-green-bg)', text: 'var(--badge-green-text)' },
+  EB: { bg: 'var(--badge-green-bg)', text: 'var(--badge-green-text)' },
+  champion: { bg: 'var(--badge-blue-bg)', text: 'var(--badge-blue-text)' },
+  Champion: { bg: 'var(--badge-blue-bg)', text: 'var(--badge-blue-text)' },
+  coach: { bg: 'var(--badge-muted-bg)', text: 'var(--badge-muted-text)' },
+  Coach: { bg: 'var(--badge-muted-bg)', text: 'var(--badge-muted-text)' },
 };
 
 /* ------------------------------------------------------------------ */
@@ -238,7 +238,7 @@ function Section({
         {count && (
           <span style={{
             fontSize: 12, color: COLORS.tertiary,
-            padding: '3px 10px', background: '#f5f5f0',
+            padding: '3px 10px', background: 'var(--brief-surface)',
             borderRadius: 20, fontFamily: FONTS.sans,
           }}>
             {count}
@@ -255,7 +255,7 @@ function Section({
           {children}
           {feedbackNode && (
             <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', gap: 8, marginTop: 12 }}>
-              <span style={{ fontSize: 12, color: '#999', fontFamily: 'DM Sans, sans-serif' }}>Rate this section:</span>
+              <span style={{ fontSize: 12, color: COLORS.faint, fontFamily: 'DM Sans, sans-serif' }}>Rate this section:</span>
               {feedbackNode}
             </div>
           )}
@@ -276,7 +276,7 @@ function ItemChevron({
       onClick={onClick}
       style={{
         width: 22, height: 22, borderRadius: 5,
-        background: open ? '#eef2ff' : '#f5f5f0',
+        background: open ? 'var(--badge-indigo-bg)' : 'var(--brief-surface)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         cursor: 'pointer', flexShrink: 0,
         transition: 'background 0.15s',
@@ -590,8 +590,8 @@ function CitationTooltip({ tooltip }: {
         left: Math.min(tooltip.x, window.innerWidth - 340),
         top: useAbove ? posAbove : tooltip.y + 8,
         maxWidth: 320,
-        background: '#ffffff',
-        border: '1px solid #e5e0d8',
+        background: 'var(--brief-card)',
+        border: `1px solid ${COLORS.border}`,
         borderRadius: 6,
         padding: '14px 16px',
         zIndex: 1000,
@@ -601,7 +601,7 @@ function CitationTooltip({ tooltip }: {
       onClick={e => e.stopPropagation()}
     >
       {domain && (
-        <div style={{ fontSize: 11, color: '#888', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div style={{ fontSize: 11, color: COLORS.tertiary, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
           <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#7F77DD', flexShrink: 0 }} />
           {domain} · Source [{tooltip.index + 1}]
         </div>
@@ -811,7 +811,7 @@ function AgeBadge({ createdAt }: { createdAt: string | undefined }) {
       <span style={{
         display: 'inline-flex', alignItems: 'center', padding: '2px 8px',
         borderRadius: 4, fontSize: 11, fontWeight: 500, fontFamily: FONTS.sans,
-        background: '#ecfdf5', color: '#065f46',
+        background: 'var(--badge-green-bg)', color: 'var(--badge-green-text)',
       }}>Last run · Today</span>
     );
   }
@@ -820,7 +820,7 @@ function AgeBadge({ createdAt }: { createdAt: string | undefined }) {
       <span style={{
         display: 'inline-flex', alignItems: 'center', padding: '2px 8px',
         borderRadius: 4, fontSize: 11, fontWeight: 500, fontFamily: FONTS.sans,
-        background: '#fef2f2', color: '#991b1b',
+        background: 'var(--badge-red-bg)', color: 'var(--badge-red-text)',
       }}>Last run · Stale — {days}d old</span>
     );
   }
@@ -829,7 +829,7 @@ function AgeBadge({ createdAt }: { createdAt: string | undefined }) {
       <span style={{
         display: 'inline-flex', alignItems: 'center', padding: '2px 8px',
         borderRadius: 4, fontSize: 11, fontWeight: 500, fontFamily: FONTS.sans,
-        background: '#fefce8', color: '#854d0e',
+        background: 'var(--badge-yellow-bg)', color: 'var(--badge-yellow-text)',
       }}>Last run · {days}d ago</span>
     );
   }
@@ -838,7 +838,7 @@ function AgeBadge({ createdAt }: { createdAt: string | undefined }) {
       <span style={{
         display: 'inline-flex', alignItems: 'center', padding: '2px 8px',
         borderRadius: 4, fontSize: 11, fontWeight: 500, fontFamily: FONTS.sans,
-        background: '#f5f5f0', color: COLORS.tertiary,
+        background: 'var(--badge-muted-bg)', color: COLORS.tertiary,
       }}>Last run · {days}d ago</span>
     );
   }
@@ -1104,11 +1104,11 @@ function AboutSection({ pov, sources, feedbackNode, onCitationClick }: { pov: an
       {/* Strategy callout — if a dedicated strategy field exists */}
       {(pov?.why_anything?.corporate_strategy && !about.strategy) ? null : about.strategy && (
         <div style={{
-          background: '#eef2ff', borderRadius: 6,
+          background: 'var(--badge-indigo-bg)', borderRadius: 6,
           padding: '14px 16px', marginTop: 12,
         }}>
           <div style={{
-            fontSize: 11, fontWeight: 700, color: '#3730a3',
+            fontSize: 11, fontWeight: 700, color: 'var(--badge-indigo-text)',
             textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6,
             fontFamily: FONTS.sans,
           }}>Strategy</div>
@@ -1229,11 +1229,11 @@ function WhyAnythingSection({ pov, sources, feedbackNode, onCitationClick }: { p
       {/* Corporate strategy callout */}
       {wa.corporate_strategy && (
         <div style={{
-          background: '#fefce8', borderRadius: 6,
+          background: 'var(--badge-yellow-bg)', borderRadius: 6,
           padding: '14px 16px', marginBottom: 16,
         }}>
           <div style={{
-            fontSize: 11, fontWeight: 700, color: '#854d0e',
+            fontSize: 11, fontWeight: 700, color: 'var(--badge-yellow-text)',
             textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6,
             fontFamily: FONTS.sans,
           }}>Corporate Strategy</div>
@@ -1251,11 +1251,11 @@ function WhyAnythingSection({ pov, sources, feedbackNode, onCitationClick }: { p
       {/* Macro forces callout */}
       {wa.macro_forces && (
         <div style={{
-          background: '#fef2f2', borderRadius: 6,
+          background: 'var(--badge-red-bg)', borderRadius: 6,
           padding: '14px 16px', marginBottom: 16,
         }}>
           <div style={{
-            fontSize: 11, fontWeight: 700, color: '#991b1b',
+            fontSize: 11, fontWeight: 700, color: 'var(--badge-red-text)',
             textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6,
             fontFamily: FONTS.sans,
           }}>Macro Forces</div>
@@ -1587,7 +1587,7 @@ function WhitespaceSection({ pov, feedbackNode }: { pov: any; feedbackNode?: Rea
           { label: 'TOTAL WHITESPACE', value: fmtDollar(totalWhitespace) },
           { label: 'YOY GROWTH', value: ws.arr_growth_yoy || '—' },
         ].map((m, i) => (
-          <div key={i} style={{ background: '#f5f5f0', borderRadius: 8, padding: '10px 12px', flex: 1, minWidth: 120 }}>
+          <div key={i} style={{ background: 'var(--brief-surface)', borderRadius: 8, padding: '10px 12px', flex: 1, minWidth: 120 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.faint, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>{m.label}</div>
             <div style={{ fontFamily: FONTS.serif, fontSize: 20, fontWeight: 500, color: COLORS.heading, marginTop: 4 }}>{m.value}</div>
           </div>
@@ -1608,7 +1608,7 @@ function WhitespaceSection({ pov, feedbackNode }: { pov: any; feedbackNode?: Rea
             <span style={{ fontFamily: FONTS.serif, fontSize: 18, fontWeight: 500, color: COLORS.heading }}>{fmtDollar(devGapVal)}</span>
           </div>
           <div style={{ marginTop: 6 }}>
-            <div style={{ height: 3, background: '#f0ede8', borderRadius: 2, overflow: 'hidden' }}>
+            <div style={{ height: 3, background: 'var(--brief-bar)', borderRadius: 2, overflow: 'hidden' }}>
               <div style={{ height: '100%', background: ACCENT.devMode, width: `${Math.min(100, ((gaps.dev_mode.licensed || 0) / Math.max(gaps.dev_mode.universe || 1, 1)) * 100)}%`, borderRadius: 2 }} />
             </div>
             <div style={{ fontSize: 12, color: COLORS.faint, marginTop: 3 }}>{gaps.dev_mode.licensed} of {Math.round(gaps.dev_mode.universe)} licensed</div>
@@ -1625,7 +1625,7 @@ function WhitespaceSection({ pov, feedbackNode }: { pov: any; feedbackNode?: Rea
             <span style={{ fontFamily: FONTS.serif, fontSize: 18, fontWeight: 500, color: COLORS.heading }}>{fmtDollar(designerGapVal)}</span>
           </div>
           <div style={{ marginTop: 6 }}>
-            <div style={{ height: 3, background: '#f0ede8', borderRadius: 2, overflow: 'hidden' }}>
+            <div style={{ height: 3, background: 'var(--brief-bar)', borderRadius: 2, overflow: 'hidden' }}>
               <div style={{ height: '100%', background: ACCENT.fullSeat, width: `${Math.min(100, ((gaps.full_seats_designers.licensed || 0) / Math.max(gaps.full_seats_designers.universe || 1, 1)) * 100)}%`, borderRadius: 2 }} />
             </div>
             <div style={{ fontSize: 12, color: COLORS.faint, marginTop: 3 }}>{gaps.full_seats_designers.licensed} of {Math.round(gaps.full_seats_designers.universe)} licensed</div>
@@ -1642,7 +1642,7 @@ function WhitespaceSection({ pov, feedbackNode }: { pov: any; feedbackNode?: Rea
             <span style={{ fontFamily: FONTS.serif, fontSize: 18, fontWeight: 500, color: COLORS.heading }}>{fmtDollar(pmGapVal)}</span>
           </div>
           <div style={{ marginTop: 6 }}>
-            <div style={{ height: 3, background: '#f0ede8', borderRadius: 2, overflow: 'hidden' }}>
+            <div style={{ height: 3, background: 'var(--brief-bar)', borderRadius: 2, overflow: 'hidden' }}>
               <div style={{ height: '100%', background: ACCENT.fullSeat, width: `${Math.min(100, ((gaps.make_pm.licensed || 0) / Math.max(gaps.make_pm.universe || 1, 1)) * 100)}%`, borderRadius: 2 }} />
             </div>
             <div style={{ fontSize: 12, color: COLORS.faint, marginTop: 3 }}>{gaps.make_pm.licensed} of {Math.round(gaps.make_pm.universe)} licensed</div>
@@ -1659,7 +1659,7 @@ function WhitespaceSection({ pov, feedbackNode }: { pov: any; feedbackNode?: Rea
             <span style={{ fontFamily: FONTS.serif, fontSize: 18, fontWeight: 500, color: COLORS.heading }}>{fmtDollar(govVal)}</span>
           </div>
           {gaps.governance_plus?.priority && (
-            <span style={{ fontSize: 10, background: '#fee2e2', color: '#991b1b', borderRadius: 20, padding: '2px 8px', fontWeight: 600, display: 'inline-block', marginTop: 6 }}>priority: true</span>
+            <span style={{ fontSize: 10, background: 'var(--badge-red-bg)', color: 'var(--badge-red-text)', borderRadius: 20, padding: '2px 8px', fontWeight: 600, display: 'inline-block', marginTop: 6 }}>priority: true</span>
           )}
           {gaps.governance_plus?.reason && (
             <div style={{ fontSize: 15, color: COLORS.secondary, lineHeight: 1.65, marginTop: 6 }}>{gaps.governance_plus.reason}</div>
@@ -1854,8 +1854,8 @@ function PyramidItem({ item, field, color }: { item: any; field: string; color: 
             top: '100%',
             left: 14,
             zIndex: 50,
-            background: '#ffffff',
-            border: '1px solid #e5e0d8',
+            background: 'var(--brief-card)',
+            border: `1px solid ${COLORS.border}`,
             borderRadius: 6,
             padding: '12px 14px',
             fontSize: 14,
@@ -2183,7 +2183,7 @@ function ContactCard({ contact }: { contact: any }) {
             </span>
             <TierBadge tier={tier} />
             {isDeparted && (
-              <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 3, background: '#fef2f2', color: '#dc2626', fontWeight: 600, fontFamily: FONTS.sans }}>
+              <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 3, background: 'var(--badge-red-bg)', color: 'var(--badge-red-text)', fontWeight: 600, fontFamily: FONTS.sans }}>
                 ⚠ Departed
               </span>
             )}
@@ -2210,7 +2210,7 @@ function ContactCard({ contact }: { contact: any }) {
         {/* Chevron */}
         <div style={{
           width: 22, height: 22, borderRadius: 5,
-          background: open ? '#eef2ff' : '#f5f5f0',
+          background: open ? 'var(--badge-indigo-bg)' : 'var(--brief-surface)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           flexShrink: 0, marginTop: 6,
           transition: 'background 0.15s',
@@ -2284,7 +2284,7 @@ function ContactCard({ contact }: { contact: any }) {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, flexWrap: 'wrap', gap: 8 }}>
             <div>
               {contact?.email && (
-                <span style={{ fontSize: 12, padding: '3px 8px', borderRadius: 4, background: '#ecfdf5', color: '#065f46', fontFamily: FONTS.sans }}>{contact.email}</span>
+                <span style={{ fontSize: 12, padding: '3px 8px', borderRadius: 4, background: 'var(--badge-green-bg)', color: 'var(--badge-green-text)', fontFamily: FONTS.sans }}>{contact.email}</span>
               )}
             </div>
             {footerSources.length > 0 && (
@@ -2353,9 +2353,9 @@ function ContactsSection({ personas, hooksData, feedbackNode }: { personas: any;
         <div style={{
           borderLeft: '3px solid #7c3aed',
           padding: '12px 16px', marginBottom: 16,
-          background: '#f5f3ff', borderRadius: '0 6px 6px 0',
+          background: 'var(--badge-purple-bg)', borderRadius: '0 6px 6px 0',
         }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: '#7c3aed', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6, fontFamily: FONTS.sans }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--badge-purple-text)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6, fontFamily: FONTS.sans }}>
             Recommended First Move
           </div>
           <div style={{ fontWeight: 500, fontSize: 16, color: COLORS.body, fontFamily: FONTS.sans }}>
@@ -2562,7 +2562,7 @@ function RunHistory({ currentRunId, company }: { currentRunId: string; company: 
             return (
               <button key={r.id} onClick={() => navigate(`/briefs/${r.id}`)} style={{
                 fontSize: 11, padding: '3px 8px', borderRadius: 4, fontFamily: FONTS.sans,
-                background: active ? COLORS.purple : '#f5f5f0',
+                background: active ? COLORS.purple : 'var(--brief-surface)',
                 color: active ? '#fff' : COLORS.secondary,
                 border: 'none', cursor: active ? 'default' : 'pointer',
               }}>
@@ -3199,7 +3199,7 @@ export default function BriefView() {
       <div style={mainStyle}>
         {/* ============ HEADER ============ */}
         <div style={{
-          background: '#fff',
+          background: 'var(--brief-card)',
           borderBottom: `1px solid ${COLORS.border}`,
           margin: isMobile ? '-16px -16px 16px' : '-32px -40px 24px',
         }}>
@@ -3343,7 +3343,7 @@ export default function BriefView() {
                 {overflowOpen && (
                   <div style={{
                     position: 'absolute', right: 0, top: '100%', marginTop: 4,
-                    background: '#fff', border: `1px solid ${COLORS.border}`,
+                    background: 'var(--brief-card)', border: `1px solid ${COLORS.border}`,
                     borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
                     minWidth: 180, zIndex: 50, overflow: 'hidden',
                   }}>
@@ -3511,11 +3511,11 @@ export default function BriefView() {
         {/* Research Gaps warning — separate card below header */}
         {pov?.research_gaps && (
           <details style={{
-            background: '#fefce8', border: `1px solid #fde68a`,
+            background: 'var(--badge-yellow-bg)', border: '1px solid var(--badge-yellow-text)',
             borderRadius: 6, marginTop: 10, marginBottom: 16, cursor: 'pointer',
           }}>
             <summary style={{
-              padding: '10px 14px', fontSize: 13, color: '#854d0e',
+              padding: '10px 14px', fontSize: 13, color: 'var(--badge-yellow-text)',
               fontWeight: 500, listStyle: 'none', display: 'flex',
               alignItems: 'center', gap: 8, userSelect: 'none',
               fontFamily: FONTS.sans,
@@ -3542,9 +3542,9 @@ export default function BriefView() {
         {/* Old schema warning */}
         {brief && !brief.schema_version && (
           <div style={{
-            background: '#fefce8', border: `1px solid #fde68a`,
+            background: 'var(--badge-yellow-bg)', border: '1px solid var(--badge-yellow-text)',
             borderRadius: 6, padding: '10px 14px', marginBottom: 20,
-            fontSize: 13, color: '#854d0e', fontFamily: FONTS.sans,
+            fontSize: 13, color: 'var(--badge-yellow-text)', fontFamily: FONTS.sans,
           }}>
             This brief was generated with an earlier pipeline version — some sections may be missing.
             {run.pdf_url && (
@@ -3558,7 +3558,7 @@ export default function BriefView() {
         {/* No brief data fallback */}
         {!pov && (
           <div style={{
-            background: '#fff', border: `1px solid ${COLORS.border}`,
+            background: 'var(--brief-card)', border: `1px solid ${COLORS.border}`,
             borderRadius: 8, padding: 24, textAlign: 'center',
           }}>
             <div style={{ fontSize: 14, fontWeight: 500, color: COLORS.secondary, marginBottom: 8, fontFamily: FONTS.sans }}>
@@ -3821,7 +3821,7 @@ export default function BriefView() {
           zIndex: 200, display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
         }} onClick={() => setMobileActionsOpen(false)}>
           <div onClick={e => e.stopPropagation()} style={{
-            background: '#fff', borderRadius: '16px 16px 0 0', width: '100%',
+            background: 'var(--brief-card)', borderRadius: '16px 16px 0 0', width: '100%',
             maxWidth: 480, padding: '12px 0 calc(12px + max(env(safe-area-inset-bottom), 8px))',
           }}>
             {[
@@ -3855,7 +3855,7 @@ export default function BriefView() {
         <div style={{
           position: 'fixed',
           ...(isMobile ? { inset: 0 } : { right: 0, top: 0, bottom: 0, width: chatWidth }),
-          background: '#fff', borderLeft: isMobile ? 'none' : `1px solid ${COLORS.border}`,
+          background: 'var(--brief-card)', borderLeft: isMobile ? 'none' : `1px solid ${COLORS.border}`,
           display: 'flex', flexDirection: 'column', zIndex: 100,
           animation: 'slideIn 150ms ease-out',
           fontFamily: FONTS.sans,
@@ -3900,7 +3900,7 @@ export default function BriefView() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {getSuggestedPrompts(run?.market ?? null).map((prompt, i) => (
                     <button key={i} onClick={() => sendMessage(prompt)} style={{
-                      textAlign: 'left', background: '#fdfcfa',
+                      textAlign: 'left', background: 'var(--brief-bg)',
                       border: `1px solid ${COLORS.border}`, borderRadius: 6,
                       padding: '8px 12px', fontSize: 13, color: COLORS.secondary,
                       cursor: 'pointer',
@@ -3925,7 +3925,7 @@ export default function BriefView() {
                       <div style={{
                         maxWidth: '85%', padding: '8px 12px',
                         borderRadius: msg.role === 'user' ? '12px 12px 4px 12px' : '12px 12px 12px 4px',
-                        background: msg.role === 'user' ? COLORS.purple : '#f5f5f0',
+                        background: msg.role === 'user' ? COLORS.purple : 'var(--brief-surface)',
                         fontSize: 13, lineHeight: 1.5,
                         color: msg.role === 'user' ? '#fff' : COLORS.body,
                         whiteSpace: 'pre-wrap',
@@ -4015,7 +4015,7 @@ export default function BriefView() {
                 {pendingAttachments.map((att, i) => (
                   <div key={i} style={{
                     display: 'inline-flex', alignItems: 'center', gap: 4,
-                    background: '#f5f5f0', border: `1px solid ${COLORS.border}`,
+                    background: 'var(--brief-surface)', border: `1px solid ${COLORS.border}`,
                     borderRadius: 6, padding: '4px 8px', fontSize: 12, color: COLORS.body,
                   }}>
                     {att.type === 'pdf' ? (
@@ -4035,7 +4035,7 @@ export default function BriefView() {
             )}
             {reviewMode && (
               <div style={{
-                background: '#f0edf8', borderRadius: 6, padding: '6px 10px',
+                background: 'var(--badge-purple-bg)', borderRadius: 6, padding: '6px 10px',
                 fontSize: 11, color: COLORS.purple, marginBottom: 6, fontWeight: 500,
               }}>
                 PSP Review mode — Claude will coach against this brief
@@ -4075,7 +4075,7 @@ export default function BriefView() {
                 disabled={streaming}
                 rows={2}
                 style={{
-                  flex: 1, background: '#fdfcfa',
+                  flex: 1, background: 'var(--brief-bg)',
                   border: `1px solid ${COLORS.border}`,
                   borderRadius: 6, padding: '8px 12px',
                   fontSize: 13, color: COLORS.body,
