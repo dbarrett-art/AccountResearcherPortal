@@ -32,6 +32,7 @@ interface Brief {
   hooks_json: Record<string, any> | null;
   value_pyramid: Record<string, any> | null;
   schema_version: number | null;
+  chat_history?: ChatMessage[];
 }
 
 interface ChatAttachment {
@@ -47,6 +48,7 @@ interface ChatMessage {
   content: string;
   attachments?: ChatAttachment[];
   reviewMode?: boolean;
+  timestamp?: string;
 }
 
 const LANGUAGE_FLAGS: Record<string, string> = {
@@ -2722,6 +2724,9 @@ export default function BriefView() {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [streaming, setStreaming] = useState(false);
+  const [chatTotal, setChatTotal] = useState(0);
+  const [loadingEarlier, setLoadingEarlier] = useState(false);
+  const chatScrollRef = useRef<HTMLDivElement>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
@@ -2959,7 +2964,7 @@ export default function BriefView() {
       if (runData.brief_id) {
         const { data: briefData } = await supabase
           .from('briefs')
-          .select('pov_json, personas_json, hooks_json, value_pyramid, schema_version')
+          .select('pov_json, personas_json, hooks_json, value_pyramid, schema_version, chat_history')
           .eq('id', runData.brief_id)
           .single();
         if (!cancelled && briefData) setBrief(briefData as Brief);
@@ -2970,6 +2975,43 @@ export default function BriefView() {
     load();
     return () => { cancelled = true; };
   }, [run_id]);
+
+  // Seed chat messages from persisted history when brief loads
+  useEffect(() => {
+    if (brief?.chat_history && brief.chat_history.length > 0) {
+      const last100 = brief.chat_history.slice(-100);
+      setChatMessages(last100);
+      setChatTotal(brief.chat_history.length);
+    }
+  }, [run_id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const loadEarlierMessages = async () => {
+    if (!run_id || loadingEarlier) return;
+    setLoadingEarlier(true);
+    try {
+      const scrollEl = chatScrollRef.current;
+      const prevHeight = scrollEl?.scrollHeight || 0;
+
+      const currentOffset = chatMessages.length;
+      const res = await workerFetch(
+        `/chat/${run_id}/history?offset=${currentOffset}&limit=50`
+      );
+      const { messages: earlier } = await res.json();
+      if (earlier.length > 0) {
+        setChatMessages(prev => [...earlier, ...prev]);
+        // Restore scroll position after prepend
+        requestAnimationFrame(() => {
+          if (scrollEl) {
+            scrollEl.scrollTop = scrollEl.scrollHeight - prevHeight;
+          }
+        });
+      }
+    } catch (err) {
+      console.error('Failed to load earlier messages', err);
+    } finally {
+      setLoadingEarlier(false);
+    }
+  };
 
   const pov = brief?.pov_json;
   const personas = brief?.personas_json;
@@ -3112,6 +3154,8 @@ export default function BriefView() {
           }
         }
       }
+      // Optimistically bump chat total — worker saves asynchronously
+      setChatTotal(prev => prev + 2);
     } catch (err: any) {
       setChatMessages(prev => {
         const updated = [...prev];
@@ -3891,7 +3935,7 @@ export default function BriefView() {
           </div>
 
           {/* Messages */}
-          <div style={{ flex: 1, overflowY: 'auto', padding: '16px 18px' }}>
+          <div ref={chatScrollRef} style={{ flex: 1, overflowY: 'auto', padding: '16px 18px' }}>
             {chatMessages.length === 0 ? (
               <div>
                 <p style={{ fontSize: 12, color: COLORS.tertiary, marginBottom: 12 }}>
@@ -3915,6 +3959,22 @@ export default function BriefView() {
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {chatTotal > chatMessages.length && (
+                  <button
+                    onClick={loadEarlierMessages}
+                    disabled={loadingEarlier}
+                    style={{
+                      display: 'block', width: '100%', padding: '8px',
+                      fontSize: 13, color: COLORS.tertiary,
+                      background: 'transparent',
+                      border: `0.5px solid ${COLORS.border}`,
+                      borderRadius: 6, cursor: 'pointer', marginBottom: 4,
+                      fontFamily: FONTS.sans,
+                    }}
+                  >
+                    {loadingEarlier ? 'Loading...' : `Load earlier messages (${chatTotal - chatMessages.length} more)`}
+                  </button>
+                )}
                 {chatMessages.map((msg, i) => (
                   <div key={i}>
                     <div style={{
