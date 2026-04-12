@@ -1829,6 +1829,7 @@ const PROMPT_FILE_LABELS: Record<string, { label: string; path: string }> = {
   company_pov: { label: 'POV Framework', path: 'config/company_pov.md' },
   hook_research: { label: 'Hook Research', path: 'config/hook_research.md' },
   persona_discovery: { label: 'Persona Discovery', path: 'config/persona_discovery.md' },
+  psp_system: { label: 'PSP Generator', path: 'prompts/psp_system.txt' },
 };
 
 function PromptsTab() {
