@@ -2982,7 +2982,6 @@ export default function BriefView() {
       if (briefResult.data) setBrief(briefResult.data as Brief);
 
       // Seed chat messages from persisted history (always set — clears stale state on navigation)
-      console.log('[chat-debug] chatData:', JSON.stringify(chatData).slice(0, 500));
       setChatMessages(chatData.messages || []);
       setChatTotal(chatData.total ?? 0);
 
@@ -4018,9 +4017,9 @@ export default function BriefView() {
                             ))}
                           </div>
                         )}
-                        {msg.role === 'assistant' ? (
+                        {msg.role === 'assistant' && msg.content ? (
                           <div className="chat-message-content"><ReactMarkdown>{msg.content}</ReactMarkdown></div>
-                        ) : msg.content}
+                        ) : (msg.content || null)}
                         {streaming && i === chatMessages.length - 1 && msg.role === 'assistant' && (
                           <span style={{
                             display: 'inline-block', width: 2, height: 14,
