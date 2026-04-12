@@ -8,6 +8,7 @@ import usePageTitle from '../hooks/usePageTitle';
 import useWindowWidth from '../hooks/useWindowWidth';
 import { ArrowLeft, FileText, X, ChevronDown, ExternalLink, Send, Trash2, Activity, Share2, RefreshCw, Paperclip, ClipboardList, Copy, Check, MoreHorizontal } from 'lucide-react';
 import SectionFeedback from '../components/SectionFeedback';
+import ReactMarkdown from 'react-markdown';
 // DOMPurify removed — CitedProse now renders React elements instead of innerHTML
 
 /* ------------------------------------------------------------------ */
@@ -3945,10 +3946,6 @@ export default function BriefView() {
 
           {/* Messages */}
           <div ref={chatScrollRef} style={{ flex: 1, overflowY: 'auto', padding: '16px 18px' }}>
-            {/* TEMP DEBUG — remove after diagnosis */}
-            <div style={{ fontSize: 10, color: '#f00', marginBottom: 8, fontFamily: 'monospace' }}>
-              msgs={chatMessages.length} total={chatTotal} type={typeof chatMessages} isArr={String(Array.isArray(chatMessages))}
-            </div>
             {chatMessages.length === 0 ? (
               <div>
                 <p style={{ fontSize: 12, color: COLORS.tertiary, marginBottom: 12 }}>
@@ -4001,7 +3998,7 @@ export default function BriefView() {
                         background: msg.role === 'user' ? COLORS.purple : 'var(--brief-surface)',
                         fontSize: 13, lineHeight: 1.5,
                         color: msg.role === 'user' ? '#fff' : COLORS.body,
-                        whiteSpace: 'pre-wrap',
+                        ...(msg.role === 'user' ? { whiteSpace: 'pre-wrap' as const } : {}),
                       }}>
                         {/* Attachment chips in user messages */}
                         {msg.role === 'user' && msg.attachments && msg.attachments.length > 0 && (
@@ -4021,7 +4018,9 @@ export default function BriefView() {
                             ))}
                           </div>
                         )}
-                        {msg.content}
+                        {msg.role === 'assistant' ? (
+                          <div className="chat-message-content"><ReactMarkdown>{msg.content}</ReactMarkdown></div>
+                        ) : msg.content}
                         {streaming && i === chatMessages.length - 1 && msg.role === 'assistant' && (
                           <span style={{
                             display: 'inline-block', width: 2, height: 14,
