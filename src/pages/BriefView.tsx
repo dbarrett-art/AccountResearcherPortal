@@ -3286,7 +3286,7 @@ export default function BriefView() {
               {/* On mobile: PDF + overflow only. On desktop: all buttons. */}
               {!isMobile && (
                 <>
-                  <button onClick={() => setChatOpen(prev => !prev)} style={{
+                  <button className={`btn-pulse${chatOpen ? ' active' : ''}`} onClick={() => setChatOpen(prev => !prev)} style={{
                     display: 'flex', alignItems: 'center', gap: 6, padding: '6px 13px',
                     borderRadius: 'var(--border-radius-md, 8px)',
                     border: '0.5px solid var(--color-border-secondary, #d6d3d1)',
