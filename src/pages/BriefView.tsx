@@ -3949,7 +3949,10 @@ export default function BriefView() {
           </div>
 
           {/* Messages */}
-          <div ref={chatScrollRef} style={{ flexGrow: 1, flexShrink: 1, flexBasis: 0, overflowY: 'auto', padding: '16px 18px', minHeight: 100, background: 'rgba(0,255,0,0.15)' }}>
+          <div style={{ background: 'lime', padding: 20, minHeight: 80 }}>
+            <p style={{ color: '#000', fontSize: 16 }}>STATIC TEST — if you see this, the container works</p>
+          </div>
+          <div ref={chatScrollRef} style={{ flexGrow: 1, flexShrink: 1, flexBasis: 0, overflowY: 'auto', padding: '16px 18px' }}>
             {chatMessages.length === 0 ? (
               <div>
                 <p style={{ fontSize: 12, color: COLORS.tertiary, marginBottom: 12 }}>
