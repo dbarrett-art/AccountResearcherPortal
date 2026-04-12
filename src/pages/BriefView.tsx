@@ -8,7 +8,6 @@ import usePageTitle from '../hooks/usePageTitle';
 import useWindowWidth from '../hooks/useWindowWidth';
 import { ArrowLeft, FileText, X, ChevronDown, ExternalLink, Send, Trash2, Activity, Share2, RefreshCw, Paperclip, ClipboardList, Copy, Check, MoreHorizontal } from 'lucide-react';
 import SectionFeedback from '../components/SectionFeedback';
-import ReactMarkdown from 'react-markdown';
 // DOMPurify removed — CitedProse now renders React elements instead of innerHTML
 
 /* ------------------------------------------------------------------ */
@@ -3943,16 +3942,8 @@ export default function BriefView() {
             </button>
           </div>
 
-          {/* DEBUG — remove after diagnosis */}
-          <div style={{ background: '#f00', color: '#fff', padding: '6px 18px', fontSize: 11, fontFamily: 'monospace', flexShrink: 0 }}>
-            DEBUG: msgs={chatMessages.length} isArr={String(Array.isArray(chatMessages))}
-          </div>
-
           {/* Messages */}
-          <div style={{ background: 'lime', padding: 20, minHeight: 80 }}>
-            <p style={{ color: '#000', fontSize: 16 }}>STATIC TEST — if you see this, the container works</p>
-          </div>
-          <div ref={chatScrollRef} style={{ flexGrow: 1, flexShrink: 1, flexBasis: 0, overflowY: 'auto', padding: '16px 18px' }}>
+          <div ref={chatScrollRef} style={{ flex: 1, overflowY: 'auto', padding: '16px 18px' }}>
             {chatMessages.length === 0 ? (
               <div>
                 <p style={{ fontSize: 12, color: COLORS.tertiary, marginBottom: 12 }}>
@@ -4005,7 +3996,7 @@ export default function BriefView() {
                         background: msg.role === 'user' ? COLORS.purple : 'var(--brief-surface)',
                         fontSize: 13, lineHeight: 1.5,
                         color: msg.role === 'user' ? '#fff' : COLORS.body,
-                        ...(msg.role === 'user' ? { whiteSpace: 'pre-wrap' as const } : {}),
+                        whiteSpace: 'pre-wrap',
                       }}>
                         {/* Attachment chips in user messages */}
                         {msg.role === 'user' && msg.attachments && msg.attachments.length > 0 && (
@@ -4025,9 +4016,7 @@ export default function BriefView() {
                             ))}
                           </div>
                         )}
-                        {msg.role === 'assistant' && msg.content ? (
-                          <div className="chat-message-content"><ReactMarkdown>{msg.content}</ReactMarkdown></div>
-                        ) : (msg.content || null)}
+                        {msg.content}
                         {streaming && i === chatMessages.length - 1 && msg.role === 'assistant' && (
                           <span style={{
                             display: 'inline-block', width: 2, height: 14,
