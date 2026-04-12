@@ -3943,12 +3943,13 @@ export default function BriefView() {
             </button>
           </div>
 
+          {/* DEBUG — remove after diagnosis */}
+          <div style={{ background: '#f00', color: '#fff', padding: '6px 18px', fontSize: 11, fontFamily: 'monospace', flexShrink: 0 }}>
+            DEBUG: msgs={chatMessages.length} isArr={String(Array.isArray(chatMessages))}
+          </div>
+
           {/* Messages */}
           <div ref={chatScrollRef} style={{ flex: 1, overflowY: 'auto', padding: '16px 18px' }}>
-            {/* DEBUG — remove after diagnosis */}
-            <div style={{ background: '#f00', color: '#fff', padding: 8, marginBottom: 8, fontSize: 11, fontFamily: 'monospace', borderRadius: 4 }}>
-              msgs={chatMessages.length} isArr={String(Array.isArray(chatMessages))} type={typeof chatMessages}
-            </div>
             {chatMessages.length === 0 ? (
               <div>
                 <p style={{ fontSize: 12, color: COLORS.tertiary, marginBottom: 12 }}>
