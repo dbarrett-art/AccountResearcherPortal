@@ -372,19 +372,20 @@ function UsersTab({ adminId }: { adminId: string }) {
       </div>
 
       <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 700 }}>
           <thead>
             <tr style={{ background: 'var(--bg-surface)', borderBottom: '1px solid var(--border)' }}>
               {['Name', 'Email', 'Role', 'Manager', 'Credits', 'Actions'].map((h) => (
-                <th key={h} style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', padding: '10px 16px', textAlign: 'left' }}>{h}</th>
+                <th key={h} style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', padding: '10px 16px', textAlign: 'left', ...(h === 'Actions' ? { position: 'sticky' as const, right: 0, background: 'var(--bg-surface)', zIndex: 2, boxShadow: '-4px 0 8px rgba(0,0,0,0.06)' } : {}) }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {users.map((u) => (
               <tr key={u.id} style={{ borderBottom: '1px solid var(--border)' }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-elevated)')}
-                onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}>
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-elevated)'; const s = e.currentTarget.querySelector<HTMLElement>('td:last-child'); if (s) s.style.background = 'var(--bg-elevated)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; const s = e.currentTarget.querySelector<HTMLElement>('td:last-child'); if (s) s.style.background = 'var(--bg-app)'; }}>
                 <td style={{ padding: '11px 16px', fontSize: 13, fontWeight: 500 }}>{u.name}</td>
                 <td style={{ padding: '11px 16px', fontSize: 13, color: 'var(--text-secondary)' }}>{u.email}</td>
                 <td style={{ padding: '11px 16px' }}>
@@ -401,7 +402,7 @@ function UsersTab({ adminId }: { adminId: string }) {
                   </select>
                 </td>
                 <td style={{ padding: '11px 16px', fontSize: 13 }}>{u.credits_remaining}</td>
-                <td style={{ padding: '11px 16px' }}>
+                <td style={{ padding: '11px 16px', position: 'sticky', right: 0, background: 'var(--bg-app)', zIndex: 1, boxShadow: '-4px 0 8px rgba(0,0,0,0.06)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <input type="number" min={1} max={20}
                       value={grantAmounts[u.id] || ''}
@@ -461,6 +462,7 @@ function UsersTab({ adminId }: { adminId: string }) {
             ))}
           </tbody>
         </table>
+        </div>
       </div>
     </>
   );
@@ -823,11 +825,12 @@ function RunMonitorTab() {
         <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} style={selectStyle} />
       </div>
       <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 800 }}>
           <thead>
             <tr style={{ background: 'var(--bg-surface)', borderBottom: '1px solid var(--border)' }}>
-              {['User', 'Company', 'Status', 'Submitted', 'Duration', 'PDF', 'GHA', ...(userProfile?.role === 'admin' ? [''] : [])].map((h) => (
-                <th key={h} style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', padding: '10px 16px', textAlign: 'left' }}>{h}</th>
+              {['User', 'Company', 'Status', 'Submitted', 'Duration', 'PDF', 'GHA', ...(userProfile?.role === 'admin' ? [''] : [])].map((h, i, arr) => (
+                <th key={h || '_actions'} style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', padding: '10px 16px', textAlign: 'left', ...(i === arr.length - 1 && h === '' ? { position: 'sticky' as const, right: 0, background: 'var(--bg-surface)', zIndex: 2, boxShadow: '-4px 0 8px rgba(0,0,0,0.06)' } : {}) }}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -838,8 +841,8 @@ function RunMonitorTab() {
                 borderLeft: r.status === 'failed' ? '2px solid var(--status-failed)' : 'none',
                 transition: 'background 80ms',
               }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-elevated)')}
-                onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-elevated)'; const s = e.currentTarget.querySelector<HTMLElement>('td:last-child'); if (s) s.style.background = 'var(--bg-elevated)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; const s = e.currentTarget.querySelector<HTMLElement>('td:last-child'); if (s) s.style.background = 'var(--bg-app)'; }}
               >
                 <td style={{ padding: '11px 16px', fontSize: 13, color: 'var(--text-secondary)' }}>{r.users?.name || '—'}</td>
                 <td style={{ padding: '11px 16px', fontSize: 13, fontWeight: 500 }}>
@@ -904,7 +907,7 @@ function RunMonitorTab() {
                   ) : '—'}
                 </td>
                 {userProfile?.role === 'admin' && (
-                  <td style={{ padding: '11px 8px' }}>
+                  <td style={{ padding: '11px 8px', position: 'sticky', right: 0, background: 'var(--bg-app)', zIndex: 1, boxShadow: '-4px 0 8px rgba(0,0,0,0.06)' }}>
                     <div style={{ display: 'flex', gap: 4 }}>
                       {r.status === 'complete' && (
                         <button
@@ -1018,6 +1021,7 @@ function RunMonitorTab() {
             ))}
           </tbody>
         </table>
+        </div>
       </div>
 
       {/* GHA Log Modal */}
