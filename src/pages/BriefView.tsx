@@ -432,6 +432,146 @@ function IntelInline({ text }: { text: string }) {
   return <>{parts}</>;
 }
 
+/* ------------------------------------------------------------------ */
+/*  Chat message markdown (inline + block)                             */
+/* ------------------------------------------------------------------ */
+
+function ChatInline({ text }: { text: string }) {
+  const processed = text.replace(/(^|[^-])--([^-]|$)/g, '$1\u2014$2');
+  const parts: React.ReactNode[] = [];
+  const regex = /(\*\*(.+?)\*\*|`([^`]+)`|\*(\S[^*]*?\S|\S)\*)/g;
+  let lastIndex = 0;
+  let match;
+  let key = 0;
+
+  while ((match = regex.exec(processed)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(<span key={key++}>{processed.slice(lastIndex, match.index)}</span>);
+    }
+    if (match[2]) {
+      parts.push(<strong key={key++}>{match[2]}</strong>);
+    } else if (match[3]) {
+      parts.push(
+        <code key={key++} style={{
+          background: 'rgba(0,0,0,0.06)', borderRadius: 3,
+          padding: '1px 4px', fontSize: '0.9em',
+        }}>{match[3]}</code>
+      );
+    } else if (match[4]) {
+      parts.push(<em key={key++}>{match[4]}</em>);
+    }
+    lastIndex = match.index + match[0].length;
+  }
+
+  if (lastIndex < processed.length) {
+    parts.push(<span key={key++}>{processed.slice(lastIndex)}</span>);
+  }
+
+  return <>{parts}</>;
+}
+
+function ChatMarkdown({ text }: { text: string }) {
+  if (!text) return null;
+
+  const lines = text.split('\n');
+  const elements: React.ReactNode[] = [];
+  let key = 0;
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    // Fenced code block
+    if (line.trimStart().startsWith('```')) {
+      const codeLines: string[] = [];
+      i++;
+      while (i < lines.length && !lines[i].trimStart().startsWith('```')) {
+        codeLines.push(lines[i]);
+        i++;
+      }
+      if (i < lines.length) i++;
+      elements.push(
+        <pre key={key++} style={{
+          background: 'rgba(0,0,0,0.04)', borderRadius: 6, padding: '8px 10px',
+          fontSize: 12, overflowX: 'auto', margin: '4px 0',
+          whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+        }}>
+          <code>{codeLines.join('\n')}</code>
+        </pre>
+      );
+      continue;
+    }
+
+    // Heading
+    const headingMatch = line.match(/^(#{1,3})\s+(.+)/);
+    if (headingMatch) {
+      const level = headingMatch[1].length;
+      const fontSize = level === 1 ? 15 : level === 2 ? 14 : 13;
+      elements.push(
+        <div key={key++} style={{ fontWeight: 600, fontSize, marginTop: 8, marginBottom: 2 }}>
+          <ChatInline text={headingMatch[2]} />
+        </div>
+      );
+      i++;
+      continue;
+    }
+
+    // Horizontal rule
+    if (/^-{3,}$/.test(line.trim())) {
+      elements.push(
+        <hr key={key++} style={{ border: 'none', borderTop: `1px solid ${COLORS.border}`, margin: '8px 0' }} />
+      );
+      i++;
+      continue;
+    }
+
+    // Bullet list
+    if (/^\s*[-*]\s/.test(line)) {
+      const items: string[] = [];
+      while (i < lines.length && /^\s*[-*]\s/.test(lines[i])) {
+        items.push(lines[i].replace(/^\s*[-*]\s/, ''));
+        i++;
+      }
+      elements.push(
+        <ul key={key++} style={{ margin: '4px 0', paddingLeft: 20 }}>
+          {items.map((item, j) => <li key={j} style={{ marginBottom: 2 }}><ChatInline text={item} /></li>)}
+        </ul>
+      );
+      continue;
+    }
+
+    // Numbered list
+    if (/^\s*\d+\.\s/.test(line)) {
+      const items: string[] = [];
+      while (i < lines.length && /^\s*\d+\.\s/.test(lines[i])) {
+        items.push(lines[i].replace(/^\s*\d+\.\s/, ''));
+        i++;
+      }
+      elements.push(
+        <ol key={key++} style={{ margin: '4px 0', paddingLeft: 20 }}>
+          {items.map((item, j) => <li key={j} style={{ marginBottom: 2 }}><ChatInline text={item} /></li>)}
+        </ol>
+      );
+      continue;
+    }
+
+    // Empty line → spacing
+    if (line.trim() === '') {
+      elements.push(<div key={key++} style={{ height: 6 }} />);
+      i++;
+      continue;
+    }
+
+    // Regular text
+    elements.push(
+      <div key={key++}><ChatInline text={line} /></div>
+    );
+    i++;
+  }
+
+  return <>{elements}</>;
+}
+
 function CitedProse({ text, sources, style, onCitationClick }: {
   text: string | undefined | null;
   sources?: any[];
@@ -2972,8 +3112,14 @@ export default function BriefView() {
         : Promise.resolve({ data: null });
 
       const chatPromise = workerFetch(`/chat/${run_id}/history?offset=0&limit=100`)
-        .then(r => r.json())
-        .catch(() => ({ messages: [], total: 0 }));
+        .then(r => {
+          if (!r.ok) throw new Error(`Chat history fetch failed: ${r.status}`);
+          return r.json();
+        })
+        .catch((err) => {
+          console.warn('[BriefChat] Failed to load chat history:', err.message);
+          return { messages: [], total: 0 };
+        });
 
       const [briefResult, chatData] = await Promise.all([briefPromise, chatPromise]);
 
@@ -2981,7 +3127,8 @@ export default function BriefView() {
       if (briefResult.data) setBrief(briefResult.data as Brief);
 
       // Seed chat messages from persisted history (always set — clears stale state on navigation)
-      setChatMessages(chatData.messages || []);
+      const msgs = Array.isArray(chatData.messages) ? chatData.messages : [];
+      setChatMessages(msgs);
       setChatTotal(chatData.total ?? 0);
 
       if (!cancelled) setLoading(false);
@@ -3996,7 +4143,7 @@ export default function BriefView() {
                         background: msg.role === 'user' ? COLORS.purple : 'var(--brief-surface)',
                         fontSize: 13, lineHeight: 1.5,
                         color: msg.role === 'user' ? '#fff' : COLORS.body,
-                        whiteSpace: 'pre-wrap',
+                        whiteSpace: msg.role === 'user' ? 'pre-wrap' : 'normal',
                       }}>
                         {/* Attachment chips in user messages */}
                         {msg.role === 'user' && msg.attachments && msg.attachments.length > 0 && (
@@ -4016,7 +4163,7 @@ export default function BriefView() {
                             ))}
                           </div>
                         )}
-                        {msg.content}
+                        {msg.role === 'assistant' ? <ChatMarkdown text={msg.content} /> : msg.content}
                         {streaming && i === chatMessages.length - 1 && msg.role === 'assistant' && (
                           <span style={{
                             display: 'inline-block', width: 2, height: 14,
