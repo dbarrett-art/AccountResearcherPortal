@@ -18,11 +18,19 @@ interface UserRow {
   manager_id: string | null; credits_remaining: number;
 }
 
+interface PipelineWarning {
+  module: string;
+  severity: string;
+  message: string;
+  timestamp: string;
+}
+
 interface RunRow {
   id: string; company: string; url: string | null; created_at: string; started_at: string | null; completed_at: string | null;
   status: 'queued' | 'running' | 'complete' | 'failed';
-  error_message: string | null; pdf_url: string | null; gha_run_id: string | null;
+  error_message: string | null; pdf_url: string | null; gha_run_id: string | null; brief_id: string | null;
   user_id: string; users?: { name: string; email: string }; market: string | null;
+  warnings: PipelineWarning[] | null;
 }
 
 const LANGUAGE_FLAGS: Record<string, string> = {
@@ -78,6 +86,63 @@ function FreshnessBadge({ createdAt, status }: { createdAt: string; status: stri
     );
   }
   return null;
+}
+
+function WarningBadge({ warnings }: { warnings: PipelineWarning[] | null }) {
+  const [expanded, setExpanded] = useState(false);
+  if (!warnings || warnings.length === 0) return null;
+  return (
+    <span style={{ position: 'relative', display: 'inline-flex', marginLeft: 6 }}>
+      <button
+        onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
+        title={`${warnings.length} warning${warnings.length > 1 ? 's' : ''}`}
+        style={{
+          background: 'rgba(234,179,8,0.15)',
+          border: 'none',
+          borderRadius: 4,
+          padding: '2px 6px',
+          cursor: 'pointer',
+          fontSize: 12,
+          fontWeight: 500,
+          color: '#b45309',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 3,
+        }}
+      >
+        <span style={{ fontSize: 13 }}>{'\u26A0'}</span>
+        {warnings.length}
+      </button>
+      {expanded && (
+        <div
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            position: 'absolute',
+            top: '100%',
+            left: 0,
+            marginTop: 4,
+            background: 'var(--bg-surface)',
+            border: '1px solid var(--border)',
+            borderRadius: 6,
+            padding: 10,
+            minWidth: 300,
+            maxWidth: 420,
+            zIndex: 50,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+            fontSize: 12,
+          }}
+        >
+          <div style={{ fontWeight: 600, marginBottom: 6, color: '#b45309' }}>Pipeline Warnings</div>
+          {warnings.map((w, i) => (
+            <div key={i} style={{ marginBottom: 6, paddingBottom: 6, borderBottom: i < warnings.length - 1 ? '1px solid var(--border)' : 'none' }}>
+              <div style={{ fontWeight: 500, fontSize: 11, color: 'var(--text-secondary)' }}>{w.module}</div>
+              <div style={{ color: 'var(--text-primary)' }}>{w.message}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </span>
+  );
 }
 
 function ConfirmDialog({ message, onConfirm, onCancel }: {
@@ -626,7 +691,7 @@ function RunMonitorTab() {
     (async () => {
       const { data } = await supabase
         .from('runs')
-        .select('id, company, url, created_at, started_at, completed_at, status, error_message, pdf_url, gha_run_id, user_id, market, users!runs_user_id_fkey(name, email)')
+        .select('id, company, url, created_at, started_at, completed_at, status, error_message, pdf_url, gha_run_id, user_id, market, warnings, brief_id, users!runs_user_id_fkey(name, email)')
         .order('created_at', { ascending: false })
         .limit(200);
       if (data) setRuns(data as unknown as RunRow[]);
@@ -855,6 +920,7 @@ function RunMonitorTab() {
                 </td>
                 <td style={{ padding: '11px 16px' }} title={r.error_message || ''}>
                   <StatusBadge status={r.status} />
+                  <WarningBadge warnings={r.warnings} />
                   {r.status === 'running' && progressMap[r.id] && (
                     <div style={{ marginTop: 6, minWidth: 140 }}>
                       <ProgressBar {...progressMap[r.id]} />
@@ -909,7 +975,7 @@ function RunMonitorTab() {
                 {userProfile?.role === 'admin' && (
                   <td style={{ padding: '11px 8px', position: 'sticky', right: 0, background: 'var(--bg-app)', zIndex: 1, boxShadow: '-4px 0 8px rgba(0,0,0,0.06)' }}>
                     <div style={{ display: 'flex', gap: 4 }}>
-                      {r.status === 'complete' && (
+                      {r.status === 'complete' && r.brief_id && (
                         <button
                           onClick={() => navigate(`/briefs/${r.id}`)}
                           title="View brief"

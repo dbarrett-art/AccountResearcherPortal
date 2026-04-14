@@ -641,6 +641,7 @@ export default function Territory() {
                             )}
                             <td style={{ padding: '11px 16px', textAlign: 'center' }}>
                               <div style={{ display: 'flex', justifyContent: 'center', gap: 6 }}>
+                                {row.brief_id && (
                                 <button
                                   onClick={() => navigate(`/briefs/${row.run_id}`)}
                                   title="View brief"
@@ -654,6 +655,7 @@ export default function Territory() {
                                 >
                                   <Eye size={14} />
                                 </button>
+                                )}
                                 {row.url && (
                                   <button
                                     onClick={() => setRerunConfirm(row.run_id)}
