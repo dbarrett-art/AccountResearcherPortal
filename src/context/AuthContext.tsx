@@ -9,6 +9,7 @@ export interface UserProfile {
   role: 'ae' | 'manager' | 'admin';
   credits_remaining: number;
   manager_id: string | null;
+  feedback_gate_enabled?: boolean;
 }
 
 interface AuthContextType {
@@ -32,7 +33,7 @@ async function fetchOrCreateProfile(user: User): Promise<UserProfile | null> {
   // Try to fetch existing profile
   const { data, error } = await supabase
     .from('users')
-    .select('id, email, name, role, credits_remaining, manager_id')
+    .select('id, email, name, role, credits_remaining, manager_id, feedback_gate_enabled')
     .eq('id', user.id)
     .single();
 
@@ -52,7 +53,7 @@ async function fetchOrCreateProfile(user: User): Promise<UserProfile | null> {
         role: 'ae',
         credits_remaining: 5,
       })
-      .select('id, email, name, role, credits_remaining, manager_id')
+      .select('id, email, name, role, credits_remaining, manager_id, feedback_gate_enabled')
       .single();
     if (insertErr) {
       console.error('Failed to create user profile:', insertErr);

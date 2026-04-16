@@ -66,6 +66,9 @@ export default function Submit() {
   const [duplicate, setDuplicate] = useState<{ name: string; days: number; user: string } | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
+  // Feedback gate state
+  const [feedbackBlocked, setFeedbackBlocked] = useState<{ run_id: string; title: string; created_at: string }[]>([]);
+
   // Credit request modal state
   const [creditModalOpen, setCreditModalOpen] = useState(false);
   const [creditAmount, setCreditAmount] = useState(5);
@@ -151,7 +154,15 @@ export default function Submit() {
       });
       clearTimeout(timeout);
 
-      if (res.status === 402) {
+      if (res.status === 403) {
+        const data = await res.json();
+        if (data.error === 'feedback_gate' && data.blockedBy) {
+          setFeedbackBlocked(data.blockedBy);
+          setBanner({ type: 'error', msg: `You need to submit feedback on ${data.blockedBy.length} brief(s) before running a new one.` });
+        } else {
+          setBanner({ type: 'error', msg: data.message || 'Forbidden' });
+        }
+      } else if (res.status === 402) {
         setBanner({ type: 'error', msg: 'No credits remaining.' });
         openCreditModal();
       } else if (res.status === 409) {
@@ -379,6 +390,46 @@ export default function Submit() {
                 </div>
               )}
             </Banner>
+          </div>
+        )}
+
+        {/* Feedback gate: blocked briefs list */}
+        {feedbackBlocked.length > 0 && (
+          <div style={{
+            marginTop: 16, background: 'var(--bg-surface)', border: '1px solid var(--border)',
+            borderRadius: 8, padding: 16,
+          }}>
+            <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 10 }}>
+              Briefs needing feedback:
+            </div>
+            {feedbackBlocked.map(b => (
+              <div key={b.run_id} style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                padding: '8px 0', borderBottom: '1px solid var(--border)',
+              }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 500 }}>{b.title}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
+                    {new Date(b.created_at).toLocaleDateString()}
+                  </div>
+                </div>
+                <a href={`#/briefs/${b.run_id}`} style={{
+                  fontSize: 12, color: 'var(--accent)', textDecoration: 'none', fontWeight: 500,
+                }}>
+                  Review &rarr;
+                </a>
+              </div>
+            ))}
+            <button
+              onClick={() => { setFeedbackBlocked([]); setBanner(null); }}
+              style={{
+                marginTop: 12, background: 'transparent', border: '1px solid var(--border-strong)',
+                borderRadius: 6, padding: '6px 14px', fontSize: 12, color: 'var(--text-secondary)',
+                cursor: 'pointer',
+              }}
+            >
+              Check again
+            </button>
           </div>
         )}
       </div>
