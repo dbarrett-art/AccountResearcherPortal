@@ -16,6 +16,7 @@ type Tab = 'users' | 'runs' | 'health' | 'credits' | 'api-credits' | 'assign' | 
 interface UserRow {
   id: string; name: string; email: string; role: string;
   manager_id: string | null; credits_remaining: number;
+  feedback_gate_enabled?: boolean;
 }
 
 interface PipelineWarning {
@@ -181,6 +182,7 @@ function UsersTab({ adminId }: { adminId: string }) {
   const [grantAmounts, setGrantAmounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [confirm, setConfirm] = useState<{ msg: string; action: () => void } | null>(null);
+  const [feedbackStats, setFeedbackStats] = useState<Record<string, { feedback_gate_enabled: boolean; pending_count: number }>>({});
 
   // Add user form state
   const [showAddForm, setShowAddForm] = useState(false);
@@ -243,6 +245,11 @@ function UsersTab({ adminId }: { adminId: string }) {
         setManagers((data as UserRow[]).filter((u) => u.role === 'manager' || u.role === 'admin'));
       }
       setLoading(false);
+      // Fetch feedback stats
+      try {
+        const res = await workerFetch('/admin/users/feedback-stats');
+        if (res.ok) setFeedbackStats(await res.json());
+      } catch { /* non-critical */ }
     })();
   }, []);
 
@@ -286,6 +293,20 @@ function UsersTab({ adminId }: { adminId: string }) {
         setConfirm(null);
       },
     });
+  };
+
+  const toggleFeedbackGate = async (userId: string, enabled: boolean) => {
+    try {
+      const res = await workerFetch(`/admin/users/${userId}/gate`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ feedback_gate_enabled: enabled }),
+      });
+      if (res.ok) {
+        setUsers(prev => prev.map(u => u.id === userId ? { ...u, feedback_gate_enabled: enabled } : u));
+        setFeedbackStats(prev => ({ ...prev, [userId]: { ...prev[userId], feedback_gate_enabled: enabled } }));
+      }
+    } catch { /* silent */ }
   };
 
   const inviteUser = async (userId: string, email: string) => {
@@ -438,11 +459,11 @@ function UsersTab({ adminId }: { adminId: string }) {
 
       <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
         <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 700 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 850 }}>
           <thead>
             <tr style={{ background: 'var(--bg-surface)', borderBottom: '1px solid var(--border)' }}>
-              {['Name', 'Email', 'Role', 'Manager', 'Credits', 'Actions'].map((h) => (
-                <th key={h} style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', padding: '10px 16px', textAlign: 'left', ...(h === 'Actions' ? { position: 'sticky' as const, right: 0, background: 'var(--bg-surface)', zIndex: 2, boxShadow: '-4px 0 8px rgba(0,0,0,0.06)' } : {}) }}>{h}</th>
+              {['Name', 'Email', 'Role', 'Manager', 'Credits', 'Gate', 'Pending', 'Actions'].map((h) => (
+                <th key={h} style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', padding: '10px 16px', textAlign: 'left', ...(h === 'Actions' ? { position: 'sticky' as const, right: 0, background: 'var(--bg-surface)', zIndex: 2, boxShadow: '-4px 0 8px rgba(0,0,0,0.06)' } : {}), ...(h === 'Gate' || h === 'Pending' ? { textAlign: 'center' as const } : {}) }}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -467,6 +488,34 @@ function UsersTab({ adminId }: { adminId: string }) {
                   </select>
                 </td>
                 <td style={{ padding: '11px 16px', fontSize: 13 }}>{u.credits_remaining}</td>
+                <td style={{ padding: '11px 16px', textAlign: 'center' }}>
+                  <button
+                    onClick={() => toggleFeedbackGate(u.id, !u.feedback_gate_enabled)}
+                    title={u.feedback_gate_enabled ? 'Feedback gate ON — click to disable' : 'Feedback gate OFF — click to enable'}
+                    style={{
+                      background: u.feedback_gate_enabled ? 'rgba(34,197,94,0.15)' : 'rgba(136,136,136,0.1)',
+                      border: u.feedback_gate_enabled ? '1px solid rgba(34,197,94,0.3)' : '1px solid var(--border-strong)',
+                      borderRadius: 10, padding: '3px 10px', fontSize: 11, fontWeight: 500,
+                      color: u.feedback_gate_enabled ? '#16a34a' : 'var(--text-tertiary)',
+                      cursor: 'pointer', transition: 'all 0.15s',
+                    }}
+                  >
+                    {u.feedback_gate_enabled ? 'ON' : 'OFF'}
+                  </button>
+                </td>
+                <td style={{ padding: '11px 16px', textAlign: 'center', fontSize: 13 }}>
+                  {(() => {
+                    const count = feedbackStats[u.id]?.pending_count ?? 0;
+                    return count > 0 ? (
+                      <span style={{
+                        background: 'rgba(239,68,68,0.12)', color: '#ef4444',
+                        padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 600,
+                      }}>{count}</span>
+                    ) : (
+                      <span style={{ color: 'var(--text-tertiary)' }}>0</span>
+                    );
+                  })()}
+                </td>
                 <td style={{ padding: '11px 16px', position: 'sticky', right: 0, background: 'var(--bg-app)', zIndex: 1, boxShadow: '-4px 0 8px rgba(0,0,0,0.06)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <input type="number" min={1} max={20}
@@ -794,9 +843,27 @@ function RunMonitorTab() {
       }
     };
     poll();
-    const interval = setInterval(poll, 15000);
+    const interval = setInterval(poll, 10000);
     return () => clearInterval(interval);
   }, [runningIds, hasQueued, session]);
+
+  // Auto-refresh runs while any are running/queued (fallback for unreliable Realtime)
+  const hasActive = runs.some(r => r.status === 'running' || r.status === 'queued');
+  useEffect(() => {
+    if (!hasActive) return;
+    const refresh = async () => {
+      try {
+        const { data } = await supabase
+          .from('runs')
+          .select('id, company, url, created_at, started_at, completed_at, status, error_message, pdf_url, gha_run_id, user_id, market, warnings, brief_id, users!runs_user_id_fkey(name, email)')
+          .order('created_at', { ascending: false })
+          .limit(200);
+        if (data) setRuns(data as unknown as RunRow[]);
+      } catch { /* silent */ }
+    };
+    const interval = setInterval(refresh, 5000);
+    return () => clearInterval(interval);
+  }, [hasActive]);
 
   const filtered = runs.filter((r) => {
     if (statusFilter !== 'all' && r.status !== statusFilter) return false;

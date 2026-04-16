@@ -204,9 +204,17 @@ export default function MyBriefs() {
       }
     };
     poll();
-    const interval = setInterval(poll, 15000);
+    const interval = setInterval(poll, 10000);
     return () => clearInterval(interval);
   }, [runningIds, session]);
+
+  // Auto-refresh runs while any are running/queued (fallback for unreliable Realtime)
+  const hasActive = runs.some(r => r.status === 'running' || r.status === 'queued');
+  useEffect(() => {
+    if (!hasActive) return;
+    const interval = setInterval(() => { fetchRuns(); }, 5000);
+    return () => clearInterval(interval);
+  }, [hasActive, fetchRuns]);
 
   const handleRetry = async (runId: string) => {
     if (!session) return;
