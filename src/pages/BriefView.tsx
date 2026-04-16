@@ -6,8 +6,9 @@ import Layout from '../components/Layout';
 import TableSkeleton from '../components/TableSkeleton';
 import usePageTitle from '../hooks/usePageTitle';
 import useWindowWidth from '../hooks/useWindowWidth';
-import { ArrowLeft, FileText, X, ChevronDown, ExternalLink, Send, Trash2, Activity, Share2, RefreshCw, Paperclip, ClipboardList, Copy, Check, MoreHorizontal } from 'lucide-react';
+import { ArrowLeft, FileText, X, ChevronDown, ExternalLink, Send, Trash2, Activity, Share2, RefreshCw, Paperclip, ClipboardList, Copy, Check, MoreHorizontal, Mail } from 'lucide-react';
 import SectionFeedback from '../components/SectionFeedback';
+import { isMeaningfulFeedback } from '../lib/feedback';
 // DOMPurify removed — CitedProse now renders React elements instead of innerHTML
 
 /* ------------------------------------------------------------------ */
@@ -2890,6 +2891,7 @@ export default function BriefView() {
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pendingAttachments, setPendingAttachments] = useState<ChatAttachment[]>([]);
   const [reviewMode, setReviewMode] = useState(false);
+  const [outreachMode, setOutreachMode] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Section feedback state
@@ -3085,6 +3087,22 @@ export default function BriefView() {
   }, [hasAnyFeedback, feedbackSubmitted]);
 
 
+  // Hydrate feedbackSubmitted from server on mount / run change
+  useEffect(() => {
+    if (!run_id || !session) return;
+    let cancelled = false;
+    workerFetch(`/feedback/${run_id}`)
+      .then(r => r.json())
+      .then(data => {
+        if (cancelled) return;
+        if (data.exists && (isMeaningfulFeedback(data.comment) || isMeaningfulFeedback(data.overall_comment))) {
+          setFeedbackSubmitted(true);
+        }
+      })
+      .catch(() => {}); // silent — non-critical
+    return () => { cancelled = true; };
+  }, [run_id, session]);
+
   // sparkle keyframes moved to inline <style> tag in JSX
 
   useEffect(() => {
@@ -3271,6 +3289,7 @@ export default function BriefView() {
           market: run?.market ?? null,
           messages: apiMessages,
           reviewMode: currentReviewMode || undefined,
+          outreachMode: outreachMode || undefined,
           attachments: currentAttachments?.map(a => ({ type: a.type, mimeType: a.mimeType, filename: a.filename, data: a.data })),
         }),
       });
@@ -3460,6 +3479,36 @@ export default function BriefView() {
                     background: 'transparent', color: COLORS.secondary,
                   }}>
                     <ClipboardList size={14} /> Review PSP
+                  </button>
+                  <button onClick={() => {
+                    setChatOpen(true);
+                    setOutreachMode(true);
+                    const matrix = personas?.matrix;
+                    let firstContactName = '';
+                    if (matrix) {
+                      outer: for (const fn of ['design', 'engineering', 'product']) {
+                        for (const tier of ['eb', 'champion', 'coach']) {
+                          const contacts = matrix?.[fn]?.[tier];
+                          if (Array.isArray(contacts) && contacts.length > 0 && contacts[0]?.name) {
+                            firstContactName = contacts[0].name;
+                            break outer;
+                          }
+                        }
+                      }
+                    }
+                    const companyName = pov?.company_name || run?.company || '';
+                    setChatInput(firstContactName
+                      ? `Help me write a cold email to ${firstContactName} at ${companyName}.`
+                      : `Help me write a cold email to a prospect at ${companyName}.`
+                    );
+                  }} style={{
+                    display: 'flex', alignItems: 'center', gap: 6, padding: '6px 13px',
+                    borderRadius: 'var(--border-radius-md, 8px)',
+                    border: '0.5px solid var(--color-border-secondary, #d6d3d1)',
+                    fontSize: 13, cursor: 'pointer', fontFamily: FONTS.sans,
+                    background: 'transparent', color: COLORS.secondary,
+                  }}>
+                    <Mail size={14} /> Write Outreach
                   </button>
                   <button onClick={() => {
                     setToastMessage('Coming soon — Generate PSP will be available once we\'ve reviewed example plans.');
@@ -3953,7 +4002,9 @@ export default function BriefView() {
 
                     {/* Overall comments */}
                     <div style={{ padding: '14px 0 8px' }}>
-                      <div style={{ fontSize: 13, color: 'var(--brief-tertiary)', marginBottom: 6 }}>Overall comments (optional)</div>
+                      <div style={{ fontSize: 13, color: 'var(--brief-tertiary)', marginBottom: 6 }}>
+                        Overall comments {userProfile?.feedback_gate_enabled ? '' : '(optional)'}
+                      </div>
                       <textarea
                         value={overallComment}
                         onChange={e => setOverallComment(e.target.value)}
@@ -3968,46 +4019,65 @@ export default function BriefView() {
                         onFocus={e => { e.currentTarget.style.borderColor = '#5e6ad2'; }}
                         onBlur={e => { e.currentTarget.style.borderColor = ''; }}
                       />
+                      {userProfile?.feedback_gate_enabled && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
+                          <div style={{ fontSize: 11, color: 'var(--brief-faint)' }}>
+                            Add a comment to submit feedback (min. 20 characters)
+                          </div>
+                          <div style={{
+                            fontSize: 11, fontVariantNumeric: 'tabular-nums',
+                            color: overallComment.trim().length >= 20 ? '#22c55e' : 'var(--brief-faint)',
+                          }}>
+                            {overallComment.trim().length}/20
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </>
                 )}
               </div>
 
               {/* Footer */}
-              {!feedbackSubmitted && (
-                <div style={{
-                  padding: '14px 20px', borderTop: '1px solid var(--brief-border)',
-                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                  flexShrink: 0,
-                }}>
-                  <span style={{ fontSize: 12, color: 'var(--brief-faint)' }}>
-                    {ratedCount} of {FEEDBACK_SECTIONS.filter(s => s.id !== 'icp_fit' || userProfile?.role === 'manager' || userProfile?.role === 'admin').length} sections rated
-                  </span>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button onClick={() => setRateModalOpen(false)} style={{
-                      background: 'transparent', border: '1px solid var(--brief-input-border)',
-                      borderRadius: 6, padding: '7px 16px', fontSize: 13,
-                      color: 'var(--brief-tertiary)', cursor: 'pointer', fontFamily: FONTS.sans,
-                    }}>
-                      Cancel
-                    </button>
-                    <button
-                      onClick={handleModalSubmit}
-                      disabled={ratedCount === 0 || feedbackSubmitting}
-                      style={{
-                        background: ratedCount > 0 ? '#5e6ad2' : 'var(--brief-input-border)',
-                        border: 'none', borderRadius: 6, padding: '7px 20px',
-                        fontSize: 13, fontWeight: 500,
-                        color: ratedCount > 0 ? '#fff' : 'var(--brief-faint)',
-                        cursor: ratedCount > 0 ? 'pointer' : 'default',
-                        fontFamily: FONTS.sans,
-                      }}
-                    >
-                      {feedbackSubmitting ? 'Sending...' : 'Submit'}
-                    </button>
+              {!feedbackSubmitted && (() => {
+                const gateActive = !!userProfile?.feedback_gate_enabled;
+                const hasAnyComment = Object.values(sectionFeedback).some(f => f.comment && f.comment.trim().length > 0);
+                const meetsMeaningful = isMeaningfulFeedback(overallComment) || (hasAnyComment && Object.values(sectionFeedback).some(f => isMeaningfulFeedback(f.comment)));
+                const canSubmit = ratedCount > 0 && (!gateActive || meetsMeaningful) && !feedbackSubmitting;
+                return (
+                  <div style={{
+                    padding: '14px 20px', borderTop: '1px solid var(--brief-border)',
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    flexShrink: 0,
+                  }}>
+                    <span style={{ fontSize: 12, color: 'var(--brief-faint)' }}>
+                      {ratedCount} of {FEEDBACK_SECTIONS.filter(s => s.id !== 'icp_fit' || userProfile?.role === 'manager' || userProfile?.role === 'admin').length} sections rated
+                    </span>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button onClick={() => setRateModalOpen(false)} style={{
+                        background: 'transparent', border: '1px solid var(--brief-input-border)',
+                        borderRadius: 6, padding: '7px 16px', fontSize: 13,
+                        color: 'var(--brief-tertiary)', cursor: 'pointer', fontFamily: FONTS.sans,
+                      }}>
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleModalSubmit}
+                        disabled={!canSubmit}
+                        style={{
+                          background: canSubmit ? '#5e6ad2' : 'var(--brief-input-border)',
+                          border: 'none', borderRadius: 6, padding: '7px 20px',
+                          fontSize: 13, fontWeight: 500,
+                          color: canSubmit ? '#fff' : 'var(--brief-faint)',
+                          cursor: canSubmit ? 'pointer' : 'default',
+                          fontFamily: FONTS.sans,
+                        }}
+                      >
+                        {feedbackSubmitting ? 'Sending...' : 'Submit'}
+                      </button>
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
             </div>
           </>
         );
@@ -4026,6 +4096,29 @@ export default function BriefView() {
             {[
               { label: 'Chat', icon: <svg width="16" height="16" viewBox="0 0 20 20" fill="none"><path d="M10 2.5 L11.3 7.2 L16.5 8.5 L11.3 9.8 L10 14.5 L8.7 9.8 L3.5 8.5 L8.7 7.2 Z" fill="#7F77DD"/></svg>, action: () => { setMobileActionsOpen(false); setChatOpen(true); } },
               { label: 'Review PSP', icon: <ClipboardList size={16} />, action: () => { setMobileActionsOpen(false); setChatOpen(true); reviewFileInputRef.current?.click(); } },
+              { label: 'Write Outreach', icon: <Mail size={16} />, action: () => {
+                setMobileActionsOpen(false);
+                setChatOpen(true);
+                setOutreachMode(true);
+                const matrix = personas?.matrix;
+                let firstContactName = '';
+                if (matrix) {
+                  outer: for (const fn of ['design', 'engineering', 'product']) {
+                    for (const tier of ['eb', 'champion', 'coach']) {
+                      const contacts = matrix?.[fn]?.[tier];
+                      if (Array.isArray(contacts) && contacts.length > 0 && contacts[0]?.name) {
+                        firstContactName = contacts[0].name;
+                        break outer;
+                      }
+                    }
+                  }
+                }
+                const companyName = pov?.company_name || run?.company || '';
+                setChatInput(firstContactName
+                  ? `Help me write a cold email to ${firstContactName} at ${companyName}.`
+                  : `Help me write a cold email to a prospect at ${companyName}.`
+                );
+              } },
               { label: 'Generate PSP', icon: <FileText size={16} />, action: () => { setMobileActionsOpen(false); setToastMessage('Coming soon — Generate PSP will be available once we\'ve reviewed example plans.'); setTimeout(() => setToastMessage(null), 4000); } },
               ...(session ? [{ label: feedbackSubmitted ? 'Rated!' : 'Rate', icon: <span style={{ fontSize: 16 }}>{feedbackSubmitted ? '\u2605' : '\u2606'}</span>, action: () => { setMobileActionsOpen(false); setRateModalOpen(true); } }] : []),
             ].map((item, i) => (
@@ -4076,7 +4169,23 @@ export default function BriefView() {
             flexShrink: 0,
           }}>
             <div>
-              <div style={{ fontWeight: 500, fontSize: 13, color: COLORS.body }}>Chat</div>
+              <div style={{ fontWeight: 500, fontSize: 13, color: COLORS.body, display: 'flex', alignItems: 'center', gap: 8 }}>
+                Chat
+                {outreachMode && (
+                  <span style={{
+                    background: 'var(--badge-yellow-bg)', color: 'var(--badge-yellow-text)',
+                    fontSize: 10, fontWeight: 600, borderRadius: 4, padding: '2px 7px',
+                    display: 'inline-flex', alignItems: 'center', gap: 4,
+                  }}>
+                    Outreach mode
+                    <button onClick={() => setOutreachMode(false)} style={{
+                      background: 'none', border: 'none', color: 'var(--badge-yellow-text)',
+                      cursor: 'pointer', padding: 0, fontSize: 10, fontWeight: 400,
+                      textDecoration: 'underline', fontFamily: FONTS.sans,
+                    }}>Exit</button>
+                  </span>
+                )}
+              </div>
               <div style={{ fontSize: 12, color: COLORS.tertiary, marginTop: 1 }}>
                 {pov?.company_name || run.company}
               </div>
