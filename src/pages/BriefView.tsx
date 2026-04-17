@@ -3994,15 +3994,17 @@ export default function BriefView() {
                   }}>
                     <ClipboardList size={14} /> Review PSP
                   </button>
-                  <button onClick={openOutreachPicker} style={{
-                    display: 'flex', alignItems: 'center', gap: 6, padding: '6px 13px',
-                    borderRadius: 'var(--border-radius-md, 8px)',
-                    border: '0.5px solid var(--color-border-secondary, #d6d3d1)',
-                    fontSize: 13, cursor: 'pointer', fontFamily: FONTS.sans,
-                    background: 'transparent', color: COLORS.secondary,
-                  }}>
-                    <Mail size={14} /> Write Outreach
-                  </button>
+                  {userProfile?.role === 'admin' && (
+                    <button onClick={openOutreachPicker} style={{
+                      display: 'flex', alignItems: 'center', gap: 6, padding: '6px 13px',
+                      borderRadius: 'var(--border-radius-md, 8px)',
+                      border: '0.5px solid var(--color-border-secondary, #d6d3d1)',
+                      fontSize: 13, cursor: 'pointer', fontFamily: FONTS.sans,
+                      background: 'transparent', color: COLORS.secondary,
+                    }}>
+                      <Mail size={14} /> Write Outreach
+                    </button>
+                  )}
                   <button onClick={() => {
                     setToastMessage('Coming soon — Generate PSP will be available once we\'ve reviewed example plans.');
                     setTimeout(() => setToastMessage(null), 4000);
@@ -4592,10 +4594,10 @@ export default function BriefView() {
             {[
               { label: 'Chat', icon: <svg width="16" height="16" viewBox="0 0 20 20" fill="none"><path d="M10 2.5 L11.3 7.2 L16.5 8.5 L11.3 9.8 L10 14.5 L8.7 9.8 L3.5 8.5 L8.7 7.2 Z" fill="#7F77DD"/></svg>, action: () => { setMobileActionsOpen(false); setChatOpen(true); } },
               { label: 'Review PSP', icon: <ClipboardList size={16} />, action: () => { setMobileActionsOpen(false); setChatOpen(true); reviewFileInputRef.current?.click(); } },
-              { label: 'Write Outreach', icon: <Mail size={16} />, action: () => {
+              ...(userProfile?.role === 'admin' ? [{ label: 'Write Outreach', icon: <Mail size={16} />, action: () => {
                 setMobileActionsOpen(false);
                 openOutreachPicker();
-              } },
+              } }] : []),
               { label: 'Generate PSP', icon: <FileText size={16} />, action: () => { setMobileActionsOpen(false); setToastMessage('Coming soon — Generate PSP will be available once we\'ve reviewed example plans.'); setTimeout(() => setToastMessage(null), 4000); } },
               ...(session ? [{ label: feedbackSubmitted ? 'Rated!' : 'Rate', icon: <span style={{ fontSize: 16 }}>{feedbackSubmitted ? '\u2605' : '\u2606'}</span>, action: () => { setMobileActionsOpen(false); setRateModalOpen(true); } }] : []),
             ].map((item, i) => (
@@ -4839,7 +4841,7 @@ export default function BriefView() {
           )}
 
           {/* Outreach contact picker */}
-          {outreachPickerOpen && (
+          {outreachPickerOpen && userProfile?.role === 'admin' && (
             <div style={{
               borderTop: `1px solid ${COLORS.border}`,
               background: 'var(--brief-bg)',
