@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase, workerFetch } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
@@ -85,6 +85,363 @@ function getSuggestedPrompts(market: string | null): string[] {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Section labels — localised for fr, defaults to en                  */
+/* ------------------------------------------------------------------ */
+
+type LabelKey =
+  | 'section_icp_fit' | 'section_about' | 'section_org_structure'
+  | 'section_why_anything' | 'section_why_now' | 'section_why_figma'
+  | 'section_whitespace' | 'section_value_pyramid' | 'section_digital_products'
+  | 'section_contacts' | 'section_job_signals' | 'section_key_executives'
+  | 'section_tech_partners' | 'section_research_deep_dive' | 'section_sources'
+  | 'section_proof_points'
+  | 'count_objectives' | 'count_triggers' | 'count_products' | 'count_items'
+  | 'count_signals' | 'count_contacts' | 'count_found' | 'count_partners'
+  | 'count_sources' | 'count_sections'
+  | 'callout_strategy' | 'callout_corporate_strategy' | 'callout_macro_forces'
+  | 'callout_strongest_angle' | 'callout_entry_point' | 'callout_what_theyre_saying'
+  | 'callout_design_infrastructure' | 'callout_design_team' | 'callout_handoff'
+  | 'callout_multi_brand' | 'callout_pain_quotes'
+  | 'ws_current_arr' | 'ws_total_whitespace' | 'ws_yoy_growth'
+  | 'ws_seat_opportunities' | 'ws_dev_mode' | 'ws_dev_mode_seats'
+  | 'ws_full_seat_design' | 'ws_designer_seats'
+  | 'ws_full_seat_make' | 'ws_pm_make_seats'
+  | 'ws_governance_plus' | 'ws_governance_plus_addon' | 'ws_priority'
+  | 'ws_enterprise_upgrade' | 'ws_enterprise_tier_upgrade'
+  | 'ws_services_opportunities' | 'ws_125k_engagement'
+  | 'ws_arr_minimum' | 'ws_services_floor' | 'ws_arr_floor_note'
+  | 'ws_total_whitespace_footer'
+  | 'ws_licensed_of'
+  | 'contact_outreach_context' | 'contact_personal_signal' | 'contact_angle'
+  | 'contact_departed' | 'contact_no_email' | 'contact_recommended_first_move'
+  | 'presence_high' | 'presence_medium' | 'presence_low' | 'presence_none'
+  | 'research_gaps_banner' | 'research_gaps_expand'
+  | 'old_schema_warning' | 'download_full_pdf' | 'research_not_available'
+  | 'show_all_products'
+  | 'nudge_how_was' | 'nudge_rate_it' | 'rate_this_section'
+  | 'rate_this_brief' | 'feedback_thanks' | 'feedback_helps'
+  | 'icp_suffix'
+  | 'age_today' | 'age_stale' | 'age_days_ago' | 'age_days_ago_old'
+  | 'source_arrow'
+  | 'show_less' | 'read_more'
+  | 'fb_icp_fit' | 'fb_about' | 'fb_why_anything' | 'fb_why_now'
+  | 'fb_why_figma' | 'fb_whitespace' | 'fb_value_pyramid'
+  | 'fb_contact_matrix' | 'fb_research_deep_dive'
+  | 'sources_source' | 'sources_source_n'
+  | 'footer_linkedin_active'
+  | 'objective' | 'objective_n'
+  | 'design_team_label' | 'design_handoff_label' | 'design_multibrand_label';
+
+const LABELS: Record<string, Record<LabelKey, string>> = {
+  en: {
+    section_icp_fit: 'ICP Fit',
+    section_about: 'About',
+    section_org_structure: 'Organisational Structure',
+    section_why_anything: 'Why Anything',
+    section_why_now: 'Why Now',
+    section_why_figma: 'Why Figma',
+    section_whitespace: 'Whitespace & Opportunity',
+    section_value_pyramid: 'Value Pyramid',
+    section_digital_products: 'Digital Products',
+    section_contacts: 'Who to Contact',
+    section_job_signals: 'Job Signals',
+    section_key_executives: 'Key Executives',
+    section_tech_partners: 'Technology Partnerships',
+    section_research_deep_dive: 'Research Deep Dive',
+    section_sources: 'Sources',
+    section_proof_points: 'Proof Points',
+
+    count_objectives: 'objectives',
+    count_triggers: 'triggers',
+    count_products: 'products',
+    count_items: 'items',
+    count_signals: 'signals',
+    count_contacts: 'contacts',
+    count_found: 'found',
+    count_partners: 'partners',
+    count_sources: 'sources',
+    count_sections: 'sections',
+
+    callout_strategy: 'Strategy',
+    callout_corporate_strategy: 'Corporate Strategy',
+    callout_macro_forces: 'Macro Forces',
+    callout_strongest_angle: 'Strongest Angle',
+    callout_entry_point: 'Entry Point',
+    callout_what_theyre_saying: "What They're Saying",
+    callout_design_infrastructure: 'Design Infrastructure',
+    callout_design_team: 'Team',
+    callout_handoff: 'Handoff',
+    callout_multi_brand: 'Multi-brand',
+    callout_pain_quotes: 'Pain Quotes',
+
+    ws_current_arr: 'CURRENT ARR',
+    ws_total_whitespace: 'TOTAL WHITESPACE',
+    ws_yoy_growth: 'YOY GROWTH',
+    ws_seat_opportunities: 'SEAT OPPORTUNITIES',
+    ws_dev_mode: 'DEV MODE',
+    ws_dev_mode_seats: 'Dev Mode seats',
+    ws_full_seat_design: 'FULL SEAT — DESIGN',
+    ws_designer_seats: 'Designer seats',
+    ws_full_seat_make: 'FULL SEAT — MAKE',
+    ws_pm_make_seats: 'PM / Make seats',
+    ws_governance_plus: 'GOVERNANCE+',
+    ws_governance_plus_addon: 'Governance+ add-on',
+    ws_priority: 'priority: true',
+    ws_enterprise_upgrade: 'ENTERPRISE UPGRADE',
+    ws_enterprise_tier_upgrade: 'Enterprise tier upgrade',
+    ws_services_opportunities: 'SERVICES OPPORTUNITIES',
+    ws_125k_engagement: '$125K ENGAGEMENT',
+    ws_arr_minimum: '25% ARR MINIMUM',
+    ws_services_floor: 'Services floor',
+    ws_arr_floor_note: '25% ARR floor — use as anchor if selling a single bundled engagement.',
+    ws_total_whitespace_footer: 'Total Whitespace — seats + Governance+ + services',
+    ws_licensed_of: 'licensed',
+
+    contact_outreach_context: 'Outreach context',
+    contact_personal_signal: 'Personal signal',
+    contact_angle: 'Angle',
+    contact_departed: '\u26A0 Departed',
+    contact_no_email: 'No verified email',
+    contact_recommended_first_move: 'Recommended First Move',
+
+    presence_high: 'High',
+    presence_medium: 'Medium',
+    presence_low: 'Low',
+    presence_none: 'None',
+
+    research_gaps_banner: 'Research gaps — review before your call',
+    research_gaps_expand: 'click to expand',
+
+    old_schema_warning: 'This brief was generated with an earlier pipeline version — some sections may be missing.',
+    download_full_pdf: 'Download full PDF',
+    research_not_available: 'Research intelligence not available for this run. Re-run with --fresh to populate.',
+
+    show_all_products: 'Show all',
+
+    nudge_how_was: 'How was this brief?',
+    nudge_rate_it: 'Rate it \u2192',
+    rate_this_section: 'Rate this section:',
+    rate_this_brief: 'Rate this brief',
+    feedback_thanks: 'Thanks for your feedback!',
+    feedback_helps: 'Your ratings help us improve.',
+
+    icp_suffix: 'ICP',
+
+    age_today: 'Last run \u00B7 Today',
+    age_stale: 'Last run \u00B7 Stale',
+    age_days_ago: 'Last run',
+    age_days_ago_old: 'd old',
+
+    source_arrow: 'Source',
+
+    show_less: 'Show less',
+    read_more: 'Read more',
+
+    fb_icp_fit: 'ICP Fit',
+    fb_about: 'About',
+    fb_why_anything: 'Why Anything',
+    fb_why_now: 'Why Now',
+    fb_why_figma: 'Why Figma',
+    fb_whitespace: 'Whitespace & Opportunity',
+    fb_value_pyramid: 'Value Pyramid',
+    fb_contact_matrix: 'Key Contacts',
+    fb_research_deep_dive: 'Research Deep Dive',
+
+    sources_source: 'Source',
+    sources_source_n: 'Source',
+
+    footer_linkedin_active: 'LinkedIn active',
+
+    objective: 'Objective',
+    objective_n: 'Objective',
+
+    design_team_label: 'Design team',
+    design_handoff_label: 'Handoff',
+    design_multibrand_label: 'Multi-brand',
+  },
+  fr: {
+    section_icp_fit: 'Ad\u00E9quation ICP',
+    section_about: '\u00C0 propos',
+    section_org_structure: 'Structure organisationnelle',
+    section_why_anything: 'Pourquoi agir',
+    section_why_now: 'Pourquoi maintenant',
+    section_why_figma: 'Pourquoi Figma',
+    section_whitespace: 'Whitespace & Opportunit\u00E9',
+    section_value_pyramid: 'Pyramide de valeur',
+    section_digital_products: 'Produits num\u00E9riques',
+    section_contacts: 'Qui contacter',
+    section_job_signals: 'Signaux d\'emploi',
+    section_key_executives: 'Dirigeants cl\u00E9s',
+    section_tech_partners: 'Partenariats technologiques',
+    section_research_deep_dive: 'Recherche approfondie',
+    section_sources: 'Sources',
+    section_proof_points: 'Preuves',
+
+    count_objectives: 'objectifs',
+    count_triggers: 'd\u00E9clencheurs',
+    count_products: 'produits',
+    count_items: '\u00E9l\u00E9ments',
+    count_signals: 'signaux',
+    count_contacts: 'contacts',
+    count_found: 'trouv\u00E9s',
+    count_partners: 'partenaires',
+    count_sources: 'sources',
+    count_sections: 'sections',
+
+    callout_strategy: 'Strat\u00E9gie',
+    callout_corporate_strategy: 'Strat\u00E9gie d\'entreprise',
+    callout_macro_forces: 'Forces macro',
+    callout_strongest_angle: 'Angle le plus fort',
+    callout_entry_point: 'Point d\'entr\u00E9e',
+    callout_what_theyre_saying: 'Ce qu\'ils disent',
+    callout_design_infrastructure: 'Infrastructure de design',
+    callout_design_team: '\u00C9quipe',
+    callout_handoff: 'Handoff',
+    callout_multi_brand: 'Multi-marque',
+    callout_pain_quotes: 'Citations de pain',
+
+    ws_current_arr: 'ARR ACTUEL',
+    ws_total_whitespace: 'WHITESPACE TOTAL',
+    ws_yoy_growth: 'CROISSANCE ANNUELLE',
+    ws_seat_opportunities: 'OPPORTUNIT\u00C9S DE SI\u00C8GES',
+    ws_dev_mode: 'DEV MODE',
+    ws_dev_mode_seats: 'Si\u00E8ges Dev Mode',
+    ws_full_seat_design: 'SI\u00C8GE COMPLET \u2014 DESIGN',
+    ws_designer_seats: 'Si\u00E8ges designers',
+    ws_full_seat_make: 'SI\u00C8GE COMPLET \u2014 MAKE',
+    ws_pm_make_seats: 'Si\u00E8ges PM / Make',
+    ws_governance_plus: 'GOVERNANCE+',
+    ws_governance_plus_addon: 'Add-on Governance+',
+    ws_priority: 'priorit\u00E9 : vraie',
+    ws_enterprise_upgrade: 'UPGRADE ENTERPRISE',
+    ws_enterprise_tier_upgrade: 'Upgrade tier Enterprise',
+    ws_services_opportunities: 'OPPORTUNIT\u00C9S DE SERVICES',
+    ws_125k_engagement: 'ENGAGEMENT 125K$',
+    ws_arr_minimum: 'MINIMUM 25% ARR',
+    ws_services_floor: 'Plancher services',
+    ws_arr_floor_note: 'Plancher 25% ARR \u2014 \u00E0 utiliser comme ancre pour un engagement group\u00E9.',
+    ws_total_whitespace_footer: 'Whitespace total \u2014 si\u00E8ges + Governance+ + services',
+    ws_licensed_of: 'sous licence',
+
+    contact_outreach_context: 'Contexte d\'approche',
+    contact_personal_signal: 'Signal personnel',
+    contact_angle: 'Angle',
+    contact_departed: '\u26A0 A quitt\u00E9',
+    contact_no_email: 'Aucun email v\u00E9rifi\u00E9',
+    contact_recommended_first_move: 'Premier contact recommand\u00E9',
+
+    presence_high: '\u00C9lev\u00E9e',
+    presence_medium: 'Moyenne',
+    presence_low: 'Faible',
+    presence_none: 'Aucune',
+
+    research_gaps_banner: 'Lacunes de recherche \u2014 \u00E0 v\u00E9rifier avant votre appel',
+    research_gaps_expand: 'cliquer pour d\u00E9velopper',
+
+    old_schema_warning: 'Ce brief a \u00E9t\u00E9 g\u00E9n\u00E9r\u00E9 avec une version ant\u00E9rieure du pipeline \u2014 certaines sections peuvent manquer.',
+    download_full_pdf: 'T\u00E9l\u00E9charger le PDF complet',
+    research_not_available: 'Intelligence de recherche non disponible pour cette analyse. Relancer avec --fresh pour g\u00E9n\u00E9rer.',
+
+    show_all_products: 'Afficher les',
+
+    nudge_how_was: 'Comment \u00E9tait ce brief ?',
+    nudge_rate_it: 'L\'\u00E9valuer \u2192',
+    rate_this_section: '\u00C9valuer cette section :',
+    rate_this_brief: '\u00C9valuer ce brief',
+    feedback_thanks: 'Merci pour votre retour !',
+    feedback_helps: 'Vos \u00E9valuations nous aident \u00E0 nous am\u00E9liorer.',
+
+    icp_suffix: 'ICP',
+
+    age_today: 'Derni\u00E8re analyse \u00B7 Aujourd\'hui',
+    age_stale: 'Derni\u00E8re analyse \u00B7 Obsol\u00E8te',
+    age_days_ago: 'Derni\u00E8re analyse',
+    age_days_ago_old: 'j',
+
+    source_arrow: 'Source',
+
+    show_less: 'R\u00E9duire',
+    read_more: 'Lire la suite',
+
+    fb_icp_fit: 'Ad\u00E9quation ICP',
+    fb_about: '\u00C0 propos',
+    fb_why_anything: 'Pourquoi agir',
+    fb_why_now: 'Pourquoi maintenant',
+    fb_why_figma: 'Pourquoi Figma',
+    fb_whitespace: 'Whitespace & Opportunit\u00E9',
+    fb_value_pyramid: 'Pyramide de valeur',
+    fb_contact_matrix: 'Contacts cl\u00E9s',
+    fb_research_deep_dive: 'Recherche approfondie',
+
+    sources_source: 'Source',
+    sources_source_n: 'Source',
+
+    footer_linkedin_active: 'LinkedIn actif',
+
+    objective: 'Objectif',
+    objective_n: 'Objectif',
+
+    design_team_label: '\u00C9quipe design',
+    design_handoff_label: 'Handoff',
+    design_multibrand_label: 'Multi-marque',
+  },
+};
+
+function getLabels(market: string | null | undefined): Record<LabelKey, string> {
+  if (market && market !== 'en' && market !== 'auto' && LABELS[market]) {
+    return LABELS[market];
+  }
+  return LABELS.en;
+}
+
+// Localised signal category labels for Job Signals chips
+const SIGNAL_CATEGORY_LABELS: Record<string, Record<string, string>> = {
+  en: {
+    figma: 'Figma',
+    design_system: 'Design System',
+    design_infrastructure: 'Design Infrastructure',
+    design_hiring: 'Design Hiring',
+    product_velocity: 'Product Velocity',
+    design_maturity: 'Design Maturity',
+    ai_automation: 'AI / Automation',
+    platform_systems: 'Platform / Systems',
+    hiring: 'Hiring',
+    tooling: 'Tooling',
+    ai: 'AI',
+    product: 'Product',
+    new_build: 'New Build',
+    dev_velocity: 'Dev Velocity',
+  },
+  fr: {
+    figma: 'Figma',
+    design_system: 'Design System',
+    design_infrastructure: 'Infrastructure de design',
+    design_hiring: 'Recrutement design',
+    product_velocity: 'V\u00E9locit\u00E9 produit',
+    design_maturity: 'Maturit\u00E9 design',
+    ai_automation: 'IA / Automatisation',
+    platform_systems: 'Plateforme / Syst\u00E8mes',
+    hiring: 'Recrutement',
+    tooling: 'Outillage',
+    ai: 'IA',
+    product: 'Produit',
+    new_build: 'Nouvelle Construction',
+    dev_velocity: 'V\u00E9locit\u00E9 Dev',
+  },
+};
+
+function formatCategoryLocalized(cat: string, market: string | null | undefined): string {
+  if (!cat) return '';
+  const map = (market && market !== 'en' && market !== 'auto' && SIGNAL_CATEGORY_LABELS[market])
+    ? SIGNAL_CATEGORY_LABELS[market]
+    : SIGNAL_CATEGORY_LABELS.en;
+  const key = cat.toLowerCase().replace(/[\s/]+/g, '_').replace(/[^a-z0-9_]/g, '');
+  if (map[key]) return map[key];
+  // Fallback: title-case the snake_case
+  return cat.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+/* ------------------------------------------------------------------ */
 /*  Design tokens                                                      */
 /* ------------------------------------------------------------------ */
 
@@ -154,12 +511,6 @@ const SIGNAL_CATEGORY_COLOURS: Record<string, string> = {
   'product':               '#10b981',
 };
 
-function formatCategory(cat: string): string {
-  return cat
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, c => c.toUpperCase());
-}
-
 const FEEDBACK_SECTIONS = [
   { id: 'icp_fit',           label: 'ICP Fit',                  icon: '\u25CE' },
   { id: 'about',             label: 'About',                    icon: '\u25A4' },
@@ -204,7 +555,7 @@ const isNoisySource = (url: string, title?: string) => {
 /* ------------------------------------------------------------------ */
 
 function Section({
-  title, accent, badge, count, defaultOpen = false, children, feedbackNode,
+  title, accent, badge, count, defaultOpen = false, children, feedbackNode, market,
 }: {
   title: string;
   accent: string;
@@ -213,8 +564,10 @@ function Section({
   defaultOpen?: boolean;
   children: React.ReactNode;
   feedbackNode?: React.ReactNode;
+  market?: string | null;
 }) {
   const [open, setOpen] = useState(defaultOpen);
+  const L = getLabels(market);
   return (
     <div style={{ marginBottom: 8 }}>
       <div
@@ -257,7 +610,7 @@ function Section({
           {children}
           {feedbackNode && (
             <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', gap: 8, marginTop: 12 }}>
-              <span style={{ fontSize: 12, color: COLORS.faint, fontFamily: 'DM Sans, sans-serif' }}>Rate this section:</span>
+              <span style={{ fontSize: 12, color: COLORS.faint, fontFamily: 'DM Sans, sans-serif' }}>{L.rate_this_section}</span>
               {feedbackNode}
             </div>
           )}
@@ -911,10 +1264,17 @@ function IntelMarkdown({ text }: { text: string }) {
 /*  Badges                                                             */
 /* ------------------------------------------------------------------ */
 
-function IcpBadge({ score, size = 'normal' }: { score: string | undefined; size?: 'normal' | 'small' }) {
+const ICP_SCORE_LABELS: Record<string, Record<string, string>> = {
+  en: { Strong: 'Strong', Moderate: 'Moderate', Weak: 'Weak' },
+  fr: { Strong: 'Fort', Moderate: 'Mod\u00E9r\u00E9', Weak: 'Faible' },
+};
+
+function IcpBadge({ score, size = 'normal', market }: { score: string | undefined; size?: 'normal' | 'small'; market?: string | null }) {
   if (!score) return null;
   const isStrong = score === 'Strong';
   const isModerate = score === 'Moderate';
+  const useFr = market === 'fr';
+  const scoreLabel = (useFr ? ICP_SCORE_LABELS.fr : ICP_SCORE_LABELS.en)[score] || score;
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', gap: 6,
@@ -925,7 +1285,7 @@ function IcpBadge({ score, size = 'normal' }: { score: string | undefined; size?
       background: isStrong ? '#ecfdf5' : isModerate ? '#fefce8' : '#fef2f2',
       color: isStrong ? '#065f46' : isModerate ? '#854d0e' : '#991b1b',
     }}>
-      {score} ICP
+      {useFr ? `ICP ${scoreLabel}` : `${scoreLabel} ICP`}
     </span>
   );
 }
@@ -945,16 +1305,18 @@ function TierBadge({ tier }: { tier: string }) {
   );
 }
 
-function AgeBadge({ createdAt }: { createdAt: string | undefined }) {
+function AgeBadge({ createdAt, market }: { createdAt: string | undefined; market?: string | null }) {
   if (!createdAt) return null;
   const days = Math.floor((Date.now() - new Date(createdAt).getTime()) / 86400000);
+  const L = getLabels(market);
+  const dayAgo = market === 'fr' ? 'j' : 'd ago';
   if (days < 1) {
     return (
       <span style={{
         display: 'inline-flex', alignItems: 'center', padding: '2px 8px',
         borderRadius: 4, fontSize: 11, fontWeight: 500, fontFamily: FONTS.sans,
         background: 'var(--badge-green-bg)', color: 'var(--badge-green-text)',
-      }}>Last run · Today</span>
+      }}>{L.age_today}</span>
     );
   }
   if (days > 90) {
@@ -963,7 +1325,7 @@ function AgeBadge({ createdAt }: { createdAt: string | undefined }) {
         display: 'inline-flex', alignItems: 'center', padding: '2px 8px',
         borderRadius: 4, fontSize: 11, fontWeight: 500, fontFamily: FONTS.sans,
         background: 'var(--badge-red-bg)', color: 'var(--badge-red-text)',
-      }}>Last run · Stale — {days}d old</span>
+      }}>{L.age_stale} {'\u2014'} {days}{market === 'fr' ? ' j' : 'd old'}</span>
     );
   }
   if (days > 30) {
@@ -972,7 +1334,7 @@ function AgeBadge({ createdAt }: { createdAt: string | undefined }) {
         display: 'inline-flex', alignItems: 'center', padding: '2px 8px',
         borderRadius: 4, fontSize: 11, fontWeight: 500, fontFamily: FONTS.sans,
         background: 'var(--badge-yellow-bg)', color: 'var(--badge-yellow-text)',
-      }}>Last run · {days}d ago</span>
+      }}>{L.age_days_ago} {'\u00B7'} {days}{market === 'fr' ? ' ' + dayAgo : 'd ago'}</span>
     );
   }
   if (days >= 7) {
@@ -981,7 +1343,7 @@ function AgeBadge({ createdAt }: { createdAt: string | undefined }) {
         display: 'inline-flex', alignItems: 'center', padding: '2px 8px',
         borderRadius: 4, fontSize: 11, fontWeight: 500, fontFamily: FONTS.sans,
         background: 'var(--badge-muted-bg)', color: COLORS.tertiary,
-      }}>Last run · {days}d ago</span>
+      }}>{L.age_days_ago} {'\u00B7'} {days}{market === 'fr' ? ' ' + dayAgo : 'd ago'}</span>
     );
   }
   return null;
@@ -1106,14 +1468,15 @@ function MetricsBar({ pov, isMobile }: { pov: any; hooksData?: any; personas?: a
 /*  Section: ICP Fit                                                   */
 /* ------------------------------------------------------------------ */
 
-function IcpSection({ pov, sources, onCitationClick }: { pov: any; sources: any[]; onCitationClick?: (i: number, src: any, e: React.MouseEvent) => void }) {
+function IcpSection({ pov, sources, onCitationClick, market }: { pov: any; sources: any[]; onCitationClick?: (i: number, src: any, e: React.MouseEvent) => void; market?: string | null }) {
   const icp = pov?.icp_fit || pov?.icp_assessment;
   if (!icp) return null;
+  const L = getLabels(market);
   return (
     <Section
-      title="ICP Fit"
+      title={L.section_icp_fit}
       accent={SECTION_ACCENTS.icp}
-      badge={<IcpBadge score={icp.score} size="small" />}
+      badge={<IcpBadge score={icp.score} size="small" market={market} />}
     >
       <CitedProse text={icp.rationale} sources={sources} onCitationClick={onCitationClick} />
     </Section>
@@ -1215,14 +1578,15 @@ function stripMarkdownHeaders(text: string): string {
     .trim();
 }
 
-function AboutSection({ pov, sources, feedbackNode, onCitationClick }: { pov: any; sources: any[]; feedbackNode?: React.ReactNode; onCitationClick?: (i: number, src: any, e: React.MouseEvent) => void }) {
+function AboutSection({ pov, sources, feedbackNode, onCitationClick, market }: { pov: any; sources: any[]; feedbackNode?: React.ReactNode; onCitationClick?: (i: number, src: any, e: React.MouseEvent) => void; market?: string | null }) {
   const about = pov?.about;
   if (!about) return null;
+  const L = getLabels(market);
 
   const cleanWhatTheyDo = about.what_they_do ? stripMarkdownHeaders(about.what_they_do) : null;
 
   return (
-    <Section title="About" accent={SECTION_ACCENTS.about} feedbackNode={feedbackNode}>
+    <Section title={L.section_about} accent={SECTION_ACCENTS.about} feedbackNode={feedbackNode} market={market}>
       {/* Narrative intro */}
       {(about.who_they_are || cleanWhatTheyDo) && (
         <CitedProse text={about.who_they_are || cleanWhatTheyDo} sources={sources} onCitationClick={onCitationClick} />
@@ -1230,13 +1594,6 @@ function AboutSection({ pov, sources, feedbackNode, onCitationClick }: { pov: an
 
       {/* Pulled numbers */}
       <PulledNumbers pov={pov} />
-
-      {/* Org narrative */}
-      {pov?.org_structure?.structure_summary && (
-        <p style={{ fontSize: 17, lineHeight: 1.75, color: COLORS.body, fontFamily: FONTS.sans, margin: '12px 0' }}>
-          {pov.org_structure.structure_summary}
-        </p>
-      )}
 
       {/* what_they_do prose (only content before ## headers, if who_they_are already shown) */}
       {about.who_they_are && cleanWhatTheyDo && (
@@ -1253,7 +1610,7 @@ function AboutSection({ pov, sources, feedbackNode, onCitationClick }: { pov: an
             fontSize: 11, fontWeight: 700, color: 'var(--badge-indigo-text)',
             textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6,
             fontFamily: FONTS.sans,
-          }}>Strategy</div>
+          }}>{L.callout_strategy}</div>
           <CitedProse text={about.strategy} sources={sources} style={{ fontWeight: 400 }} onCitationClick={onCitationClick} />
         </div>
       )}
@@ -1265,8 +1622,9 @@ function AboutSection({ pov, sources, feedbackNode, onCitationClick }: { pov: an
 /*  Section: Organisational Structure                                  */
 /* ------------------------------------------------------------------ */
 
-function OrgStructureSection({ pov }: { pov: any }) {
+function OrgStructureSection({ pov, market }: { pov: any; market?: string | null }) {
   const org = pov?.org_structure;
+  const L = getLabels(market);
 
   // Filter divisions to only those with meaningful content
   const meaningfulDivisions = (org?.divisions || []).filter((div: any) => {
@@ -1284,7 +1642,7 @@ function OrgStructureSection({ pov }: { pov: any }) {
   if (!hasMeaningfulContent) return null;
 
   return (
-    <Section title="Organisational Structure" accent={SECTION_ACCENTS.about} defaultOpen={false}>
+    <Section title={L.section_org_structure} accent={SECTION_ACCENTS.about} defaultOpen={false} market={market}>
       {org.structure_summary && (
         <p style={{ fontSize: 17, lineHeight: 1.75, color: COLORS.body, fontFamily: FONTS.sans, margin: '0 0 12px', fontWeight: 400 }}>
           {org.structure_summary}
@@ -1356,17 +1714,19 @@ function ExpandableObjective({ objective, index, sources, onCitationClick }: { o
   );
 }
 
-function WhyAnythingSection({ pov, sources, feedbackNode, onCitationClick }: { pov: any; sources: any[]; feedbackNode?: React.ReactNode; onCitationClick?: (i: number, src: any, e: React.MouseEvent) => void }) {
+function WhyAnythingSection({ pov, sources, feedbackNode, onCitationClick, market }: { pov: any; sources: any[]; feedbackNode?: React.ReactNode; onCitationClick?: (i: number, src: any, e: React.MouseEvent) => void; market?: string | null }) {
   const wa = pov?.why_anything;
   if (!wa) return null;
   const objectives = wa.strategic_objectives || [];
+  const L = getLabels(market);
 
   return (
     <Section
-      title="Why Anything"
+      title={L.section_why_anything}
       accent={SECTION_ACCENTS.whyAnything}
-      count={objectives.length > 0 ? `${objectives.length} objectives` : undefined}
+      count={objectives.length > 0 ? `${objectives.length} ${L.count_objectives}` : undefined}
       feedbackNode={feedbackNode}
+      market={market}
     >
       {/* Corporate strategy callout */}
       {wa.corporate_strategy && (
@@ -1378,7 +1738,7 @@ function WhyAnythingSection({ pov, sources, feedbackNode, onCitationClick }: { p
             fontSize: 11, fontWeight: 700, color: 'var(--badge-yellow-text)',
             textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6,
             fontFamily: FONTS.sans,
-          }}>Corporate Strategy</div>
+          }}>{L.callout_corporate_strategy}</div>
           <CitedProse text={wa.corporate_strategy} sources={sources} onCitationClick={onCitationClick} />
         </div>
       )}
@@ -1400,7 +1760,7 @@ function WhyAnythingSection({ pov, sources, feedbackNode, onCitationClick }: { p
             fontSize: 11, fontWeight: 700, color: 'var(--badge-red-text)',
             textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6,
             fontFamily: FONTS.sans,
-          }}>Macro Forces</div>
+          }}>{L.callout_macro_forces}</div>
           <CitedProse text={wa.macro_forces} sources={sources} onCitationClick={onCitationClick} />
         </div>
       )}
@@ -1471,12 +1831,13 @@ function TriggerBlock({ trigger, sources, onCitationClick }: { trigger: any; sou
   );
 }
 
-function WhyNowSection({ pov, sources, feedbackNode, onCitationClick }: { pov: any; sources?: any[]; feedbackNode?: React.ReactNode; onCitationClick?: (i: number, src: any, e: React.MouseEvent) => void }) {
+function WhyNowSection({ pov, sources, feedbackNode, onCitationClick, market }: { pov: any; sources?: any[]; feedbackNode?: React.ReactNode; onCitationClick?: (i: number, src: any, e: React.MouseEvent) => void; market?: string | null }) {
   const triggers = pov?.why_now?.triggers || [];
   if (triggers.length === 0) return null;
+  const L = getLabels(market);
 
   return (
-    <Section title="Why Now" accent={SECTION_ACCENTS.whyNow} count={`${triggers.length} triggers`} feedbackNode={feedbackNode}>
+    <Section title={L.section_why_now} accent={SECTION_ACCENTS.whyNow} count={`${triggers.length} ${L.count_triggers}`} feedbackNode={feedbackNode} market={market}>
       {pov?.why_now?.urgency_rationale && (
         <div style={{ marginBottom: 16 }}>
           <CitedProse text={pov.why_now.urgency_rationale} sources={sources} onCitationClick={onCitationClick} />
@@ -1515,16 +1876,17 @@ function ProductItem({ product, sources, onCitationClick }: { product: any; sour
   );
 }
 
-function WhyFigmaSection({ pov, sources, feedbackNode, onCitationClick }: { pov: any; sources: any[]; feedbackNode?: React.ReactNode; onCitationClick?: (i: number, src: any, e: React.MouseEvent) => void }) {
+function WhyFigmaSection({ pov, sources, feedbackNode, onCitationClick, market }: { pov: any; sources: any[]; feedbackNode?: React.ReactNode; onCitationClick?: (i: number, src: any, e: React.MouseEvent) => void; market?: string | null }) {
   const wf = pov?.why_figma;
   if (!wf) return null;
   const products = wf.primary_products || [];
   const di = wf.design_infrastructure;
   const painSignals = wf.pain_signals || wf.what_they_say || [];
   const [showAllProducts, setShowAllProducts] = useState(products.length <= 6);
+  const L = getLabels(market);
 
   return (
-    <Section title="Why Figma" accent={SECTION_ACCENTS.whyFigma} count={products.length > 0 ? `${products.length} products` : undefined} feedbackNode={feedbackNode}>
+    <Section title={L.section_why_figma} accent={SECTION_ACCENTS.whyFigma} count={products.length > 0 ? `${products.length} ${L.count_products}` : undefined} feedbackNode={feedbackNode} market={market}>
       {/* What They're Saying — exec quotes before strongest angle */}
       {painSignals.length > 0 && (
         <div style={{ marginBottom: 16 }}>
@@ -1532,7 +1894,7 @@ function WhyFigmaSection({ pov, sources, feedbackNode, onCitationClick }: { pov:
             fontSize: 12, fontWeight: 700, color: COLORS.purple,
             textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10,
             fontFamily: FONTS.sans,
-          }}>What They're Saying</div>
+          }}>{L.callout_what_theyre_saying}</div>
           {painSignals.map((ps: any, i: number) => (
             <div key={i} style={{
               borderLeft: `3px solid ${COLORS.purple}`,
@@ -1576,7 +1938,7 @@ function WhyFigmaSection({ pov, sources, feedbackNode, onCitationClick }: { pov:
             fontSize: 11, fontWeight: 700, color: COLORS.purple,
             textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6,
             fontFamily: FONTS.sans,
-          }}>Strongest Angle</div>
+          }}>{L.callout_strongest_angle}</div>
           <CitedProse text={wf.strongest_angle} sources={sources} style={{ fontSize: 16, lineHeight: 1.7, fontWeight: 400 }} onCitationClick={onCitationClick} />
         </div>
       )}
@@ -1605,13 +1967,80 @@ function WhyFigmaSection({ pov, sources, feedbackNode, onCitationClick }: { pov:
                 fontFamily: FONTS.sans, fontWeight: 500, textAlign: 'left',
               }}
             >
-              Show all {products.length} products
+              {market === 'fr' ? `Afficher les ${products.length} produits` : `Show all ${products.length} products`}
             </button>
           )}
         </div>
       )}
 
-      {/* Design Infrastructure → Entry Point */}
+      {/* Design Infrastructure subsection */}
+      {di && (di.design_team_size || di.handoff_approach || di.multi_brand_complexity || (di.confirmed_tools || []).length > 0 || (di.named_systems || []).length > 0 || (di.pain_quotes || []).length > 0) && (
+        <div style={{
+          marginTop: 16, marginBottom: 16,
+          borderLeft: `3px solid ${COLORS.purple}`,
+          padding: '12px 16px',
+          borderRadius: '0 6px 6px 0',
+        }}>
+          <div style={{
+            fontSize: 11, fontWeight: 700, color: COLORS.purple,
+            textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10,
+            fontFamily: FONTS.sans,
+          }}>{L.callout_design_infrastructure}</div>
+
+          {di.design_team_size && (
+            <div style={{ marginBottom: 8 }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.tertiary, fontFamily: FONTS.sans, marginRight: 6 }}>
+                {L.callout_design_team}:
+              </span>
+              <span style={{ fontSize: 14, color: COLORS.body, fontFamily: FONTS.sans, lineHeight: 1.5 }}>
+                {di.design_team_size}
+              </span>
+            </div>
+          )}
+
+          {di.handoff_approach && (
+            <div style={{ marginBottom: 8 }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.tertiary, fontFamily: FONTS.sans, marginRight: 6 }}>
+                {L.callout_handoff}:
+              </span>
+              <span style={{ fontSize: 14, color: COLORS.body, fontFamily: FONTS.sans, lineHeight: 1.5 }}>
+                {di.handoff_approach}
+              </span>
+            </div>
+          )}
+
+          {di.multi_brand_complexity && (
+            <div style={{ marginBottom: 8 }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.tertiary, fontFamily: FONTS.sans, marginRight: 6 }}>
+                {L.callout_multi_brand}:
+              </span>
+              <span style={{ fontSize: 14, color: COLORS.body, fontFamily: FONTS.sans, lineHeight: 1.5 }}>
+                {di.multi_brand_complexity}
+              </span>
+            </div>
+          )}
+
+          {Array.isArray(di.pain_quotes) && di.pain_quotes.length > 0 && (
+            <div style={{ marginTop: 10 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.tertiary, fontFamily: FONTS.sans, marginBottom: 4 }}>
+                {L.callout_pain_quotes}
+              </div>
+              {di.pain_quotes.map((pq: any, i: number) => {
+                const quoteText = typeof pq === 'string' ? pq : (pq?.quote || pq?.text || '');
+                const speaker = typeof pq === 'string' ? null : (pq?.speaker || pq?.source);
+                return quoteText ? (
+                  <div key={i} style={{ fontSize: 14, fontStyle: 'italic', color: COLORS.body, fontFamily: FONTS.serif, lineHeight: 1.6, marginBottom: 4 }}>
+                    &ldquo;{quoteText}&rdquo;
+                    {speaker && <span style={{ fontStyle: 'normal', fontSize: 12, color: COLORS.tertiary, fontFamily: FONTS.sans }}> {'\u2014'} {speaker}</span>}
+                  </div>
+                ) : null;
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Entry Point (short footer when we have any infra signal) */}
       {di && (
         (() => {
           const hasConfirmedFigma = (di.confirmed_tools || []).some((t: string) =>
@@ -1619,14 +2048,12 @@ function WhyFigmaSection({ pov, sources, feedbackNode, onCitationClick }: { pov:
           );
           const namedSystem = (di.named_systems || [])[0];
           const systemName = typeof namedSystem === 'string' ? namedSystem : namedSystem?.name;
-          const handoff = di.handoff_approach;
 
-          if (!hasConfirmedFigma && !systemName && !handoff) return null;
+          if (!hasConfirmedFigma && !systemName) return null;
 
           const parts: string[] = [];
-          if (hasConfirmedFigma) parts.push('Figma confirmed in active use');
-          if (systemName) parts.push(`Design system: ${systemName}`);
-          if (handoff) parts.push(handoff);
+          if (hasConfirmedFigma) parts.push(market === 'fr' ? 'Figma confirm\u00E9 en utilisation active' : 'Figma confirmed in active use');
+          if (systemName) parts.push(`${market === 'fr' ? 'Design system' : 'Design system'}: ${systemName}`);
 
           return (
             <div style={{
@@ -1635,9 +2062,9 @@ function WhyFigmaSection({ pov, sources, feedbackNode, onCitationClick }: { pov:
               lineHeight: 1.5,
             }}>
               <span style={{ fontWeight: 500, color: COLORS.tertiary, textTransform: 'uppercase', fontSize: 10, letterSpacing: '0.05em' }}>
-                Entry Point
+                {L.callout_entry_point}
               </span>
-              {' — '}
+              {' \u2014 '}
               {parts.join('. ')}
               {parts.length > 0 && '.'}
             </div>
@@ -1688,12 +2115,13 @@ const FIGMA_PRICES = {
   collabSeat: 5,   // per seat per month (not used in display but keep for reference)
 };
 
-function WhitespaceSection({ pov, feedbackNode }: { pov: any; feedbackNode?: React.ReactNode }) {
+function WhitespaceSection({ pov, feedbackNode, market }: { pov: any; feedbackNode?: React.ReactNode; market?: string | null }) {
   if (pov?._meta?.whitespace_available === false || !pov?.whitespace_section) return null;
 
   const ws = pov.whitespace_section;
   const gaps = ws.key_gaps || {};
   const services: any[] = (ws.services_opportunities || []).filter((s: any) => s?.found);
+  const L = getLabels(market);
 
   // Format currency
   const fmtDollar = (v: number) => {
@@ -1721,13 +2149,13 @@ function WhitespaceSection({ pov, feedbackNode }: { pov: any; feedbackNode?: Rea
   };
 
   return (
-    <Section title="Whitespace & Opportunity" accent={COLORS.purple} defaultOpen={false} feedbackNode={feedbackNode}>
+    <Section title={L.section_whitespace} accent={COLORS.purple} defaultOpen={false} feedbackNode={feedbackNode} market={market}>
       {/* Metrics row */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 18, flexWrap: 'wrap' }}>
         {[
-          { label: 'CURRENT ARR', value: fmtDollar(ws.current_arr) },
-          { label: 'TOTAL WHITESPACE', value: fmtDollar(totalWhitespace) },
-          { label: 'YOY GROWTH', value: ws.arr_growth_yoy || '—' },
+          { label: L.ws_current_arr, value: fmtDollar(ws.current_arr) },
+          { label: L.ws_total_whitespace, value: fmtDollar(totalWhitespace) },
+          { label: L.ws_yoy_growth, value: ws.arr_growth_yoy || '—' },
         ].map((m, i) => (
           <div key={i} style={{ background: 'var(--brief-surface)', borderRadius: 8, padding: '10px 12px', flex: 1, minWidth: 120 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.faint, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>{m.label}</div>
@@ -1738,22 +2166,22 @@ function WhitespaceSection({ pov, feedbackNode }: { pov: any; feedbackNode?: Rea
 
       {/* Seat opportunities */}
       <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.05em', color: COLORS.tertiary, textTransform: 'uppercase' as const, marginBottom: 10 }}>
-        SEAT OPPORTUNITIES
+        {L.ws_seat_opportunities}
       </div>
 
       {/* Dev Mode */}
       {gaps.dev_mode?.gap > 0 && (
         <div style={{ borderLeft: `3px solid ${ACCENT.devMode}`, padding: '12px 16px', marginBottom: 10, borderRadius: '0 6px 6px 0' }}>
-          <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: ACCENT.devMode, marginBottom: 4 }}>DEV MODE</div>
+          <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: ACCENT.devMode, marginBottom: 4 }}>{L.ws_dev_mode}</div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-            <span style={{ fontSize: 16, fontWeight: 500, color: COLORS.heading }}>Dev Mode seats</span>
+            <span style={{ fontSize: 16, fontWeight: 500, color: COLORS.heading }}>{L.ws_dev_mode_seats}</span>
             <span style={{ fontFamily: FONTS.serif, fontSize: 18, fontWeight: 500, color: COLORS.heading }}>{fmtDollar(devGapVal)}</span>
           </div>
           <div style={{ marginTop: 6 }}>
             <div style={{ height: 3, background: 'var(--brief-bar)', borderRadius: 2, overflow: 'hidden' }}>
               <div style={{ height: '100%', background: ACCENT.devMode, width: `${Math.min(100, ((gaps.dev_mode.licensed || 0) / Math.max(gaps.dev_mode.universe || 1, 1)) * 100)}%`, borderRadius: 2 }} />
             </div>
-            <div style={{ fontSize: 12, color: COLORS.faint, marginTop: 3 }}>{gaps.dev_mode.licensed} of {Math.round(gaps.dev_mode.universe)} licensed</div>
+            <div style={{ fontSize: 12, color: COLORS.faint, marginTop: 3 }}>{market === 'fr' ? `${gaps.dev_mode.licensed} sur ${Math.round(gaps.dev_mode.universe)} sous licence` : `${gaps.dev_mode.licensed} of ${Math.round(gaps.dev_mode.universe)} licensed`}</div>
           </div>
         </div>
       )}
@@ -1761,16 +2189,16 @@ function WhitespaceSection({ pov, feedbackNode }: { pov: any; feedbackNode?: Rea
       {/* Designer seats */}
       {gaps.full_seats_designers?.gap > 0 && (
         <div style={{ borderLeft: `3px solid ${ACCENT.fullSeat}`, padding: '12px 16px', marginBottom: 10, borderRadius: '0 6px 6px 0' }}>
-          <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: ACCENT.fullSeat, marginBottom: 4 }}>FULL SEAT — DESIGN</div>
+          <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: ACCENT.fullSeat, marginBottom: 4 }}>{L.ws_full_seat_design}</div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-            <span style={{ fontSize: 16, fontWeight: 500, color: COLORS.heading }}>Designer seats</span>
+            <span style={{ fontSize: 16, fontWeight: 500, color: COLORS.heading }}>{L.ws_designer_seats}</span>
             <span style={{ fontFamily: FONTS.serif, fontSize: 18, fontWeight: 500, color: COLORS.heading }}>{fmtDollar(designerGapVal)}</span>
           </div>
           <div style={{ marginTop: 6 }}>
             <div style={{ height: 3, background: 'var(--brief-bar)', borderRadius: 2, overflow: 'hidden' }}>
               <div style={{ height: '100%', background: ACCENT.fullSeat, width: `${Math.min(100, ((gaps.full_seats_designers.licensed || 0) / Math.max(gaps.full_seats_designers.universe || 1, 1)) * 100)}%`, borderRadius: 2 }} />
             </div>
-            <div style={{ fontSize: 12, color: COLORS.faint, marginTop: 3 }}>{gaps.full_seats_designers.licensed} of {Math.round(gaps.full_seats_designers.universe)} licensed</div>
+            <div style={{ fontSize: 12, color: COLORS.faint, marginTop: 3 }}>{market === 'fr' ? `${gaps.full_seats_designers.licensed} sur ${Math.round(gaps.full_seats_designers.universe)} sous licence` : `${gaps.full_seats_designers.licensed} of ${Math.round(gaps.full_seats_designers.universe)} licensed`}</div>
           </div>
         </div>
       )}
@@ -1778,16 +2206,16 @@ function WhitespaceSection({ pov, feedbackNode }: { pov: any; feedbackNode?: Rea
       {/* PM / Make seats */}
       {gaps.make_pm?.gap > 0 && (
         <div style={{ borderLeft: `3px solid ${ACCENT.fullSeat}`, padding: '12px 16px', marginBottom: 10, borderRadius: '0 6px 6px 0' }}>
-          <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: ACCENT.fullSeat, marginBottom: 4 }}>FULL SEAT — MAKE</div>
+          <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: ACCENT.fullSeat, marginBottom: 4 }}>{L.ws_full_seat_make}</div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-            <span style={{ fontSize: 16, fontWeight: 500, color: COLORS.heading }}>PM / Make seats</span>
+            <span style={{ fontSize: 16, fontWeight: 500, color: COLORS.heading }}>{L.ws_pm_make_seats}</span>
             <span style={{ fontFamily: FONTS.serif, fontSize: 18, fontWeight: 500, color: COLORS.heading }}>{fmtDollar(pmGapVal)}</span>
           </div>
           <div style={{ marginTop: 6 }}>
             <div style={{ height: 3, background: 'var(--brief-bar)', borderRadius: 2, overflow: 'hidden' }}>
               <div style={{ height: '100%', background: ACCENT.fullSeat, width: `${Math.min(100, ((gaps.make_pm.licensed || 0) / Math.max(gaps.make_pm.universe || 1, 1)) * 100)}%`, borderRadius: 2 }} />
             </div>
-            <div style={{ fontSize: 12, color: COLORS.faint, marginTop: 3 }}>{gaps.make_pm.licensed} of {Math.round(gaps.make_pm.universe)} licensed</div>
+            <div style={{ fontSize: 12, color: COLORS.faint, marginTop: 3 }}>{market === 'fr' ? `${gaps.make_pm.licensed} sur ${Math.round(gaps.make_pm.universe)} sous licence` : `${gaps.make_pm.licensed} of ${Math.round(gaps.make_pm.universe)} licensed`}</div>
           </div>
         </div>
       )}
@@ -1795,13 +2223,13 @@ function WhitespaceSection({ pov, feedbackNode }: { pov: any; feedbackNode?: Rea
       {/* Governance+ */}
       {govVal > 0 && (
         <div style={{ borderLeft: `3px solid ${ACCENT.governance}`, padding: '12px 16px', marginBottom: 10, borderRadius: '0 6px 6px 0' }}>
-          <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: ACCENT.governance, marginBottom: 4 }}>GOVERNANCE+</div>
+          <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: ACCENT.governance, marginBottom: 4 }}>{L.ws_governance_plus}</div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-            <span style={{ fontSize: 16, fontWeight: 500, color: COLORS.heading }}>Governance+ add-on</span>
+            <span style={{ fontSize: 16, fontWeight: 500, color: COLORS.heading }}>{L.ws_governance_plus_addon}</span>
             <span style={{ fontFamily: FONTS.serif, fontSize: 18, fontWeight: 500, color: COLORS.heading }}>{fmtDollar(govVal)}</span>
           </div>
           {gaps.governance_plus?.priority && (
-            <span style={{ fontSize: 10, background: 'var(--badge-red-bg)', color: 'var(--badge-red-text)', borderRadius: 20, padding: '2px 8px', fontWeight: 600, display: 'inline-block', marginTop: 6 }}>priority: true</span>
+            <span style={{ fontSize: 10, background: 'var(--badge-red-bg)', color: 'var(--badge-red-text)', borderRadius: 20, padding: '2px 8px', fontWeight: 600, display: 'inline-block', marginTop: 6 }}>{L.ws_priority}</span>
           )}
           {gaps.governance_plus?.reason && (
             <div style={{ fontSize: 15, color: COLORS.secondary, lineHeight: 1.65, marginTop: 6 }}>{gaps.governance_plus.reason}</div>
@@ -1812,9 +2240,9 @@ function WhitespaceSection({ pov, feedbackNode }: { pov: any; feedbackNode?: Rea
       {/* Enterprise upgrade */}
       {euVal > 0 && (
         <div style={{ borderLeft: `3px solid ${ACCENT.enterprise}`, padding: '12px 16px', marginBottom: 10, borderRadius: '0 6px 6px 0' }}>
-          <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: ACCENT.enterprise, marginBottom: 4 }}>ENTERPRISE UPGRADE</div>
+          <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: ACCENT.enterprise, marginBottom: 4 }}>{L.ws_enterprise_upgrade}</div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-            <span style={{ fontSize: 16, fontWeight: 500, color: COLORS.heading }}>Enterprise tier upgrade</span>
+            <span style={{ fontSize: 16, fontWeight: 500, color: COLORS.heading }}>{L.ws_enterprise_tier_upgrade}</span>
             <span style={{ fontFamily: FONTS.serif, fontSize: 18, fontWeight: 500, color: COLORS.heading }}>{fmtDollar(euVal)}</span>
           </div>
         </div>
@@ -1824,11 +2252,11 @@ function WhitespaceSection({ pov, feedbackNode }: { pov: any; feedbackNode?: Rea
       {services.length > 0 && (
         <>
           <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.05em', color: COLORS.tertiary, textTransform: 'uppercase' as const, marginTop: 18, marginBottom: 10 }}>
-            SERVICES OPPORTUNITIES
+            {L.ws_services_opportunities}
           </div>
           {services.map((s: any, i: number) => (
             <div key={i} style={{ borderLeft: `3px solid ${ACCENT.services}`, padding: '12px 16px', marginBottom: 10, borderRadius: '0 6px 6px 0' }}>
-              <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: ACCENT.services, marginBottom: 4 }}>$125K ENGAGEMENT</div>
+              <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: ACCENT.services, marginBottom: 4 }}>{L.ws_125k_engagement}</div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                 <span style={{ fontSize: 16, fontWeight: 500, color: COLORS.heading }}>{s.engagement_label}</span>
                 <span style={{ fontFamily: FONTS.serif, fontSize: 18, fontWeight: 500, color: COLORS.heading }}>$125K</span>
@@ -1841,35 +2269,36 @@ function WhitespaceSection({ pov, feedbackNode }: { pov: any; feedbackNode?: Rea
 
           {/* ARR floor */}
           <div style={{ borderLeft: `3px solid ${ACCENT.arrFloor}`, padding: '12px 16px', marginBottom: 10, borderRadius: '0 6px 6px 0' }}>
-            <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: ACCENT.arrFloor, marginBottom: 4 }}>25% ARR MINIMUM</div>
+            <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: ACCENT.arrFloor, marginBottom: 4 }}>{L.ws_arr_minimum}</div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-              <span style={{ fontSize: 16, fontWeight: 500, color: COLORS.heading }}>Services floor</span>
+              <span style={{ fontSize: 16, fontWeight: 500, color: COLORS.heading }}>{L.ws_services_floor}</span>
               <span style={{ fontFamily: FONTS.serif, fontSize: 18, fontWeight: 500, color: COLORS.heading }}>{fmtDollar(ws.services_arr_floor || 125000)}</span>
             </div>
-            <div style={{ fontSize: 15, color: COLORS.secondary, lineHeight: 1.65, marginTop: 6 }}>25% ARR floor — use as anchor if selling a single bundled engagement.</div>
+            <div style={{ fontSize: 15, color: COLORS.secondary, lineHeight: 1.65, marginTop: 6 }}>{L.ws_arr_floor_note}</div>
           </div>
         </>
       )}
 
       {/* Total Whitespace */}
       <div style={{ borderTop: `1px solid ${COLORS.border}`, padding: '14px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 8 }}>
-        <span style={{ fontSize: 13, color: COLORS.tertiary }}>Total Whitespace — seats + Governance+ + services</span>
+        <span style={{ fontSize: 13, color: COLORS.tertiary }}>{L.ws_total_whitespace_footer}</span>
         <span style={{ fontFamily: FONTS.serif, fontSize: 24, fontWeight: 500, color: COLORS.heading }}>{fmtDollar(totalWhitespace)}</span>
       </div>
     </Section>
   );
 }
 
-function ResearchDeepDiveSection({ pov, feedbackNode }: { pov: any; feedbackNode?: React.ReactNode }) {
+function ResearchDeepDiveSection({ pov, feedbackNode, market }: { pov: any; feedbackNode?: React.ReactNode; market?: string | null }) {
   const [expanded, setExpanded] = useState(false);
   const intel = pov?.distilled_intel || pov?.research_deep_dive;
   console.log('[BriefView] distilled_intel length:', intel ? intel.length : 0);
+  const L = getLabels(market);
 
   if (!intel) {
     return (
-      <Section title="Research Deep Dive" accent={SECTION_ACCENTS.researchDeepDive} feedbackNode={feedbackNode}>
+      <Section title={L.section_research_deep_dive} accent={SECTION_ACCENTS.researchDeepDive} feedbackNode={feedbackNode} market={market}>
         <p style={{ fontSize: 14, color: COLORS.faint, fontFamily: FONTS.sans, margin: 0, fontStyle: 'italic' }}>
-          Research intelligence not available for this run. Re-run with --fresh to populate.
+          {L.research_not_available}
         </p>
       </Section>
     );
@@ -1882,7 +2311,7 @@ function ResearchDeepDiveSection({ pov, feedbackNode }: { pov: any; feedbackNode
 
   if (sections.length > 0) {
     return (
-      <Section title="Research Deep Dive" accent={SECTION_ACCENTS.researchDeepDive} count={`${sections.length} sections`} feedbackNode={feedbackNode}>
+      <Section title={L.section_research_deep_dive} accent={SECTION_ACCENTS.researchDeepDive} count={`${sections.length} ${L.count_sections}`} feedbackNode={feedbackNode} market={market}>
         {sections.map((section: string, i: number) => {
           const lines = section.split('\n');
           const heading = lines[0].trim();
@@ -1895,7 +2324,7 @@ function ResearchDeepDiveSection({ pov, feedbackNode }: { pov: any; feedbackNode
 
   // Fallback: render as truncated prose
   return (
-    <Section title="Research Deep Dive" accent={SECTION_ACCENTS.researchDeepDive} feedbackNode={feedbackNode}>
+    <Section title={L.section_research_deep_dive} accent={SECTION_ACCENTS.researchDeepDive} feedbackNode={feedbackNode} market={market}>
       <Trunc lines={10} expanded={expanded} onToggle={() => setExpanded(e => !e)}>
         <div style={{ fontSize: 16, lineHeight: 1.7, color: COLORS.secondary, fontFamily: FONTS.sans }}>
           <IntelMarkdown text={cleanIntel} />
@@ -2017,7 +2446,8 @@ function PyramidItem({ item, field, color }: { item: any; field: string; color: 
   );
 }
 
-function ValuePyramidSection({ pyramid, feedbackNode }: { pyramid: any; feedbackNode?: React.ReactNode }) {
+function ValuePyramidSection({ pyramid, feedbackNode, market }: { pyramid: any; feedbackNode?: React.ReactNode; market?: string | null }) {
+  const L = getLabels(market);
   if (!pyramid) return null;
   const objectives = pyramid.corporate_objectives || [];
   const strategies = pyramid.business_strategies || [];
@@ -2033,7 +2463,7 @@ function ValuePyramidSection({ pyramid, feedbackNode }: { pyramid: any; feedback
   ];
 
   return (
-    <Section title="Value Pyramid" accent={SECTION_ACCENTS.valuePyramid} count={`${totalItems} items`} feedbackNode={feedbackNode}>
+    <Section title={L.section_value_pyramid} accent={SECTION_ACCENTS.valuePyramid} count={`${totalItems} ${L.count_items}`} feedbackNode={feedbackNode} market={market}>
       {layers.map((layer, li) => {
         if (layer.items.length === 0) return null;
         return (
@@ -2077,18 +2507,19 @@ function isExcludedJobSignalUrl(url: string | null | undefined): boolean {
   } catch { return false; }
 }
 
-function JobSignalsSection({ pov }: { pov: any }) {
+function JobSignalsSection({ pov, market }: { pov: any; market?: string | null }) {
   const signals = pov?.job_signals;
   const extracted = pov?.job_signals_extracted;
   const hasExtracted = extracted && (extracted.signals?.length > 0 || extracted.roles?.length > 0);
   const design = (signals?.design_tool_signals || []).filter((s: any) => !isExcludedJobSignalUrl(s?.link));
   const other = (signals?.other_signals || []).filter((s: any) => !isExcludedJobSignalUrl(s?.link));
   const signalCount = (hasExtracted ? (extracted.signals?.length || 0) : 0) + design.length + other.length;
+  const L = getLabels(market);
 
   if (!hasExtracted && design.length === 0 && other.length === 0) return null;
 
   return (
-    <Section title="Job Signals" accent={SECTION_ACCENTS.jobSignals} count={signalCount > 0 ? `${signalCount} signals` : undefined}>
+    <Section title={L.section_job_signals} accent={SECTION_ACCENTS.jobSignals} count={signalCount > 0 ? `${signalCount} ${L.count_signals}` : undefined} market={market}>
       {/* Extracted signals */}
       {hasExtracted && extracted.signals?.length > 0 && (
         <div style={{ marginBottom: 16 }}>
@@ -2108,7 +2539,7 @@ function JobSignalsSection({ pov }: { pov: any }) {
                     background: catColor + '18', color: catColor,
                     fontWeight: 600, letterSpacing: '0.04em', fontFamily: FONTS.sans,
                   }}>
-                    {formatCategory(s.category)}
+                    {formatCategoryLocalized(s.category, market)}
                   </span>
                 )}
                 <div style={{ fontSize: 16, color: COLORS.body, fontFamily: FONTS.sans, lineHeight: 1.5 }}>
@@ -2191,12 +2622,13 @@ function JobSignalsSection({ pov }: { pov: any }) {
 /*  Section: Digital Products                                          */
 /* ------------------------------------------------------------------ */
 
-function DigitalProductsSection({ pov }: { pov: any }) {
+function DigitalProductsSection({ pov, market }: { pov: any; market?: string | null }) {
   const products = pov?.digital_products || [];
   if (products.length === 0) return null;
+  const L = getLabels(market);
 
   return (
-    <Section title="Digital Products" accent={SECTION_ACCENTS.digitalProducts} count={`${products.length} products`}>
+    <Section title={L.section_digital_products} accent={SECTION_ACCENTS.digitalProducts} count={`${products.length} ${L.count_products}`} market={market}>
       {products.map((p: any, i: number) => {
         const platforms: string[] = Array.isArray(p?.platforms)
           ? p.platforms
@@ -2262,13 +2694,18 @@ function PresenceDot({ level }: { level: string }) {
   return <span style={{ width: 6, height: 6, borderRadius: '50%', background: bg, display: 'inline-block', flexShrink: 0 }} />;
 }
 
-function ContactCard({ contact }: { contact: any }) {
+function ContactCard({ contact, market }: { contact: any; market?: string | null }) {
   const [open, setOpen] = useState(false);
   const tier = contact?.tier || 'coach';
   const isEB = tier === 'eb' || tier === 'EB';
   const isDeparted = !!contact?.departure_signal;
   const presenceLevel = contact?.public_presence?.presence_level || contact?.presence_level || 'none';
   const fnLabel = (contact?.function || '').replace(/^./, (c: string) => c.toUpperCase());
+  const L = getLabels(market);
+  const presenceLabel = (() => {
+    const key = `presence_${presenceLevel.toLowerCase()}` as LabelKey;
+    return L[key] || presenceLevel.replace(/^./, (c: string) => c.toUpperCase());
+  })();
 
   // Derive personal signals: signals not already captured in outreach_context
   const oc = contact?.outreach_context || '';
@@ -2285,7 +2722,7 @@ function ContactCard({ contact }: { contact: any }) {
       if (label) sourceLabels.push(label);
     }
   }
-  if (presenceLevel === 'high' || presenceLevel === 'medium') sourceLabels.push('LinkedIn active');
+  if (presenceLevel === 'high' || presenceLevel === 'medium') sourceLabels.push(L.footer_linkedin_active);
   const footerSources = [...new Set(sourceLabels)].slice(0, 3);
 
   return (
@@ -2326,7 +2763,7 @@ function ContactCard({ contact }: { contact: any }) {
             <TierBadge tier={tier} />
             {isDeparted && (
               <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 3, background: 'var(--badge-red-bg)', color: 'var(--badge-red-text)', fontWeight: 600, fontFamily: FONTS.sans }}>
-                ⚠ Departed
+                {L.contact_departed}
               </span>
             )}
             {contact?.url && (
@@ -2340,11 +2777,11 @@ function ContactCard({ contact }: { contact: any }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
             <PresenceDot level={presenceLevel} />
             <span style={{ fontSize: 12, color: COLORS.tertiary, fontFamily: FONTS.sans }}>
-              {presenceLevel.replace(/^./, (c: string) => c.toUpperCase())}
+              {presenceLabel}
             </span>
             <span style={{ fontSize: 12, color: COLORS.faint }}>·</span>
             <span style={{ fontSize: 12, color: contact?.email ? COLORS.secondary : COLORS.faint, fontFamily: FONTS.sans }}>
-              {contact?.email || 'No verified email'}
+              {contact?.email || L.contact_no_email}
             </span>
           </div>
         </div>
@@ -2373,7 +2810,7 @@ function ContactCard({ contact }: { contact: any }) {
           {oc && (
             <div style={{ marginTop: 12, marginBottom: 12 }}>
               <div style={{ fontSize: 11, fontWeight: 600, color: COLORS.faint, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4, fontFamily: FONTS.sans }}>
-                Outreach context
+                {L.contact_outreach_context}
               </div>
               <div style={{ fontSize: 14, lineHeight: 1.65, color: COLORS.body, fontFamily: FONTS.sans }}>
                 {oc}
@@ -2397,7 +2834,7 @@ function ContactCard({ contact }: { contact: any }) {
               marginBottom: 12, padding: '8px 12px',
             }}>
               <div style={{ fontSize: 11, fontWeight: 600, color: '#059669', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4, fontFamily: FONTS.sans }}>
-                Personal signal
+                {L.contact_personal_signal}
               </div>
               {distinctSignals.map((s, i) => (
                 <div key={i} style={{ fontSize: 13, color: COLORS.body, lineHeight: 1.55, fontFamily: FONTS.sans }}>
@@ -2414,7 +2851,7 @@ function ContactCard({ contact }: { contact: any }) {
               marginBottom: 12, padding: '8px 12px',
             }}>
               <div style={{ fontSize: 11, fontWeight: 600, color: '#7c3aed', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4, fontFamily: FONTS.sans }}>
-                Angle
+                {L.contact_angle}
               </div>
               <div style={{ fontSize: 13, color: COLORS.body, lineHeight: 1.55, fontFamily: FONTS.sans }}>
                 {contact.recommended_angle}
@@ -2441,9 +2878,10 @@ function ContactCard({ contact }: { contact: any }) {
   );
 }
 
-function ContactsSection({ personas, hooksData, feedbackNode }: { personas: any; hooksData?: any; feedbackNode?: React.ReactNode }) {
+function ContactsSection({ personas, hooksData, feedbackNode, market }: { personas: any; hooksData?: any; feedbackNode?: React.ReactNode; market?: string | null }) {
   const matrix = personas?.matrix;
   if (!matrix) return null;
+  const L = getLabels(market);
 
   // Build hooks lookup
   const hooksLookup = new Map<string, any>();
@@ -2486,10 +2924,11 @@ function ContactsSection({ personas, hooksData, feedbackNode }: { personas: any;
 
   return (
     <Section
-      title="Who to Contact"
+      title={L.section_contacts}
       accent={SECTION_ACCENTS.contacts}
-      count={`${unique.length} contacts`}
+      count={`${unique.length} ${L.count_contacts}`}
       feedbackNode={feedbackNode}
+      market={market}
     >
       {rfm && (
         <div style={{
@@ -2498,7 +2937,7 @@ function ContactsSection({ personas, hooksData, feedbackNode }: { personas: any;
           background: 'var(--badge-purple-bg)', borderRadius: '0 6px 6px 0',
         }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--badge-purple-text)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6, fontFamily: FONTS.sans }}>
-            Recommended First Move
+            {L.contact_recommended_first_move}
           </div>
           <div style={{ fontWeight: 500, fontSize: 16, color: COLORS.body, fontFamily: FONTS.sans }}>
             {rfm.contact_name} {rfm.title ? `\u2014 ${rfm.title}` : ''}
@@ -2508,7 +2947,7 @@ function ContactsSection({ personas, hooksData, feedbackNode }: { personas: any;
         </div>
       )}
 
-      {unique.map((c, i) => <ContactCard key={c?.name || i} contact={c} />)}
+      {unique.map((c, i) => <ContactCard key={c?.name || i} contact={c} market={market} />)}
     </Section>
   );
 }
@@ -2517,13 +2956,14 @@ function ContactsSection({ personas, hooksData, feedbackNode }: { personas: any;
 /*  Section: Key Executives                                            */
 /* ------------------------------------------------------------------ */
 
-function KeyExecutivesSection({ pov }: { pov: any }) {
+function KeyExecutivesSection({ pov, market }: { pov: any; market?: string | null }) {
   const executives = pov?.executives || [];
   console.log('[BriefView] executives:', executives.length);
   if (executives.length === 0) return null;
+  const L = getLabels(market);
 
   return (
-    <Section title="Key Executives" accent={SECTION_ACCENTS.keyExecutives} count={`${executives.length} found`}>
+    <Section title={L.section_key_executives} accent={SECTION_ACCENTS.keyExecutives} count={`${executives.length} ${L.count_found}`} market={market}>
       {executives.map((exec: any, i: number) => (
         <DataRow
           key={i}
@@ -2542,13 +2982,14 @@ function KeyExecutivesSection({ pov }: { pov: any }) {
 /*  Section: Technology Partnerships                                   */
 /* ------------------------------------------------------------------ */
 
-function TechPartnersSection({ pov }: { pov: any }) {
+function TechPartnersSection({ pov, market }: { pov: any; market?: string | null }) {
   const partners = pov?.technology_partnerships || [];
   console.log('[BriefView] partners:', partners.length);
   if (partners.length === 0) return null;
+  const L = getLabels(market);
 
   return (
-    <Section title="Technology Partnerships" accent={SECTION_ACCENTS.techPartners} count={`${partners.length} partners`}>
+    <Section title={L.section_tech_partners} accent={SECTION_ACCENTS.techPartners} count={`${partners.length} ${L.count_partners}`} market={market}>
       {partners.map((p: any, i: number) => (
         <DataRow
           key={i}
@@ -2599,7 +3040,8 @@ function ProofPointsSection({ pov }: { pov: any }) {
 /*  Section: Sources                                                   */
 /* ------------------------------------------------------------------ */
 
-function SourcesSection({ pov }: { pov: any }) {
+function SourcesSection({ pov, market }: { pov: any; market?: string | null }) {
+  const _L = getLabels(market);
   const allSources = pov?.sources_used || [];
   const cleanSources = allSources.filter((s: any) => {
     const url = typeof s === 'string' ? s : (s?.url || '');
@@ -2611,7 +3053,7 @@ function SourcesSection({ pov }: { pov: any }) {
   if (cleanSources.length === 0) return null;
 
   return (
-    <Section title="Sources" accent={COLORS.faint} count={`${cleanSources.length} sources`}>
+    <Section title={_L.section_sources} accent={COLORS.faint} count={`${cleanSources.length} ${_L.count_sources}`} market={market}>
       {cleanSources.map((s: any, i: number) => {
         const url = typeof s === 'string' ? s : (s?.url || '');
         const sourceTitle = typeof s === 'string' ? '' : (s?.source || s?.title || '');
@@ -2619,7 +3061,7 @@ function SourcesSection({ pov }: { pov: any }) {
           ? (sourceTitle.length > 60 ? sourceTitle.slice(0, 57) + '…' : sourceTitle)
           : url ? (() => { try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return ''; } })()
           : '';
-        const displayLabel = label || `Source ${i + 1}`;
+        const displayLabel = label || `${_L.sources_source_n} ${i + 1}`;
         return (
           <div key={i} style={{
             fontSize: 13, padding: '6px 0',
@@ -2722,11 +3164,12 @@ function RunHistory({ currentRunId, company }: { currentRunId: string; company: 
 /*  Brief content (all sections assembled)                             */
 /* ------------------------------------------------------------------ */
 
-function BriefContent({ pov, personas, hooksData, valuePyramid, sectionFeedback, onSectionFeedback, userRole }: {
+function BriefContent({ pov, personas, hooksData, valuePyramid, sectionFeedback, onSectionFeedback, userRole, market }: {
   pov: any; personas: any; hooksData?: any; valuePyramid?: any;
   sectionFeedback: Record<string, { score: number; comment: string }>;
   onSectionFeedback: (key: string, score: number, comment: string) => void;
   userRole?: string;
+  market?: string | null;
 }) {
   const allSources = pov?.sources_used || [];
   void ProofPointsSection; // Retained but removed from render tree (2026-04-01 reframe)
@@ -2761,52 +3204,52 @@ function BriefContent({ pov, personas, hooksData, valuePyramid, sectionFeedback,
     <>
       {/* 1. ICP Fit (manager/admin only) */}
       {(userRole === 'manager' || userRole === 'admin') && (
-        <IcpSection pov={pov} sources={allSources} onCitationClick={onCitationClick} />
+        <IcpSection pov={pov} sources={allSources} onCitationClick={onCitationClick} market={market} />
       )}
 
       {/* 2. About */}
-      <AboutSection pov={pov} sources={allSources} feedbackNode={fb('about')} onCitationClick={onCitationClick} />
+      <AboutSection pov={pov} sources={allSources} feedbackNode={fb('about')} onCitationClick={onCitationClick} market={market} />
 
       {/* 2.5. Organisational Structure */}
-      <OrgStructureSection pov={pov} />
+      <OrgStructureSection pov={pov} market={market} />
 
       {/* 3. Why Anything */}
-      <WhyAnythingSection pov={pov} sources={allSources} feedbackNode={fb('why_anything')} onCitationClick={onCitationClick} />
+      <WhyAnythingSection pov={pov} sources={allSources} feedbackNode={fb('why_anything')} onCitationClick={onCitationClick} market={market} />
 
       {/* 4. Why Now */}
-      <WhyNowSection pov={pov} sources={allSources} feedbackNode={fb('why_now')} onCitationClick={onCitationClick} />
+      <WhyNowSection pov={pov} sources={allSources} feedbackNode={fb('why_now')} onCitationClick={onCitationClick} market={market} />
 
       {/* 5. Why Figma */}
-      <WhyFigmaSection pov={pov} sources={allSources} feedbackNode={fb('why_figma')} onCitationClick={onCitationClick} />
+      <WhyFigmaSection pov={pov} sources={allSources} feedbackNode={fb('why_figma')} onCitationClick={onCitationClick} market={market} />
 
       {/* 5.5 Whitespace & Opportunity */}
-      <WhitespaceSection pov={pov} feedbackNode={fb('whitespace')} />
+      <WhitespaceSection pov={pov} feedbackNode={fb('whitespace')} market={market} />
 
       {/* 6. Value Pyramid */}
-      <ValuePyramidSection pyramid={valuePyramid} feedbackNode={fb('value_pyramid')} />
+      <ValuePyramidSection pyramid={valuePyramid} feedbackNode={fb('value_pyramid')} market={market} />
 
       {/* 8. Digital Products */}
-      <DigitalProductsSection pov={pov} />
+      <DigitalProductsSection pov={pov} market={market} />
 
       {/* 9. Who to Contact */}
-      <ContactsSection personas={personas} hooksData={hooksData} feedbackNode={fb('contact_matrix')} />
+      <ContactsSection personas={personas} hooksData={hooksData} feedbackNode={fb('contact_matrix')} market={market} />
 
       {/* 10. Job Signals */}
-      <JobSignalsSection pov={pov} />
+      <JobSignalsSection pov={pov} market={market} />
 
       {/* 11. Key Executives */}
-      <KeyExecutivesSection pov={pov} />
+      <KeyExecutivesSection pov={pov} market={market} />
 
       {/* 12. Technology Partnerships */}
-      <TechPartnersSection pov={pov} />
+      <TechPartnersSection pov={pov} market={market} />
 
       {/* 13. Research Deep Dive */}
-      <ResearchDeepDiveSection pov={pov} feedbackNode={fb('research_deep_dive')} />
+      <ResearchDeepDiveSection pov={pov} feedbackNode={fb('research_deep_dive')} market={market} />
 
       {/* Proof Points — removed from spec (2026-04-01 reframe) */}
 
       {/* 14. Sources */}
-      <SourcesSection pov={pov} />
+      <SourcesSection pov={pov} market={market} />
 
       {/* Citation tooltip */}
       {citationTooltip && (
@@ -2892,6 +3335,7 @@ export default function BriefView() {
   const [pendingAttachments, setPendingAttachments] = useState<ChatAttachment[]>([]);
   const [reviewMode, setReviewMode] = useState(false);
   const [outreachMode, setOutreachMode] = useState(false);
+  const [outreachPickerOpen, setOutreachPickerOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Section feedback state
@@ -3188,6 +3632,40 @@ export default function BriefView() {
   const personas = brief?.personas_json;
   const hooksData = brief?.hooks_json;
 
+  // Flattened, deduped, tier-ordered contact list used by the outreach picker.
+  const outreachContacts = useMemo(() => {
+    const matrix = personas?.matrix;
+    if (!matrix) return [] as any[];
+    const hooksLookup = new Map<string, any>();
+    if (Array.isArray(hooksData?.contacts)) {
+      for (const hc of hooksData.contacts) {
+        if (hc?.name) hooksLookup.set(hc.name.toLowerCase(), hc);
+      }
+    }
+    const all: any[] = [];
+    for (const fn of ['design', 'engineering', 'product']) {
+      for (const tier of ['eb', 'champion', 'coach']) {
+        const list = matrix?.[fn]?.[tier];
+        if (Array.isArray(list)) {
+          for (const c of list) {
+            const h = c?.name ? hooksLookup.get(c.name.toLowerCase()) : null;
+            all.push({ ...c, ...h, function: fn, tier });
+          }
+        }
+      }
+    }
+    const seen = new Set<string>();
+    const unique = all.filter(c => {
+      const k = (c?.name || '').toLowerCase();
+      if (!k || seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+    const tierOrder: Record<string, number> = { eb: 0, champion: 1, coach: 2 };
+    unique.sort((a, b) => (tierOrder[a.tier] ?? 9) - (tierOrder[b.tier] ?? 9));
+    return unique;
+  }, [personas, hooksData]);
+
   const toBase64 = (file: File): Promise<string> => new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve((reader.result as string).split(',')[1]);
@@ -3345,6 +3823,42 @@ export default function BriefView() {
     }
   };
 
+  const openOutreachPicker = () => {
+    setChatOpen(true);
+    setOutreachMode(true);
+    setOutreachPickerOpen(true);
+  };
+
+  const selectOutreachContact = (contact: any) => {
+    const companyName = pov?.company_name || run?.company || '';
+    const name = contact?.name || 'this contact';
+    const title = contact?.title || '';
+    const bullets: string[] = [];
+    if (Array.isArray(contact?.briefing_bullets)) {
+      for (const b of contact.briefing_bullets) {
+        if (typeof b === 'string' && b.trim()) bullets.push(b.trim());
+      }
+    }
+    if (bullets.length === 0 && typeof contact?.outreach_context === 'string' && contact.outreach_context.trim()) {
+      bullets.push(contact.outreach_context.trim());
+    }
+    if (contact?.recommended_angle && bullets.length < 5) {
+      bullets.push(String(contact.recommended_angle).trim());
+    }
+    const hookList = bullets.slice(0, 5).map(b => `- ${b}`).join('\n');
+    const titleClause = title ? `, ${title}` : '';
+    const prompt = [
+      `Write a cold email to ${name}${titleClause} at ${companyName}.`,
+      '',
+      'Their research hooks:',
+      hookList || '- (no specific hooks found — use the brief context)',
+      '',
+      'Use the OPPS framework. Under 75 words. Subject line: First name + hook. No feature lists.',
+    ].join('\n');
+    setOutreachPickerOpen(false);
+    sendMessage(prompt);
+  };
+
   const mainStyle: React.CSSProperties = {
     paddingBottom: 64,
   };
@@ -3441,9 +3955,9 @@ export default function BriefView() {
             </h1>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, marginBottom: 16 }}>
               {(userProfile?.role === 'manager' || userProfile?.role === 'admin') && (
-                <IcpBadge score={pov?.icp_fit?.score} size="small" />
+                <IcpBadge score={pov?.icp_fit?.score} size="small" market={run?.market} />
               )}
-              <AgeBadge createdAt={run.created_at} />
+              <AgeBadge createdAt={run.created_at} market={run?.market} />
             </div>
 
             {/* Part 2 — Button row */}
@@ -3480,28 +3994,7 @@ export default function BriefView() {
                   }}>
                     <ClipboardList size={14} /> Review PSP
                   </button>
-                  <button onClick={() => {
-                    setChatOpen(true);
-                    setOutreachMode(true);
-                    const matrix = personas?.matrix;
-                    let firstContactName = '';
-                    if (matrix) {
-                      outer: for (const fn of ['design', 'engineering', 'product']) {
-                        for (const tier of ['eb', 'champion', 'coach']) {
-                          const contacts = matrix?.[fn]?.[tier];
-                          if (Array.isArray(contacts) && contacts.length > 0 && contacts[0]?.name) {
-                            firstContactName = contacts[0].name;
-                            break outer;
-                          }
-                        }
-                      }
-                    }
-                    const companyName = pov?.company_name || run?.company || '';
-                    setChatInput(firstContactName
-                      ? `Help me write a cold email to ${firstContactName} at ${companyName}.`
-                      : `Help me write a cold email to a prospect at ${companyName}.`
-                    );
-                  }} style={{
+                  <button onClick={openOutreachPicker} style={{
                     display: 'flex', alignItems: 'center', gap: 6, padding: '6px 13px',
                     borderRadius: 'var(--border-radius-md, 8px)',
                     border: '0.5px solid var(--color-border-secondary, #d6d3d1)',
@@ -3769,8 +4262,8 @@ export default function BriefView() {
               fontFamily: FONTS.sans,
             }}>
               <span>{'\u26A0'}</span>
-              <span>Research gaps — review before your call</span>
-              <span style={{ marginLeft: 'auto', fontSize: 11, color: COLORS.faint }}>click to expand</span>
+              <span>{getLabels(run?.market).research_gaps_banner}</span>
+              <span style={{ marginLeft: 'auto', fontSize: 11, color: COLORS.faint }}>{getLabels(run?.market).research_gaps_expand}</span>
             </summary>
             <div style={{ padding: '0 14px 12px', fontSize: 13, color: COLORS.secondary, lineHeight: 1.6, fontFamily: FONTS.sans }}>
               {Array.isArray(pov.research_gaps) ? (
@@ -3794,10 +4287,10 @@ export default function BriefView() {
             borderRadius: 6, padding: '10px 14px', marginBottom: 20,
             fontSize: 13, color: 'var(--badge-yellow-text)', fontFamily: FONTS.sans,
           }}>
-            This brief was generated with an earlier pipeline version — some sections may be missing.
+            {getLabels(run?.market).old_schema_warning}
             {run.pdf_url && (
               <button onClick={handleDownloadPdf} disabled={pdfLoading} style={{ background: 'none', border: 'none', padding: 0, color: COLORS.purple, marginLeft: 8, cursor: 'pointer', fontSize: 'inherit', fontFamily: 'inherit' }}>
-                {pdfLoading ? 'Loading...' : 'Download full PDF'} <ExternalLink size={11} style={{ display: 'inline', verticalAlign: 'middle' }} />
+                {pdfLoading ? 'Loading...' : getLabels(run?.market).download_full_pdf} <ExternalLink size={11} style={{ display: 'inline', verticalAlign: 'middle' }} />
               </button>
             )}
           </div>
@@ -3831,6 +4324,7 @@ export default function BriefView() {
             sectionFeedback={sectionFeedback}
             onSectionFeedback={handleSectionFeedback}
             userRole={userProfile?.role}
+            market={run?.market}
           />
         )}
       </div>
@@ -3845,7 +4339,7 @@ export default function BriefView() {
           boxShadow: '0 8px 24px rgba(0,0,0,0.4)', zIndex: 40,
           fontSize: 13, color: 'var(--brief-body)', fontFamily: FONTS.sans,
         }}>
-          <span>How was this brief?</span>
+          <span>{getLabels(run?.market).nudge_how_was}</span>
           <button
             onClick={() => { setRateModalOpen(true); setNudgeBannerVisible(false); }}
             style={{
@@ -3854,7 +4348,7 @@ export default function BriefView() {
               fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap',
             }}
           >
-            Rate it &rarr;
+            {getLabels(run?.market).nudge_rate_it}
           </button>
           <button
             onClick={() => setNudgeBannerVisible(false)}
@@ -3902,7 +4396,7 @@ export default function BriefView() {
                 flexShrink: 0,
               }}>
                 <div>
-                  <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 4 }}>Rate this brief</div>
+                  <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 4 }}>{getLabels(run?.market).rate_this_brief}</div>
                   <div style={{ fontSize: 12, color: 'var(--brief-tertiary)' }}>
                     {pov?.company_name || run?.company}
                     {run?.created_at && <> &middot; {new Date(run.created_at).toLocaleDateString()}</>}
@@ -3936,8 +4430,8 @@ export default function BriefView() {
                     justifyContent: 'center', padding: '48px 0', gap: 12,
                   }}>
                     <Check size={32} style={{ color: '#22c55e' }} />
-                    <div style={{ fontSize: 16, fontWeight: 500, color: 'var(--brief-heading)' }}>Thanks for your feedback!</div>
-                    <div style={{ fontSize: 13, color: 'var(--brief-tertiary)' }}>Your ratings help us improve.</div>
+                    <div style={{ fontSize: 16, fontWeight: 500, color: 'var(--brief-heading)' }}>{getLabels(run?.market).feedback_thanks}</div>
+                    <div style={{ fontSize: 13, color: 'var(--brief-tertiary)' }}>{getLabels(run?.market).feedback_helps}</div>
                   </div>
                 ) : (
                   <>
@@ -3945,11 +4439,13 @@ export default function BriefView() {
                       const fb = sectionFeedback[section.id];
                       const score = fb?.score ?? 0;
                       const comment = fb?.comment ?? '';
+                      const labelKey = `fb_${section.id}` as LabelKey;
+                      const localisedLabel = getLabels(run?.market)[labelKey] || section.label;
                       return (
                         <div key={section.id} style={{ padding: '10px 0', borderBottom: '1px solid var(--brief-border)' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                             <span style={{ fontSize: 16, width: 24, textAlign: 'center', color: 'var(--brief-faint)' }}>{section.icon}</span>
-                            <span style={{ flex: 1, fontSize: 14, color: 'var(--brief-heading)' }}>{section.label}</span>
+                            <span style={{ flex: 1, fontSize: 14, color: 'var(--brief-heading)' }}>{localisedLabel}</span>
                             {/* Thumbs up */}
                             <button
                               onClick={() => handleSectionFeedback(section.id, score === 1 ? 0 : 1, score === 1 ? '' : comment, false)}
@@ -4098,26 +4594,7 @@ export default function BriefView() {
               { label: 'Review PSP', icon: <ClipboardList size={16} />, action: () => { setMobileActionsOpen(false); setChatOpen(true); reviewFileInputRef.current?.click(); } },
               { label: 'Write Outreach', icon: <Mail size={16} />, action: () => {
                 setMobileActionsOpen(false);
-                setChatOpen(true);
-                setOutreachMode(true);
-                const matrix = personas?.matrix;
-                let firstContactName = '';
-                if (matrix) {
-                  outer: for (const fn of ['design', 'engineering', 'product']) {
-                    for (const tier of ['eb', 'champion', 'coach']) {
-                      const contacts = matrix?.[fn]?.[tier];
-                      if (Array.isArray(contacts) && contacts.length > 0 && contacts[0]?.name) {
-                        firstContactName = contacts[0].name;
-                        break outer;
-                      }
-                    }
-                  }
-                }
-                const companyName = pov?.company_name || run?.company || '';
-                setChatInput(firstContactName
-                  ? `Help me write a cold email to ${firstContactName} at ${companyName}.`
-                  : `Help me write a cold email to a prospect at ${companyName}.`
-                );
+                openOutreachPicker();
               } },
               { label: 'Generate PSP', icon: <FileText size={16} />, action: () => { setMobileActionsOpen(false); setToastMessage('Coming soon — Generate PSP will be available once we\'ve reviewed example plans.'); setTimeout(() => setToastMessage(null), 4000); } },
               ...(session ? [{ label: feedbackSubmitted ? 'Rated!' : 'Rate', icon: <span style={{ fontSize: 16 }}>{feedbackSubmitted ? '\u2605' : '\u2606'}</span>, action: () => { setMobileActionsOpen(false); setRateModalOpen(true); } }] : []),
@@ -4178,7 +4655,7 @@ export default function BriefView() {
                     display: 'inline-flex', alignItems: 'center', gap: 4,
                   }}>
                     Outreach mode
-                    <button onClick={() => setOutreachMode(false)} style={{
+                    <button onClick={() => { setOutreachMode(false); setOutreachPickerOpen(false); }} style={{
                       background: 'none', border: 'none', color: 'var(--badge-yellow-text)',
                       cursor: 'pointer', padding: 0, fontSize: 10, fontWeight: 400,
                       textDecoration: 'underline', fontFamily: FONTS.sans,
@@ -4357,6 +4834,78 @@ export default function BriefView() {
                 </>
               ) : (
                 chatError
+              )}
+            </div>
+          )}
+
+          {/* Outreach contact picker */}
+          {outreachPickerOpen && (
+            <div style={{
+              borderTop: `1px solid ${COLORS.border}`,
+              background: 'var(--brief-bg)',
+              flexShrink: 0,
+              maxHeight: '45%',
+              display: 'flex', flexDirection: 'column',
+            }}>
+              <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '10px 18px 6px',
+              }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: COLORS.faint, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  {outreachContacts.length > 0 ? 'Pick a contact' : 'No contacts'}
+                </div>
+                <button onClick={() => setOutreachPickerOpen(false)} style={{
+                  background: 'none', border: 'none', color: COLORS.faint,
+                  cursor: 'pointer', padding: 2, borderRadius: 4,
+                }} title="Close picker">
+                  <X size={14} />
+                </button>
+              </div>
+              {outreachContacts.length === 0 ? (
+                <div style={{ padding: '4px 18px 14px', fontSize: 13, color: COLORS.tertiary, fontFamily: FONTS.sans }}>
+                  No contacts found for this brief.
+                </div>
+              ) : (
+                <div style={{ overflowY: 'auto', padding: '0 12px 10px' }}>
+                  {outreachContacts.map((c, i) => {
+                    const companyName = pov?.company_name || run.company || '';
+                    const firstBullet = Array.isArray(c?.briefing_bullets) && c.briefing_bullets[0]
+                      ? c.briefing_bullets[0]
+                      : (c?.outreach_context || c?.recommended_angle || '');
+                    return (
+                      <button
+                        key={c?.name || i}
+                        onClick={() => selectOutreachContact(c)}
+                        disabled={streaming}
+                        style={{
+                          display: 'block', width: '100%', textAlign: 'left',
+                          background: 'var(--brief-card)', border: `1px solid ${COLORS.border}`,
+                          borderRadius: 8, padding: '8px 10px', marginBottom: 6,
+                          cursor: streaming ? 'not-allowed' : 'pointer',
+                          fontFamily: FONTS.sans, opacity: streaming ? 0.5 : 1,
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: COLORS.heading }}>
+                            {c?.name || 'Unknown'}
+                          </span>
+                          {c?.tier && <TierBadge tier={c.tier} />}
+                        </div>
+                        <div style={{ fontSize: 12, color: COLORS.tertiary, marginTop: 2 }}>
+                          {[c?.title, companyName].filter(Boolean).join(' · ')}
+                        </div>
+                        {firstBullet && (
+                          <div style={{
+                            fontSize: 12, color: COLORS.secondary, marginTop: 4,
+                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                          }}>
+                            {firstBullet}
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
               )}
             </div>
           )}
