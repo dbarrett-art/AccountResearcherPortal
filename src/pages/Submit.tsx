@@ -75,8 +75,6 @@ export default function Submit() {
   const [creditReason, setCreditReason] = useState('');
   const [creditSubmitting, setCreditSubmitting] = useState(false);
   const [creditResult, setCreditResult] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
-  const [unratedBriefs, setUnratedBriefs] = useState<{ run_id: string; company: string; created_at: string }[]>([]);
-  const [unratedLoading, setUnratedLoading] = useState(false);
 
   useEffect(() => { refreshProfile(); }, [refreshProfile]);
 
@@ -213,23 +211,11 @@ export default function Submit() {
     }
   };
 
-  const openCreditModal = async () => {
+  const openCreditModal = () => {
     setCreditModalOpen(true);
     setCreditResult(null);
     setCreditAmount(5);
     setCreditReason('');
-    setUnratedBriefs([]);
-    setUnratedLoading(true);
-    try {
-      const res = await workerFetch('/unrated-briefs');
-      if (res.ok) {
-        const data = await res.json();
-        if (data.unrated_count > 0) {
-          setUnratedBriefs(data.unrated_briefs);
-        }
-      }
-    } catch { /* fail-open: show the form */ }
-    setUnratedLoading(false);
   };
 
   const handleCreditSubmit = async () => {
@@ -241,13 +227,6 @@ export default function Submit() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ amount: creditAmount, reason: creditReason || undefined }),
       });
-      if (res.status === 422) {
-        const data = await res.json();
-        if (data.error === 'rate_briefs_first') {
-          setUnratedBriefs(data.unrated_briefs || []);
-          return;
-        }
-      }
       if (res.ok) {
         setCreditResult({ type: 'success', msg: 'Request submitted — your manager will be notified.' });
       } else {
@@ -454,50 +433,7 @@ export default function Submit() {
               }}>{'\u00D7'}</button>
             </div>
 
-            {unratedLoading ? (
-              <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-secondary)', fontSize: 13 }}>
-                Checking brief ratings...
-              </div>
-            ) : unratedBriefs.length > 0 ? (
-              /* ── Blocking state: unrated briefs ── */
-              <div>
-                <div style={{
-                  background: 'rgba(217,119,6,0.08)', border: '1px solid rgba(217,119,6,0.2)',
-                  borderRadius: 8, padding: '12px 14px', marginBottom: 16, fontSize: 13, color: 'var(--text-primary)',
-                }}>
-                  Rate your completed briefs before requesting more credits.
-                </div>
-                <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8, fontWeight: 500 }}>
-                  {unratedBriefs.length} unrated brief{unratedBriefs.length > 1 ? 's' : ''}
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {unratedBriefs.map(b => (
-                    <a key={b.run_id} href={`#/briefs/${b.run_id}`}
-                      onClick={() => setCreditModalOpen(false)}
-                      style={{
-                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                        padding: '10px 12px', borderRadius: 6, fontSize: 13,
-                        background: 'var(--bg-elevated)', border: '1px solid var(--border)',
-                        color: 'var(--text-primary)', textDecoration: 'none',
-                        transition: 'border-color 120ms',
-                      }}
-                      onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
-                      onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}
-                    >
-                      <span style={{ fontWeight: 500 }}>{b.company}</span>
-                      <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
-                        {new Date(b.created_at).toLocaleDateString()}
-                      </span>
-                    </a>
-                  ))}
-                </div>
-                <button onClick={() => { setCreditModalOpen(false); setTimeout(() => openCreditModal(), 300); }} style={{
-                  width: '100%', marginTop: 16, padding: '8px 14px', fontSize: 13, fontWeight: 500,
-                  borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-elevated)',
-                  color: 'var(--text-primary)', cursor: 'pointer',
-                }}>Refresh</button>
-              </div>
-            ) : creditResult?.type === 'success' ? (
+            {creditResult?.type === 'success' ? (
               /* ── Success state ── */
               <div>
                 <div style={{
