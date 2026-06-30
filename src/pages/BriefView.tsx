@@ -4047,10 +4047,11 @@ export default function BriefView() {
                     }}>
                       <span style={{ fontSize: 14 }}>{feedbackSubmitted ? '\u2605' : '\u2606'}</span> Rate
                       <span style={{
-                        fontSize: 9, fontWeight: 700, letterSpacing: '0.04em',
-                        padding: '2px 6px', borderRadius: 4,
-                        background: feedbackSubmitted ? 'rgba(34,197,94,0.08)' : '#2a2a2a',
-                        color: feedbackSubmitted ? '#22c55e' : '#555',
+                        fontSize: 10, fontWeight: 700, letterSpacing: '0.05em',
+                        padding: '2px 7px', borderRadius: 10,
+                        background: feedbackSubmitted ? 'rgba(34,197,94,0.08)' : '#f0eeeb',
+                        color: feedbackSubmitted ? '#16a34a' : '#999',
+                        border: feedbackSubmitted ? '1px solid rgba(34,197,94,0.2)' : '1px solid #e5e2de',
                       }}>
                         {feedbackSubmitted ? 'RATED \u2713' : 'NOT RATED'}
                       </span>
