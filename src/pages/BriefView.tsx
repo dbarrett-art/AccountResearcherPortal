@@ -7,7 +7,6 @@ import TableSkeleton from '../components/TableSkeleton';
 import usePageTitle from '../hooks/usePageTitle';
 import useWindowWidth from '../hooks/useWindowWidth';
 import { ArrowLeft, FileText, X, ChevronDown, ExternalLink, Send, Trash2, Activity, Share2, RefreshCw, Paperclip, ClipboardList, Copy, Check, MoreHorizontal, Mail } from 'lucide-react';
-import SectionFeedback from '../components/SectionFeedback';
 import { isMeaningfulFeedback } from '../lib/feedback';
 // DOMPurify removed — CitedProse now renders React elements instead of innerHTML
 
@@ -222,8 +221,8 @@ const LABELS: Record<string, Record<LabelKey, string>> = {
     nudge_rate_it: 'Rate it \u2192',
     rate_this_section: 'Rate this section:',
     rate_this_brief: 'Rate this brief',
-    feedback_thanks: 'Thanks for your feedback!',
-    feedback_helps: 'Your ratings help us improve.',
+    feedback_thanks: 'Thanks for the feedback',
+    feedback_helps: 'Your ratings help improve future briefs.',
 
     icp_suffix: 'ICP',
 
@@ -1119,7 +1118,7 @@ function CitationTooltip({ tooltip }: {
       )}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 10, borderTop: '1px solid #e5e0d8' }}>
         <div style={{ fontSize: 11, color: COLORS.faint }}>
-          {source?.date || ''}
+          {source?.published_date || source?.date || ''}
         </div>
         {url && (
           <a
@@ -3057,6 +3056,7 @@ function SourcesSection({ pov, market }: { pov: any; market?: string | null }) {
       {cleanSources.map((s: any, i: number) => {
         const url = typeof s === 'string' ? s : (s?.url || '');
         const sourceTitle = typeof s === 'string' ? '' : (s?.source || s?.title || '');
+        const publishedDate = typeof s === 'string' ? '' : (s?.published_date || '');
         const label = sourceTitle && sourceTitle !== 'Research source'
           ? (sourceTitle.length > 60 ? sourceTitle.slice(0, 57) + '…' : sourceTitle)
           : url ? (() => { try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return ''; } })()
@@ -3076,6 +3076,11 @@ function SourcesSection({ pov, market }: { pov: any; market?: string | null }) {
               </a>
             ) : (
               <span style={{ color: COLORS.secondary }}>{displayLabel}</span>
+            )}
+            {publishedDate && (
+              <span style={{ color: COLORS.tertiary, fontSize: 12, marginLeft: 6 }}>
+                {'\u00b7'} {publishedDate}
+              </span>
             )}
           </div>
         );
@@ -3164,10 +3169,8 @@ function RunHistory({ currentRunId, company }: { currentRunId: string; company: 
 /*  Brief content (all sections assembled)                             */
 /* ------------------------------------------------------------------ */
 
-function BriefContent({ pov, personas, hooksData, valuePyramid, sectionFeedback, onSectionFeedback, userRole, market }: {
+function BriefContent({ pov, personas, hooksData, valuePyramid, userRole, market }: {
   pov: any; personas: any; hooksData?: any; valuePyramid?: any;
-  sectionFeedback: Record<string, { score: number; comment: string }>;
-  onSectionFeedback: (key: string, score: number, comment: string) => void;
   userRole?: string;
   market?: string | null;
 }) {
@@ -3196,10 +3199,6 @@ function BriefContent({ pov, personas, hooksData, valuePyramid, sectionFeedback,
 
   const onCitationClick = (i: number, src: any, e: React.MouseEvent) => handleCitationClick(i, src, e);
 
-  const fb = (key: string) => (
-    <SectionFeedback sectionKey={key} feedback={sectionFeedback[key]} onChange={onSectionFeedback} />
-  );
-
   return (
     <>
       {/* 1. ICP Fit (manager/admin only) */}
@@ -3208,31 +3207,31 @@ function BriefContent({ pov, personas, hooksData, valuePyramid, sectionFeedback,
       )}
 
       {/* 2. About */}
-      <AboutSection pov={pov} sources={allSources} feedbackNode={fb('about')} onCitationClick={onCitationClick} market={market} />
+      <AboutSection pov={pov} sources={allSources} onCitationClick={onCitationClick} market={market} />
 
       {/* 2.5. Organisational Structure */}
       <OrgStructureSection pov={pov} market={market} />
 
       {/* 3. Why Anything */}
-      <WhyAnythingSection pov={pov} sources={allSources} feedbackNode={fb('why_anything')} onCitationClick={onCitationClick} market={market} />
+      <WhyAnythingSection pov={pov} sources={allSources} onCitationClick={onCitationClick} market={market} />
 
       {/* 4. Why Now */}
-      <WhyNowSection pov={pov} sources={allSources} feedbackNode={fb('why_now')} onCitationClick={onCitationClick} market={market} />
+      <WhyNowSection pov={pov} sources={allSources} onCitationClick={onCitationClick} market={market} />
 
       {/* 5. Why Figma */}
-      <WhyFigmaSection pov={pov} sources={allSources} feedbackNode={fb('why_figma')} onCitationClick={onCitationClick} market={market} />
+      <WhyFigmaSection pov={pov} sources={allSources} onCitationClick={onCitationClick} market={market} />
 
       {/* 5.5 Whitespace & Opportunity */}
-      <WhitespaceSection pov={pov} feedbackNode={fb('whitespace')} market={market} />
+      <WhitespaceSection pov={pov} market={market} />
 
       {/* 6. Value Pyramid */}
-      <ValuePyramidSection pyramid={valuePyramid} feedbackNode={fb('value_pyramid')} market={market} />
+      <ValuePyramidSection pyramid={valuePyramid} market={market} />
 
       {/* 8. Digital Products */}
       <DigitalProductsSection pov={pov} market={market} />
 
       {/* 9. Who to Contact */}
-      <ContactsSection personas={personas} hooksData={hooksData} feedbackNode={fb('contact_matrix')} market={market} />
+      <ContactsSection personas={personas} hooksData={hooksData} market={market} />
 
       {/* 10. Job Signals */}
       <JobSignalsSection pov={pov} market={market} />
@@ -3244,7 +3243,7 @@ function BriefContent({ pov, personas, hooksData, valuePyramid, sectionFeedback,
       <TechPartnersSection pov={pov} market={market} />
 
       {/* 13. Research Deep Dive */}
-      <ResearchDeepDiveSection pov={pov} feedbackNode={fb('research_deep_dive')} market={market} />
+      <ResearchDeepDiveSection pov={pov} market={market} />
 
       {/* Proof Points — removed from spec (2026-04-01 reframe) */}
 
@@ -3330,13 +3329,14 @@ export default function BriefView() {
   const [overallComment, setOverallComment] = useState('');
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
   const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
-  const [nudgeBannerVisible, setNudgeBannerVisible] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pendingAttachments, setPendingAttachments] = useState<ChatAttachment[]>([]);
   const [reviewMode, setReviewMode] = useState(false);
   const [outreachMode, setOutreachMode] = useState(false);
   const [outreachPickerOpen, setOutreachPickerOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toastTone, setToastTone] = useState<'credit' | 'neutral'>('neutral');
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Section feedback state
   const [sectionFeedback, setSectionFeedback] = useState<Record<string, { score: number; comment: string }>>({});
@@ -3487,9 +3487,38 @@ export default function BriefView() {
         }),
       });
       setFeedbackSubmitted(true);
-      setTimeout(() => setRateModalOpen(false), 1800);
+      setTimeout(() => setRateModalOpen(false), 2000);
+      pollForFeedbackNotification();
     } catch { /* silent */ }
     setFeedbackSubmitting(false);
+  };
+
+  // Show a transient toast (bottom-right). 'credit' tone gets a green border.
+  const showToast = (message: string, tone: 'credit' | 'neutral' = 'neutral') => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setToastTone(tone);
+    setToastMessage(message);
+    toastTimerRef.current = setTimeout(() => setToastMessage(null), 4000);
+  };
+
+  // Poll for the async feedback-credit notification (max 10s, every 2s).
+  const pollForFeedbackNotification = () => {
+    if (!run_id) return;
+    let attempts = 0;
+    const pollInterval = setInterval(async () => {
+      attempts++;
+      if (attempts > 5) { clearInterval(pollInterval); return; }
+      try {
+        const res = await workerFetch(`/notifications/feedback/${run_id}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.message && !data.read) {
+            showToast(data.message, /\bcredit/i.test(data.message) ? 'credit' : 'neutral');
+            clearInterval(pollInterval);
+          }
+        }
+      } catch { /* silent */ }
+    }, 2000);
   };
 
   // Section feedback handler — debounced auto-save (inline) or state-only (modal)
@@ -3520,16 +3549,6 @@ export default function BriefView() {
       } catch { /* silent */ }
     }, 1000);
   };
-
-  const hasAnyFeedback = Object.values(sectionFeedback).some(f => f.score !== 0);
-
-  // Nudge banner timer — fires after 2 minutes if no ratings given
-  useEffect(() => {
-    if (hasAnyFeedback || feedbackSubmitted) return;
-    const timer = setTimeout(() => setNudgeBannerVisible(true), 2 * 60 * 1000);
-    return () => clearTimeout(timer);
-  }, [hasAnyFeedback, feedbackSubmitted]);
-
 
   // Hydrate feedbackSubmitted from server on mount / run change
   useEffect(() => {
@@ -4020,14 +4039,21 @@ export default function BriefView() {
                   <div style={{ width: 0.5, height: 18, background: 'var(--color-border-tertiary, #e7e5e4)' }} />
                   {session && (
                     <button onClick={() => setRateModalOpen(true)} style={{
-                      display: 'flex', alignItems: 'center', gap: 6, padding: '6px 13px',
+                      display: 'flex', alignItems: 'center', gap: 8, padding: '6px 13px',
                       borderRadius: 'var(--border-radius-md, 8px)',
                       border: '0.5px solid var(--color-border-secondary, #d6d3d1)',
                       fontSize: 13, cursor: 'pointer', fontFamily: FONTS.sans,
-                      background: 'transparent',
-                      color: feedbackSubmitted ? '#065f46' : COLORS.secondary,
+                      background: 'transparent', color: COLORS.secondary,
                     }}>
-                      <span style={{ fontSize: 14 }}>{feedbackSubmitted ? '\u2605' : '\u2606'}</span> {feedbackSubmitted ? 'Rated!' : 'Rate'}
+                      <span style={{ fontSize: 14 }}>{feedbackSubmitted ? '\u2605' : '\u2606'}</span> Rate
+                      <span style={{
+                        fontSize: 9, fontWeight: 700, letterSpacing: '0.04em',
+                        padding: '2px 6px', borderRadius: 4,
+                        background: feedbackSubmitted ? 'rgba(34,197,94,0.08)' : '#2a2a2a',
+                        color: feedbackSubmitted ? '#22c55e' : '#555',
+                      }}>
+                        {feedbackSubmitted ? 'RATED \u2713' : 'NOT RATED'}
+                      </span>
                     </button>
                   )}
                 </>
@@ -4323,46 +4349,12 @@ export default function BriefView() {
           <BriefContent
             pov={pov} personas={personas} hooksData={hooksData}
             valuePyramid={brief?.value_pyramid || pov?.value_pyramid}
-            sectionFeedback={sectionFeedback}
-            onSectionFeedback={handleSectionFeedback}
             userRole={userProfile?.role}
             market={run?.market}
           />
         )}
       </div>
       </div>
-
-      {/* ============ Nudge banner (2-min timer) ============ */}
-      {nudgeBannerVisible && !feedbackSubmitted && (
-        <div style={{
-          position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
-          background: 'var(--brief-card)', border: '1px solid var(--brief-input-border)', borderRadius: 8,
-          padding: '12px 20px', display: 'flex', alignItems: 'center', gap: 12,
-          boxShadow: '0 8px 24px rgba(0,0,0,0.4)', zIndex: 40,
-          fontSize: 13, color: 'var(--brief-body)', fontFamily: FONTS.sans,
-        }}>
-          <span>{getLabels(run?.market).nudge_how_was}</span>
-          <button
-            onClick={() => { setRateModalOpen(true); setNudgeBannerVisible(false); }}
-            style={{
-              background: '#5e6ad2', color: '#fff', border: 'none',
-              padding: '6px 14px', borderRadius: 6, cursor: 'pointer',
-              fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap',
-            }}
-          >
-            {getLabels(run?.market).nudge_rate_it}
-          </button>
-          <button
-            onClick={() => setNudgeBannerVisible(false)}
-            style={{
-              background: 'none', border: 'none', cursor: 'pointer',
-              color: 'var(--brief-tertiary)', padding: 4, fontSize: 16, lineHeight: 1,
-            }}
-          >
-            <X size={14} />
-          </button>
-        </div>
-      )}
 
       {/* ============ Rate modal ============ */}
       {rateModalOpen && (() => {
@@ -4437,6 +4429,52 @@ export default function BriefView() {
                   </div>
                 ) : (
                   <>
+                    {/* Overall thoughts — top of body */}
+                    <div style={{ padding: '12px 0 8px' }}>
+                      <div style={{
+                        fontSize: 11, fontWeight: 600, letterSpacing: '0.06em',
+                        textTransform: 'uppercase', color: 'var(--brief-faint)', marginBottom: 8,
+                      }}>
+                        Overall thoughts
+                      </div>
+                      <textarea
+                        value={overallComment}
+                        onChange={e => setOverallComment(e.target.value)}
+                        placeholder="How accurate was this brief overall? Anything specific that was off? (optional)"
+                        style={{
+                          width: '100%', minHeight: 64, padding: '8px 10px',
+                          fontSize: 13, fontFamily: FONTS.sans,
+                          background: 'var(--brief-input-bg)', border: '1px solid var(--brief-input-border)',
+                          borderRadius: 6, color: 'var(--brief-body)', resize: 'vertical',
+                          outline: 'none',
+                        }}
+                        onFocus={e => { e.currentTarget.style.borderColor = '#5e6ad2'; }}
+                        onBlur={e => { e.currentTarget.style.borderColor = ''; }}
+                      />
+                      {userProfile?.feedback_gate_enabled && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
+                          <div style={{ fontSize: 11, color: 'var(--brief-faint)' }}>
+                            Add a comment to submit feedback (min. 20 characters)
+                          </div>
+                          <div style={{
+                            fontSize: 11, fontVariantNumeric: 'tabular-nums',
+                            color: overallComment.trim().length >= 20 ? '#22c55e' : 'var(--brief-faint)',
+                          }}>
+                            {overallComment.trim().length}/20
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Divider + section header */}
+                    <div style={{ height: 1, background: 'var(--brief-border)', margin: '4px 0' }} />
+                    <div style={{
+                      fontSize: 11, fontWeight: 600, letterSpacing: '0.06em',
+                      textTransform: 'uppercase', color: 'var(--brief-faint)', padding: '12px 0 4px',
+                    }}>
+                      Rate each section
+                    </div>
+
                     {FEEDBACK_SECTIONS.filter(s => s.id !== 'icp_fit' || userProfile?.role === 'manager' || userProfile?.role === 'admin').map(section => {
                       const fb = sectionFeedback[section.id];
                       const score = fb?.score ?? 0;
@@ -4497,40 +4535,6 @@ export default function BriefView() {
                         </div>
                       );
                     })}
-
-                    {/* Overall comments */}
-                    <div style={{ padding: '14px 0 8px' }}>
-                      <div style={{ fontSize: 13, color: 'var(--brief-tertiary)', marginBottom: 6 }}>
-                        Overall comments {userProfile?.feedback_gate_enabled ? '' : '(optional)'}
-                      </div>
-                      <textarea
-                        value={overallComment}
-                        onChange={e => setOverallComment(e.target.value)}
-                        placeholder="Any other thoughts on this brief..."
-                        style={{
-                          width: '100%', minHeight: 60, padding: '8px 10px',
-                          fontSize: 13, fontFamily: FONTS.sans,
-                          background: 'var(--brief-input-bg)', border: '1px solid var(--brief-input-border)',
-                          borderRadius: 6, color: 'var(--brief-body)', resize: 'vertical',
-                          outline: 'none',
-                        }}
-                        onFocus={e => { e.currentTarget.style.borderColor = '#5e6ad2'; }}
-                        onBlur={e => { e.currentTarget.style.borderColor = ''; }}
-                      />
-                      {userProfile?.feedback_gate_enabled && (
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
-                          <div style={{ fontSize: 11, color: 'var(--brief-faint)' }}>
-                            Add a comment to submit feedback (min. 20 characters)
-                          </div>
-                          <div style={{
-                            fontSize: 11, fontVariantNumeric: 'tabular-nums',
-                            color: overallComment.trim().length >= 20 ? '#22c55e' : 'var(--brief-faint)',
-                          }}>
-                            {overallComment.trim().length}/20
-                          </div>
-                        </div>
-                      )}
-                    </div>
                   </>
                 )}
               </div>
@@ -4540,7 +4544,8 @@ export default function BriefView() {
                 const gateActive = !!userProfile?.feedback_gate_enabled;
                 const hasAnyComment = Object.values(sectionFeedback).some(f => f.comment && f.comment.trim().length > 0);
                 const meetsMeaningful = isMeaningfulFeedback(overallComment) || (hasAnyComment && Object.values(sectionFeedback).some(f => isMeaningfulFeedback(f.comment)));
-                const canSubmit = ratedCount > 0 && (!gateActive || meetsMeaningful) && !feedbackSubmitting;
+                // Submit always enabled when no gate (zero sections rated is a valid "read" signal).
+                const canSubmit = (!gateActive || meetsMeaningful) && !feedbackSubmitting;
                 return (
                   <div style={{
                     padding: '14px 20px', borderTop: '1px solid var(--brief-border)',
@@ -5012,12 +5017,13 @@ export default function BriefView() {
       {/* Toast notification */}
       {toastMessage && (
         <div style={{
-          position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
-          background: 'var(--brief-card)', color: 'var(--brief-heading)', padding: '10px 20px',
+          position: 'fixed', bottom: 24, right: 24,
+          background: 'var(--brief-card)', color: 'var(--brief-heading)', padding: '12px 18px',
           borderRadius: 8, fontSize: 13, fontFamily: FONTS.sans,
-          boxShadow: '0 4px 12px rgba(0,0,0,0.3)', zIndex: 200,
-          maxWidth: 400, textAlign: 'center',
-          animation: 'fadeIn 150ms ease-out',
+          border: toastTone === 'credit' ? '1px solid #22c55e' : '1px solid var(--brief-input-border)',
+          boxShadow: '0 8px 24px rgba(0,0,0,0.4)', zIndex: 250,
+          width: 280, lineHeight: 1.4,
+          animation: 'slideIn 150ms ease-out',
         }}>
           {toastMessage}
         </div>
