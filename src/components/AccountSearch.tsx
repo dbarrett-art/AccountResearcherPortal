@@ -90,10 +90,26 @@ interface Props {
 }
 
 const MIN_QUERY_LEN = 2;
-// 200ms is the shortest delay that reliably coalesces a burst of typing into one
-// request; the endpoint's own server-side work is single-digit milliseconds, so
-// the debounce dominates what the field feels like.
-const DEBOUNCE_MS = 200;
+// The endpoint's own server-side work is single-digit milliseconds and the round
+// trip is ~50ms, so the debounce is the largest single contributor to how the
+// field feels. 120ms still coalesces a burst of typing into one request — a
+// fast typist is under 100ms between keystrokes — while taking 80ms off every
+// search compared with the 200ms this started at.
+const DEBOUNCE_MS = 120;
+
+/**
+ * Results are cached per exact query string, for the session.
+ *
+ * Typing is not a forward-only sequence: people backspace, retype, and re-check
+ * a candidate they already looked at. Every one of those was a fresh round trip.
+ * Cached, they are instant, which does more for how the field feels than any
+ * query tuning — the alternative to a cache hit is not a fast request, it is a
+ * ~50ms one at best and a few hundred at worst.
+ *
+ * Capped because an AE could type for a long time in one session, and unbounded
+ * growth in a component that lives for a whole page visit is a leak.
+ */
+const CACHE_MAX = 200;
 
 const MATCH_LABEL: Record<MatchTier, string> = {
   domain_exact: 'exact domain',
@@ -132,6 +148,22 @@ export default function AccountSearch({
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const abortRef = useRef<AbortController | undefined>(undefined);
+  const cacheRef = useRef<Map<string, SearchResponse>>(new Map());
+  /**
+   * Queries that returned nothing, restricted to those with no dot in them.
+   *
+   * Substring matching is monotonic: if nothing contains 'zzyz', nothing can
+   * contain 'zzyzx' either, so once a query comes back empty every extension of
+   * it can be answered without asking. Typing out a 20-character company that
+   * is not in the book went from ~18 requests to 3.
+   *
+   * The dot-free restriction is not cosmetic. A query with a dot may become
+   * domain-shaped as it grows, which adds an exact-apex term that the shorter
+   * query never ran: 'x.isbank.com.t' matches nothing, but 'x.isbank.com.tr'
+   * resolves via the apex isbank.com.tr. Extension does not imply emptiness
+   * there, so those queries always go to the network.
+   */
+  const emptyPrefixRef = useRef<Set<string>>(new Set());
   // Every request carries a sequence number and only the newest is allowed to
   // write state. Abort alone is not enough: a response already in flight can
   // resolve after a later one and repaint the list with stale candidates.
@@ -146,6 +178,45 @@ export default function AccountSearch({
       setError(null);
       setLoading(false);
       return;
+    }
+
+    const cached = cacheRef.current.get(trimmed);
+    if (cached) {
+      // Re-insert so the cap evicts genuinely cold entries rather than the ones
+      // being used most.
+      cacheRef.current.delete(trimmed);
+      cacheRef.current.set(trimmed, cached);
+      abortRef.current?.abort();
+      seqRef.current++;
+      setResults(cached);
+      setLatency(0);
+      setHighlight(0);
+      setError(null);
+      setLoading(false);
+      setOpen(true);
+      return;
+    }
+
+    // Any extension of a dot-free query that matched nothing also matches
+    // nothing. Answer it locally rather than spending a round trip to be told so.
+    if (!trimmed.includes('.')) {
+      const lower = trimmed.toLowerCase();
+      for (const empty of emptyPrefixRef.current) {
+        if (lower.startsWith(empty)) {
+          abortRef.current?.abort();
+          seqRef.current++;
+          setResults({
+            query: trimmed,
+            interpreted_as: { kind: 'name', apex: null },
+            candidates: [], count: 0, no_match: true,
+          });
+          setLatency(0);
+          setError(null);
+          setLoading(false);
+          setOpen(true);
+          return;
+        }
+      }
     }
 
     abortRef.current?.abort();
@@ -172,6 +243,16 @@ export default function AccountSearch({
       }
       const data: SearchResponse = await res.json();
       if (seq !== seqRef.current) return;
+
+      cacheRef.current.set(trimmed, data);
+      if (cacheRef.current.size > CACHE_MAX) {
+        // Map preserves insertion order, so the first key is the coldest.
+        cacheRef.current.delete(cacheRef.current.keys().next().value as string);
+      }
+      if (data.no_match && !trimmed.includes('.')) {
+        emptyPrefixRef.current.add(trimmed.toLowerCase());
+      }
+
       setResults(data);
       setLatency(Math.round(performance.now() - started));
       setHighlight(0);
@@ -235,6 +316,9 @@ export default function AccountSearch({
     setResults(null);
     setError(null);
     setLatency(null);
+    // Caches are kept. They are keyed on the exact query and the whitespace book
+    // does not change mid-session, so a second look at the same company should
+    // still be instant.
   };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
@@ -387,8 +471,10 @@ export default function AccountSearch({
             {results.count} {results.count === 1 ? 'account' : 'accounts'} found
             {results.interpreted_as.apex && ` for ${results.interpreted_as.apex}`}
             {results.truncated && ' (showing the top 10)'}
-            {showLatency && latency != null && ` · ${latency}ms round trip`}
-            {showLatency && results.latency_ms != null && ` · ${results.latency_ms}ms in the Worker`}
+            {showLatency && latency === 0 && ' · cached, no request'}
+            {showLatency && latency != null && latency > 0 && ` · ${latency}ms round trip`}
+            {showLatency && latency != null && latency > 0 && results.latency_ms != null &&
+              ` · ${results.latency_ms}ms in the Worker`}
           </>
         )}
       </div>
