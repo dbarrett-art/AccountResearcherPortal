@@ -6,7 +6,7 @@ import Layout from '../components/Layout';
 import TableSkeleton from '../components/TableSkeleton';
 import usePageTitle from '../hooks/usePageTitle';
 import useWindowWidth from '../hooks/useWindowWidth';
-import { ArrowLeft, FileText, X, ChevronDown, ExternalLink, Send, Trash2, Activity, Share2, RefreshCw, Paperclip, ClipboardList, Copy, Check, MoreHorizontal, Mail } from 'lucide-react';
+import { ArrowLeft, FileText, X, ChevronDown, ExternalLink, Send, Trash2, Activity, RefreshCw, Paperclip, ClipboardList, Copy, Check, MoreHorizontal, Mail } from 'lucide-react';
 import { isMeaningfulFeedback } from '../lib/feedback';
 import { ClaimAuditBanner, useClaimAuditFindings } from '../components/ClaimAudit';
 // DOMPurify removed — CitedProse now renders React elements instead of innerHTML
@@ -3437,11 +3437,6 @@ export default function BriefView() {
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [shareOpen, setShareOpen] = useState(false);
-  const [shareEmail, setShareEmail] = useState('');
-  const [shareStatus, setShareStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
-  const [shareError, setShareError] = useState('');
-  const shareRef = useRef<HTMLDivElement>(null);
   const [runningEnglish, setRunningEnglish] = useState(false);
   const [englishSubmitted, setEnglishSubmitted] = useState(false);
   const [rerendering, setRerendering] = useState(false);
@@ -3498,33 +3493,6 @@ export default function BriefView() {
     }
   };
 
-  const handleShare = async () => {
-    if (!session || shareStatus === 'sending') return;
-    const email = shareEmail.trim().toLowerCase();
-    if (!email || !email.endsWith('@figma.com')) {
-      setShareStatus('error');
-      setShareError('Only @figma.com email addresses are allowed');
-      return;
-    }
-    setShareStatus('sending');
-    setShareError('');
-    try {
-      const res = await workerFetch(`/share/${run_id}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
-      });
-      if (!res.ok) {
-        const { error } = await res.json().catch(() => ({ error: 'Failed to send' }));
-        throw new Error(error || 'Failed to send');
-      }
-      setShareStatus('sent');
-    } catch (err: any) {
-      setShareStatus('error');
-      setShareError(err.message || 'Failed to send access link');
-    }
-  };
-
   const handleDelete = async () => {
     setDeleting(true);
     try {
@@ -3568,16 +3536,6 @@ export default function BriefView() {
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [overflowOpen]);
-
-  // Close share popover on outside click
-  useEffect(() => {
-    if (!shareOpen) return;
-    const handler = (e: MouseEvent) => {
-      if (shareRef.current && !shareRef.current.contains(e.target as Node)) setShareOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [shareOpen]);
 
   // Modal submit — sends all section ratings + overall comment
   const handleModalSubmit = async () => {
@@ -4238,64 +4196,13 @@ export default function BriefView() {
                     borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
                     minWidth: 180, zIndex: 50, overflow: 'hidden',
                   }}>
-                    {/* Share — opens popover inline */}
-                    <div ref={shareRef} style={{ position: 'relative' }}>
-                      <button onClick={(e) => { e.stopPropagation(); setShareOpen(o => !o); setShareStatus('idle'); setShareError(''); setShareEmail(''); }}
-                        style={{
-                          display: 'flex', alignItems: 'center', gap: 8, width: '100%',
-                          padding: '10px 14px', fontSize: 13, color: COLORS.secondary,
-                          background: 'none', border: 'none', cursor: 'pointer',
-                          fontFamily: FONTS.sans, borderBottom: `1px solid ${COLORS.borderLight}`,
-                          textAlign: 'left',
-                        }}>
-                        <Share2 size={14} /> Share
-                      </button>
-                      {shareOpen && (
-                        <div style={{
-                          position: 'absolute', right: '100%', top: 0, marginRight: 4,
-                          background: 'var(--brief-card)', border: '1px solid var(--brief-input-border)', borderRadius: 8,
-                          padding: 16, width: 300, zIndex: 50, boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-                        }}>
-                          {shareStatus === 'sent' ? (
-                            <div style={{ fontSize: 13, color: '#22c55e', lineHeight: 1.6 }}>
-                              Access link sent to <strong>{shareEmail}</strong>. They'll receive an email to view this brief.
-                            </div>
-                          ) : (
-                            <>
-                              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--brief-body)', marginBottom: 8 }}>
-                                Share with a Figma colleague
-                              </div>
-                              <input
-                                type="email"
-                                placeholder="name@figma.com"
-                                value={shareEmail}
-                                onChange={e => setShareEmail(e.target.value)}
-                                onKeyDown={e => { if (e.key === 'Enter') handleShare(); }}
-                                onClick={e => e.stopPropagation()}
-                                style={{
-                                  width: '100%', padding: '8px 10px', fontSize: 13,
-                                  background: 'var(--brief-input-bg)', border: '1px solid var(--brief-input-border)', borderRadius: 6,
-                                  color: 'var(--brief-heading)', outline: 'none', boxSizing: 'border-box',
-                                }}
-                              />
-                              {shareStatus === 'error' && (
-                                <div style={{ fontSize: 12, color: '#ef4444', marginTop: 6 }}>{shareError}</div>
-                              )}
-                              <button
-                                onClick={handleShare}
-                                disabled={shareStatus === 'sending' || !shareEmail.trim()}
-                                style={{
-                                  ...btnStyle('primary'), width: '100%', marginTop: 8,
-                                  justifyContent: 'center', opacity: shareStatus === 'sending' || !shareEmail.trim() ? 0.5 : 1,
-                                }}
-                              >
-                                <Send size={13} /> {shareStatus === 'sending' ? 'Sending...' : 'Send access link'}
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      )}
-                    </div>
+                    {/* Sharing removed 2026-08-24. The button minted a
+                        `shared_briefs` row whose token GET /share-brief/:token
+                        redeemed with no login check, and those tokens were
+                        millisecond timestamps. The endpoint now returns 410, so
+                        leaving the button here would only produce links that do
+                        not work. A colleague who needs this brief gets it the
+                        same way they get any other: they sign in to the portal. */}
                     {/* Download PDF */}
                     {run.pdf_url && (
                       <button onClick={() => { handleDownloadPdf(); setOverflowOpen(false); }} disabled={pdfLoading}
