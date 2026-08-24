@@ -5,7 +5,13 @@ export const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiO
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-const WORKER_BASE = 'https://go.accountresearch.workers.dev';
+/**
+ * Worker base URL. Defaults to production; VITE_WORKER_BASE points a local dev
+ * server at a `wrangler dev` Worker, which is the only way to exercise a Worker
+ * endpoint that has not been deployed yet. A production build has no such env
+ * var, so the default is what ships.
+ */
+const WORKER_BASE = import.meta.env.VITE_WORKER_BASE || 'https://go.accountresearch.workers.dev';
 
 /**
  * Fetch wrapper for Worker API calls that always uses a fresh Supabase JWT.
