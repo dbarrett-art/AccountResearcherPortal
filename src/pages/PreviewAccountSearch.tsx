@@ -21,6 +21,12 @@ import AccountSearch, { type AccountSelection } from '../components/AccountSearc
  * this feature exists to make impossible, the ambiguity cases that actually
  * occur in the live book, the diacritic and public-suffix canaries, and both
  * shapes of no-match.
+ *
+ * A no-match is a fork, not a dead end: a company can legitimately not be in the
+ * whitespace book, and the net-new-prospect path lets the research proceed on a
+ * hand-typed domain with the absence of whitespace data recorded rather than
+ * guessed around. The payload panel below prints what each of the two outcomes
+ * actually sends, side by side with what it means downstream.
  */
 
 interface Scenario {
@@ -90,13 +96,22 @@ const SCENARIOS: Scenario[] = [
     query: 'figma-not-a-customer.example',
     why: 'Same rule via the domain path, with the apex it tried spelled out.',
   },
+  {
+    label: 'New prospect — the path out of a no-match',
+    query: 'Northwind Robotics',
+    why: 'A company genuinely not in the book is not a search failure and must not be a dead end. Take the "new prospect" button, type a domain by hand, and the payload panel shows no_whitespace_account_id, no_whitespace_data: true, and the domain you entered. Nothing suggests the domain for you — the system does not know this account, so it does not get to guess its website.',
+  },
+  {
+    label: 'New prospect — searched by domain',
+    query: 'northwind-robotics.example',
+    why: 'Same path, reached from a domain search. The domain field starts pre-filled because you already typed it — repeating your own input is not a guess. Try a malformed one ("not a domain", "foo@bar") and the confirm button stays disabled.',
+  },
 ];
 
 export default function PreviewAccountSearch() {
   usePageTitle('Preview — Account Search');
 
   const [selection, setSelection] = useState<AccountSelection | null>(null);
-  const [unlockedFor, setUnlockedFor] = useState<string | null>(null);
   const [seedKey, setSeedKey] = useState(0);
   const [seed, setSeed] = useState('');
   const [note, setNote] = useState<Scenario | null>(null);
@@ -116,7 +131,6 @@ export default function PreviewAccountSearch() {
 
   const runScenario = (s: Scenario) => {
     setSelection(null);
-    setUnlockedFor(null);
     setNote(s);
     setSeed(s.query);
     setSeedKey(k => k + 1); // remount so the field starts from the seeded query
@@ -156,8 +170,8 @@ export default function PreviewAccountSearch() {
           <AccountSearch
             key={seedKey}
             value={selection}
-            onChange={(sel) => { setSelection(sel); setUnlockedFor(null); }}
-            onProceedUnlocked={(q) => { setUnlockedFor(q); setSelection(null); }}
+            onChange={setSelection}
+            allowNewProspect
             label="Company"
             autoFocus
             showLatency
@@ -189,7 +203,7 @@ export default function PreviewAccountSearch() {
         )}
 
         {/* What actually gets locked — the point of the whole change made visible. */}
-        {selection && (
+        {selection?.kind === 'whitespace_account' && (
           <div style={{
             ...card,
             marginBottom: 20,
@@ -221,17 +235,41 @@ export default function PreviewAccountSearch() {
           </div>
         )}
 
-        {unlockedFor && (
+        {selection?.kind === 'new_prospect' && (
           <div style={{ ...card, marginBottom: 20, borderColor: '#d97706' }}>
-            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
-              Continuing without a whitespace record
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>
+              What Submit would send — new prospect
             </div>
-            <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.7 }}>
-              Chosen explicitly for “{unlockedFor}”. On Submit this would send no
-              <code> whitespace_account_id</code>, the brief would carry no whitespace
-              section, and M1.5 would record
-              <code> whitespace_skip_reason</code> rather than matching something
-              approximate. That is the deliberate escape hatch, not a silent fallback.
+            <pre style={{
+              margin: 0, fontSize: 12, lineHeight: 1.7, overflowX: 'auto',
+              color: 'var(--text-primary)',
+            }}>
+{JSON.stringify({
+  company: selection.name,
+  url: `https://${selection.domain}`,
+  whitespace_account_id: null,
+  no_whitespace_data: true,
+  include_contacts: true,
+  market: 'auto',
+}, null, 2)}
+            </pre>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 10, lineHeight: 1.7 }}>
+              <code>no_whitespace_data: true</code> is a positive statement, not the absence
+              of one. Omitting <code>whitespace_account_id</code> on its own would only mean
+              “nothing was decided here”, which still leaves M1.5 free to match the typed
+              name as free text — the wrong-company path. This says the book was searched
+              and has no row, so M1.5 skips the lookup altogether.
+              <br /><br />
+              <code>url</code> is what was typed by hand. Nothing suggested it and nothing
+              verified it: there is no record to check it against, and inventing one is
+              exactly what this feature exists to stop.
+              <br /><br />
+              Downstream the brief carries{' '}
+              <code>_meta.whitespace_data_state = "no_record"</code>, and the PDF and the
+              portal both print “No whitespace record for this account… unknown, not zero”.
+              An account that <em>has</em> a record measuring zero opportunity gets{' '}
+              <code>"record_no_opportunity"</code> and different words. Before this, both
+              rendered as nothing at all.
             </div>
           </div>
         )}

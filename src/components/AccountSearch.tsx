@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Search, Check, Link, Shield } from 'lucide-react';
+import { Search, Check, Link, Shield, AlertTriangle } from 'lucide-react';
 import { workerFetch } from '../lib/supabase';
+import { parseDomainInput } from '../lib/domain';
 
 /**
  * AccountSearch — type-ahead over the real whitespace book.
@@ -26,8 +27,26 @@ import { workerFetch } from '../lib/supabase';
  *
  * No match is a state, not an empty list. An empty dropdown reads as "still
  * loading" or "keep typing"; this says the whitespace book has no record, and
- * offers the two honest ways forward — search differently, or proceed
- * explicitly without a locked record (only when the host page allows it).
+ * offers the honest ways forward — search differently, or say explicitly that
+ * this is a net-new prospect and proceed without whitespace data.
+ *
+ * The net-new prospect path
+ * ────────────────────────
+ * A company can legitimately not be in the whitespace book: a genuine net-new
+ * prospect nobody has ever scored. That is not a search failure and it is not a
+ * reason to block the research — so "no match" is a fork, not a dead end.
+ *
+ * Taking that fork asks for the domain, typed by hand. Nothing is auto-suggested,
+ * fuzzy-matched or looked up: if the system does not know the account, it has no
+ * business pretending to know the domain either. The only check is that what was
+ * typed is shaped like a domain.
+ *
+ * What comes out of it is deliberately NOT the same as an account with a
+ * whitespace record whose opportunity buckets happen to be zero. One knows
+ * nothing, the other knows there is nothing, and collapsing them is how a brief
+ * ends up telling an AE there is no room in an account nobody has ever measured.
+ * The selection carries `no_whitespace_data: true` and no account_id, and the
+ * pipeline keeps the two apart the whole way to the PDF.
  */
 
 export type MatchTier = 'domain_exact' | 'name_exact' | 'prefix' | 'contains';
@@ -47,7 +66,9 @@ export interface WhitespaceCandidate {
   matched_on: string;
 }
 
-export interface AccountSelection {
+/** An account chosen from real whitespace_accounts rows. */
+export interface LockedAccountSelection {
+  kind: 'whitespace_account';
   /** Salesforce account ID — the lock the pipeline consumes. */
   account_id: string;
   /** Canonical account name from the whitespace book, not what was typed. */
@@ -56,6 +77,30 @@ export interface AccountSelection {
   domain: string | null;
   candidate: WhitespaceCandidate;
 }
+
+/**
+ * A company the whitespace book has no record of, declared as such.
+ *
+ * A discriminated union rather than a nullable `account_id` on one shape, so a
+ * consumer cannot read `selection.candidate` on this branch and get `undefined`
+ * where it expected ARR. There is no candidate here: nothing was matched.
+ */
+export interface NewProspectSelection {
+  kind: 'new_prospect';
+  /** No Salesforce record. Not "unknown" — established as absent. */
+  account_id: null;
+  /** The company as the person searching spelled it. */
+  name: string;
+  /** Typed by hand. Never suggested, never fuzzy-matched, never looked up. */
+  domain: string;
+  /**
+   * Travels to the pipeline. Distinct from "has a whitespace record whose
+   * opportunity buckets are all zero" — see the header comment.
+   */
+  no_whitespace_data: true;
+}
+
+export type AccountSelection = LockedAccountSelection | NewProspectSelection;
 
 interface SearchResponse {
   query: string;
@@ -71,11 +116,16 @@ interface Props {
   value: AccountSelection | null;
   onChange: (selection: AccountSelection | null) => void;
   /**
-   * Offered only when the host page supplies it. Without it, a no-match is a
-   * dead end by design: a page that cannot cope with an unlocked submission
-   * should not present the option.
+   * Offer the net-new-prospect path on a no-match. Off by default, because a
+   * page that cannot cope with a submission carrying no whitespace record should
+   * not present the option — for those, a no-match stays a dead end and says so.
+   *
+   * When on, taking the path produces a `NewProspectSelection` through the normal
+   * `onChange`. The host does not need a second callback: there is one question
+   * on this field ("which account is this brief about") and "none of them, here
+   * is the domain" is one of its answers.
    */
-  onProceedUnlocked?: (typedQuery: string) => void;
+  allowNewProspect?: boolean;
   label?: string;
   placeholder?: string;
   autoFocus?: boolean;
@@ -130,7 +180,7 @@ function formatMoney(v: number | null): string {
 export default function AccountSearch({
   value,
   onChange,
-  onProceedUnlocked,
+  allowNewProspect = false,
   label = 'Company',
   placeholder = 'Start typing a company name or website',
   autoFocus = false,
@@ -145,6 +195,15 @@ export default function AccountSearch({
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(0);
   const [latency, setLatency] = useState<number | null>(null);
+  /**
+   * Non-null once the net-new-prospect path is taken: the company name the person
+   * searched for, held while they type the domain. Separate from `value` because
+   * nothing is selected yet — they have said "not in the book", not yet "and here
+   * is the domain", and a half-made choice must not look like a made one.
+   */
+  const [newProspectName, setNewProspectName] = useState<string | null>(null);
+  const [domainDraft, setDomainDraft] = useState('');
+  const [domainTouched, setDomainTouched] = useState(false);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const abortRef = useRef<AbortController | undefined>(undefined);
@@ -271,10 +330,14 @@ export default function AccountSearch({
 
   useEffect(() => {
     if (value) return; // locked — stop searching
+    // Mid net-new-prospect entry the search field is not what has focus, and
+    // re-running the query that just missed would only reopen the dropdown over
+    // the domain field.
+    if (newProspectName !== null) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => runSearch(query), DEBOUNCE_MS);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [query, value, runSearch]);
+  }, [query, value, newProspectName, runSearch]);
 
   useEffect(() => () => { abortRef.current?.abort(); }, []);
 
@@ -302,6 +365,7 @@ export default function AccountSearch({
 
   const select = (c: WhitespaceCandidate) => {
     onChange({
+      kind: 'whitespace_account',
       account_id: c.account_id,
       name: c.name,
       domain: c.primary_domain,
@@ -310,12 +374,46 @@ export default function AccountSearch({
     setOpen(false);
   };
 
+  const startNewProspect = (typedQuery: string) => {
+    setNewProspectName(typedQuery);
+    // If they searched by domain, that IS the domain — pre-filling it is repeating
+    // what they typed, not guessing. A name search pre-fills nothing.
+    setDomainDraft(parseDomainInput(typedQuery) || '');
+    setDomainTouched(false);
+    setOpen(false);
+  };
+
+  const cancelNewProspect = () => {
+    setNewProspectName(null);
+    setDomainDraft('');
+    setDomainTouched(false);
+  };
+
+  const confirmNewProspect = () => {
+    const domain = parseDomainInput(domainDraft);
+    setDomainTouched(true);
+    if (!domain || newProspectName === null) return;
+    onChange({
+      kind: 'new_prospect',
+      account_id: null,
+      name: newProspectName,
+      domain,
+      no_whitespace_data: true,
+    });
+    setNewProspectName(null);
+    setDomainDraft('');
+    setDomainTouched(false);
+  };
+
   const clear = () => {
     onChange(null);
     setQuery('');
     setResults(null);
     setError(null);
     setLatency(null);
+    setNewProspectName(null);
+    setDomainDraft('');
+    setDomainTouched(false);
     // Caches are kept. They are keyed on the exact query and the whitespace book
     // does not change mid-session, so a second look at the same company should
     // still be instant.
@@ -361,6 +459,73 @@ export default function AccountSearch({
     outline: 'none',
   };
 
+  const changeButton = (
+    <button
+      type="button"
+      onClick={clear}
+      disabled={disabled}
+      style={{
+        background: 'transparent',
+        border: '1px solid var(--border-strong)',
+        borderRadius: 6,
+        padding: '4px 10px',
+        fontSize: 12,
+        color: 'var(--text-secondary)',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        flexShrink: 0,
+      }}
+    >
+      Change
+    </button>
+  );
+
+  // ── Chosen: net-new prospect, no whitespace record ────────────────────────
+  // Amber rather than green, and it says what is missing rather than only what is
+  // set. This is a valid, complete choice — it is just a choice that carries less
+  // information, and the panel should not imply otherwise by looking identical to
+  // a locked account.
+  if (value?.kind === 'new_prospect') {
+    return (
+      <div ref={rootRef}>
+        <label style={{ display: 'block', fontSize: 14, fontWeight: 500, marginBottom: 6 }}>
+          {label}
+        </label>
+        <div style={{
+          background: 'var(--bg-surface)',
+          border: '1px solid #d97706',
+          borderRadius: 6,
+          padding: '10px 12px',
+          display: 'flex',
+          alignItems: 'flex-start',
+          gap: 10,
+        }}>
+          <AlertTriangle size={15} style={{ marginTop: 2, flexShrink: 0, color: '#d97706' }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 3 }}>{value.name}</div>
+            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', lineHeight: 1.7 }}>
+              <div>
+                <span style={{ opacity: 0.75 }}>Domain (entered by hand)</span>{' '}
+                <code style={{ fontSize: 11 }}>{value.domain}</code>
+              </div>
+              <div>
+                <span style={{ opacity: 0.75 }}>Salesforce ID</span> none — new prospect
+              </div>
+              <div>
+                <span style={{ opacity: 0.75 }}>Whitespace / TAM</span> no record
+              </div>
+            </div>
+          </div>
+          {changeButton}
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4, lineHeight: 1.6 }}>
+          Research will run against this domain. The brief will state that this account has
+          no whitespace record — seats, ARR and opportunity value unknown, which is not the
+          same as zero.
+        </div>
+      </div>
+    );
+  }
+
   // ── Locked state ──────────────────────────────────────────────────────────
   if (value) {
     return (
@@ -398,23 +563,7 @@ export default function AccountSearch({
               </div>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={clear}
-            disabled={disabled}
-            style={{
-              background: 'transparent',
-              border: '1px solid var(--border-strong)',
-              borderRadius: 6,
-              padding: '4px 10px',
-              fontSize: 12,
-              color: 'var(--text-secondary)',
-              cursor: disabled ? 'not-allowed' : 'pointer',
-              flexShrink: 0,
-            }}
-          >
-            Change
-          </button>
+          {changeButton}
         </div>
         <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>
           Research will run against this account. The domain and Salesforce ID above are
@@ -446,7 +595,14 @@ export default function AccountSearch({
           autoFocus={autoFocus}
           disabled={disabled}
           placeholder={placeholder}
-          onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+          onChange={(e) => {
+            // Typing again is a change of mind about the company, so the
+            // half-finished domain entry for the old query goes away rather than
+            // being carried onto a different one.
+            if (newProspectName !== null) cancelNewProspect();
+            setQuery(e.target.value);
+            setOpen(true);
+          }}
           onFocus={(e) => {
             e.currentTarget.style.borderColor = 'var(--accent)';
             if (candidates.length || showNoMatch) setOpen(true);
@@ -479,7 +635,107 @@ export default function AccountSearch({
         )}
       </div>
 
-      {open && (candidates.length > 0 || showNoMatch) && (
+      {/* ── Net-new prospect: manual domain entry ──────────────────────────── */}
+      {newProspectName !== null && (() => {
+        const parsed = parseDomainInput(domainDraft);
+        const invalid = domainTouched && domainDraft.trim().length > 0 && !parsed;
+        return (
+          <div style={{
+            marginTop: 8,
+            background: 'var(--bg-surface)',
+            border: '1px solid #d97706',
+            borderRadius: 8,
+            padding: '12px 14px',
+          }}>
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
+              New prospect — “{newProspectName}”
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 10 }}>
+              Nothing in the whitespace book covers this company, so there is no domain on
+              record to use. Type it in — the research runs against whatever you enter here.
+            </div>
+            <label
+              htmlFor="new-prospect-domain"
+              style={{ display: 'block', fontSize: 12, fontWeight: 500, marginBottom: 4 }}
+            >
+              Company domain
+            </label>
+            <input
+              id="new-prospect-domain"
+              type="text"
+              autoFocus
+              value={domainDraft}
+              disabled={disabled}
+              placeholder="example.com"
+              onChange={(e) => setDomainDraft(e.target.value)}
+              onBlur={() => setDomainTouched(true)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') { e.preventDefault(); confirmNewProspect(); }
+                else if (e.key === 'Escape') { e.preventDefault(); cancelNewProspect(); }
+              }}
+              aria-invalid={invalid}
+              aria-describedby="new-prospect-domain-help"
+              style={{
+                ...inputStyle,
+                paddingLeft: 12,
+                borderColor: invalid ? '#dc2626' : 'var(--border-strong)',
+              }}
+            />
+            <div
+              id="new-prospect-domain-help"
+              style={{ fontSize: 11, marginTop: 5, minHeight: 16, lineHeight: 1.5,
+                       color: invalid ? '#dc2626' : 'var(--text-tertiary)' }}
+            >
+              {invalid
+                ? 'That does not look like a domain. Something of the form example.com.'
+                : parsed && parsed !== domainDraft.trim().toLowerCase()
+                  ? <>Will be used as <code>{parsed}</code></>
+                  : 'Not checked against anything — no suggestions, no lookup. You are the one who knows this account.'}
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center' }}>
+              <button
+                type="button"
+                onClick={confirmNewProspect}
+                disabled={disabled || !parsed}
+                style={{
+                  background: parsed ? '#d97706' : 'transparent',
+                  border: `1px solid ${parsed ? '#d97706' : 'var(--border-strong)'}`,
+                  borderRadius: 6,
+                  padding: '6px 14px',
+                  fontSize: 12,
+                  fontWeight: 500,
+                  color: parsed ? '#fff' : 'var(--text-tertiary)',
+                  cursor: parsed && !disabled ? 'pointer' : 'not-allowed',
+                }}
+              >
+                Use this domain
+              </button>
+              <button
+                type="button"
+                onClick={cancelNewProspect}
+                disabled={disabled}
+                style={{
+                  background: 'transparent',
+                  border: '1px solid var(--border-strong)',
+                  borderRadius: 6,
+                  padding: '6px 12px',
+                  fontSize: 12,
+                  color: 'var(--text-secondary)',
+                  cursor: disabled ? 'not-allowed' : 'pointer',
+                }}
+              >
+                Back to search
+              </button>
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 10, lineHeight: 1.6 }}>
+              The brief will say plainly that this account has no whitespace record. Seats,
+              ARR and opportunity value will read as unknown rather than as zero.
+            </div>
+          </div>
+        );
+      })()}
+
+      {newProspectName === null && open && (candidates.length > 0 || showNoMatch) && (
         <div
           id="account-search-list"
           role="listbox"
@@ -572,22 +828,23 @@ export default function AccountSearch({
                 Figma has no Salesforce account for will not appear here — that is the
                 answer, not a search failure.
               </div>
-              {onProceedUnlocked && (
+              {allowNewProspect && (
                 <button
                   type="button"
-                  onMouseDown={(e) => { e.preventDefault(); onProceedUnlocked(results!.query); setOpen(false); }}
+                  onMouseDown={(e) => { e.preventDefault(); startNewProspect(results!.query); }}
                   style={{
                     marginTop: 10,
                     background: 'transparent',
-                    border: '1px solid var(--border-strong)',
+                    border: '1px solid #d97706',
                     borderRadius: 6,
                     padding: '6px 12px',
                     fontSize: 12,
-                    color: 'var(--text-secondary)',
+                    color: '#d97706',
                     cursor: 'pointer',
+                    fontWeight: 500,
                   }}
                 >
-                  Continue without a whitespace record
+                  This is a new prospect — proceed without whitespace data
                 </button>
               )}
             </div>

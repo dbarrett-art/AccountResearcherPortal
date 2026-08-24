@@ -110,6 +110,9 @@ type LabelKey =
   | 'ws_services_opportunities' | 'ws_125k_engagement'
   | 'ws_arr_minimum' | 'ws_services_floor' | 'ws_arr_floor_note'
   | 'ws_total_whitespace_footer'
+  | 'ws_no_record_heading' | 'ws_no_record_body'
+  | 'ws_zero_heading' | 'ws_zero_body'
+  | 'ws_unknown_heading' | 'ws_unknown_body'
   | 'ws_licensed_of'
   | 'contact_outreach_context' | 'contact_personal_signal' | 'contact_angle'
   | 'contact_departed' | 'contact_no_email' | 'contact_recommended_first_move'
@@ -194,6 +197,12 @@ const LABELS: Record<string, Record<LabelKey, string>> = {
     ws_services_floor: 'Services floor',
     ws_arr_floor_note: '25% ARR floor — use as anchor if selling a single bundled engagement.',
     ws_total_whitespace_footer: 'Total Whitespace — seats + Governance+ + services',
+    ws_no_record_heading: 'No whitespace record for this account',
+    ws_no_record_body: 'This account is not in the Figma whitespace book, so its seat counts, current ARR and opportunity value are unknown — not zero. Nothing here should be read as saying the opportunity is small; it has never been measured. Sizing becomes available once the account is scored.',
+    ws_zero_heading: 'Measured: no open whitespace',
+    ws_zero_body: 'This account has a whitespace record, and every opportunity bucket computed to zero — seats fully licensed against the addressable population, no tier upgrade available, and no services trigger fired. This is a measured zero, not missing data.',
+    ws_unknown_heading: 'Whitespace could not be resolved',
+    ws_unknown_body: 'The whitespace lookup did not complete for this account, so its figures are unavailable rather than zero. This is a data-access problem, not a finding about the account.',
     ws_licensed_of: 'licensed',
 
     contact_outreach_context: 'Outreach context',
@@ -320,6 +329,12 @@ const LABELS: Record<string, Record<LabelKey, string>> = {
     ws_services_floor: 'Plancher services',
     ws_arr_floor_note: 'Plancher 25% ARR \u2014 \u00E0 utiliser comme ancre pour un engagement group\u00E9.',
     ws_total_whitespace_footer: 'Whitespace total \u2014 si\u00E8ges + Governance+ + services',
+    ws_no_record_heading: 'Aucune fiche whitespace pour ce compte',
+    ws_no_record_body: "Ce compte n'est pas r\u00E9pertori\u00E9 dans le whitespace Figma : ses licences, son ARR actuel et sa valeur d'opportunit\u00E9 sont donc inconnus \u2014 et non nuls. Rien ici ne signifie que l'opportunit\u00E9 est faible ; elle n'a jamais \u00E9t\u00E9 mesur\u00E9e.",
+    ws_zero_heading: 'Mesur\u00E9 : aucun whitespace ouvert',
+    ws_zero_body: "Ce compte poss\u00E8de une fiche whitespace et chaque poste d'opportunit\u00E9 est ressorti \u00E0 z\u00E9ro : licences enti\u00E8rement attribu\u00E9es sur la population adressable, aucune mont\u00E9e de gamme disponible, aucun d\u00E9clencheur de services. Un z\u00E9ro mesur\u00E9, non des donn\u00E9es manquantes.",
+    ws_unknown_heading: 'Whitespace non r\u00E9solu',
+    ws_unknown_body: "La recherche whitespace n'a pas abouti pour ce compte : ses chiffres sont indisponibles plut\u00F4t que nuls.",
     ws_licensed_of: 'sous licence',
 
     contact_outreach_context: 'Contexte d\'approche',
@@ -936,9 +951,13 @@ function CitedProse({ text, sources, style, onCitationClick }: {
   // Strip [SOURCE: url] patterns (these come from distilled intel and should not render as raw text)
   const cleanText = text.replace(/\s*\[SOURCE:\s*https?:\/\/[^\]]+\]/gi, '');
 
-  // Split text on [N] citation markers and build React elements
+  // Split on [N] citation markers *and* the whitespace attribution marker. The
+  // latter is a literal string rather than a footnote number: whitespace figures
+  // come from Figma's internal whitespace model, not from a citable web source,
+  // and the underlying data vendor is deliberately not named (pipeline:
+  // src/utils/whitespace-attribution.mjs). Render it as a quiet inline label.
   const parts: React.ReactNode[] = [];
-  const regex = /\[(\d+)\]/g;
+  const regex = /\[(\d+)\]|\[(?:Figma\s+)?internal\s+whitespace\s+analysis\]/gi;
   let lastIndex = 0;
   let match;
   let key = 0;
@@ -947,6 +966,15 @@ function CitedProse({ text, sources, style, onCitationClick }: {
     // Text before this citation
     if (match.index > lastIndex) {
       parts.push(cleanText.slice(lastIndex, match.index));
+    }
+    if (match[1] === undefined) {
+      parts.push(
+        <span key={key++} style={{ color: COLORS.faint, fontSize: '0.72em', whiteSpace: 'nowrap' }}>
+          [Figma internal whitespace analysis]
+        </span>
+      );
+      lastIndex = match.index + match[0].length;
+      continue;
     }
     const n = parseInt(match[1], 10);
     // Look up by citation_number first (new pipeline), fall back to array index (legacy)
@@ -2114,8 +2142,99 @@ const FIGMA_PRICES = {
   collabSeat: 5,   // per seat per month (not used in display but keep for reference)
 };
 
+/**
+ * Which of the four whitespace states this brief is in.
+ *
+ * MUST agree with resolveWhitespaceState() in the pipeline repo's
+ * src/utils/whitespace-state.mjs — that file is the definition and carries the
+ * full rationale; this is the portal's copy because the portal cannot import from
+ * the pipeline. test/unit/whitespace-state.test.mjs there pins these four string
+ * literals, so a rename breaks a test rather than quietly desynchronising the two
+ * renderers.
+ *
+ * The short version of why it exists: "no whitespace record" and "a whitespace
+ * record measuring zero" used to reach this component identically, and this
+ * component answered both by returning null. A net-new prospect nobody has ever
+ * scored therefore looked exactly like a fully-penetrated account, and the wrong
+ * reading of a blank section — "no room here" — is the expensive one.
+ */
+type WsState = 'enriched' | 'record_no_opportunity' | 'no_record' | 'unknown' | 'not_run';
+
+function resolveWhitespaceState(pov: any): WsState {
+  const explicit = pov?._meta?.whitespace_data_state;
+  if (explicit === 'enriched' || explicit === 'record_no_opportunity'
+      || explicit === 'no_record' || explicit === 'unknown'
+      || explicit === 'not_run') return explicit;
+
+  // A brief written before the field existed. Classified from what it does carry,
+  // so an old brief re-read today is treated as honestly as a new one — but never
+  // reclassified as record_no_opportunity, which asserts a measurement an old
+  // brief holds no evidence of.
+  const meta = pov?._meta || {};
+  if (meta.whitespace_available === false) {
+    const reason = meta.whitespace_skip_reason;
+    return (reason === 'new_prospect_no_whitespace_record'
+      || reason === 'no_data'
+      || reason === 'locked_account_no_whitespace_row') ? 'no_record' : 'unknown';
+  }
+  if (pov?.whitespace_section) return 'enriched';
+  if (meta.whitespace_available === true) return 'enriched';
+  // No whitespace metadata of any kind — M1.5 never reported on this brief. Every
+  // brief written before M1.5 existed is in this state, and putting a "could not be
+  // resolved" notice on all of them would be making a claim they never made.
+  return 'not_run';
+}
+
+/** The panel drawn when there are no figures to draw. Never null. */
+function WhitespaceNotice({ state, pov, market, feedbackNode }: {
+  state: 'record_no_opportunity' | 'no_record' | 'unknown';
+  pov: any; market?: string | null; feedbackNode?: React.ReactNode;
+}) {
+  const L = getLabels(market);
+  const COPY = {
+    no_record: { heading: L.ws_no_record_heading, body: L.ws_no_record_body, accent: COLORS.tertiary },
+    record_no_opportunity: { heading: L.ws_zero_heading, body: L.ws_zero_body, accent: '#0891b2' },
+    unknown: { heading: L.ws_unknown_heading, body: L.ws_unknown_body, accent: '#d97706' },
+  }[state];
+  const reason = pov?._meta?.whitespace_skip_reason;
+
+  return (
+    <Section title={L.section_whitespace} accent={COLORS.purple} defaultOpen={false} feedbackNode={feedbackNode} market={market}>
+      <div style={{
+        background: 'var(--brief-surface)',
+        borderLeft: `3px solid ${COPY.accent}`,
+        borderRadius: '0 8px 8px 0',
+        padding: '14px 16px',
+      }}>
+        <div style={{ fontSize: 15, fontWeight: 600, color: COLORS.heading, marginBottom: 6 }}>
+          {COPY.heading}
+        </div>
+        <div style={{ fontSize: 14, color: COLORS.body, lineHeight: 1.65 }}>
+          {COPY.body}
+        </div>
+        {reason && (
+          <div style={{ fontSize: 11, color: COLORS.faint, marginTop: 12, fontFamily: 'ui-monospace, monospace' }}>
+            {reason}
+          </div>
+        )}
+      </div>
+    </Section>
+  );
+}
+
 function WhitespaceSection({ pov, feedbackNode, market }: { pov: any; feedbackNode?: React.ReactNode; market?: string | null }) {
-  if (pov?._meta?.whitespace_available === false || !pov?.whitespace_section) return null;
+  // Four states, one branch. A brief with no state field resolves to 'enriched'
+  // and falls through to exactly the code that has always rendered it.
+  const state = resolveWhitespaceState(pov);
+  // 'not_run' renders nothing, exactly as before. See the comment in
+  // resolveWhitespaceState.
+  if (state === 'not_run') return null;
+  if (state !== 'enriched') {
+    return <WhitespaceNotice state={state} pov={pov} market={market} feedbackNode={feedbackNode} />;
+  }
+  if (!pov?.whitespace_section) {
+    return <WhitespaceNotice state="unknown" pov={pov} market={market} feedbackNode={feedbackNode} />;
+  }
 
   const ws = pov.whitespace_section;
   const gaps = ws.key_gaps || {};
