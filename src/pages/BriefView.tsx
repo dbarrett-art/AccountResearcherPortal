@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { supabase, workerFetch } from '../lib/supabase';
+import { supabase, workerFetch, openBriefFile } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import Layout from '../components/Layout';
 import TableSkeleton from '../components/TableSkeleton';
@@ -3490,10 +3490,7 @@ export default function BriefView() {
     if (!run?.id || pdfLoading) return;
     setPdfLoading(true);
     try {
-      const res = await workerFetch(`/pdf/${run.id}`);
-      if (!res.ok) throw new Error('Failed to get PDF');
-      const { signedUrl } = await res.json();
-      window.open(signedUrl, '_blank');
+      await openBriefFile(run.id, 'pdf');
     } catch {
       // Silently fail — the button just stops loading
     } finally {

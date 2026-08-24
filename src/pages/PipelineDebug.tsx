@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
+import { supabase, briefFileUrl } from '../lib/supabase';
 import Layout from '../components/Layout';
 import usePageTitle from '../hooks/usePageTitle';
 import {
@@ -953,6 +953,8 @@ export default function PipelineDebug() {
   // Fetch from Supabase if run_id is provided
   useEffect(() => {
     if (!run_id) return;
+    // Narrowed for the async closure below — TS does not carry the guard across it.
+    const runId: string = run_id;
     let cancelled = false;
 
     async function load() {
@@ -993,7 +995,12 @@ export default function PipelineDebug() {
       }
 
       try {
-        const res = await fetch(runData.debug_events_url);
+        // runData.debug_events_url is an absolute URL into the `briefs` bucket,
+        // which is private — it was previously fetched with no auth at all, which
+        // is exactly the exposure being closed. Go through the Worker instead:
+        // ownership check, then a signed URL good for a few minutes.
+        const signedUrl = await briefFileUrl(runId, 'debug-events');
+        const res = await fetch(signedUrl);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         if (!cancelled) {

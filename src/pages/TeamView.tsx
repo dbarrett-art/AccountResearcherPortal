@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { workerFetch } from '../lib/supabase';
+import { workerFetch, openBriefFile } from '../lib/supabase';
 import { ClaimAuditBadge } from '../components/ClaimAudit';
 import Layout from '../components/Layout';
 import StatusBadge from '../components/StatusBadge';
@@ -203,10 +203,7 @@ function BriefRow({ run, indent }: { run: RunEntry; indent: number }) {
               const btn = e.currentTarget;
               btn.disabled = true;
               try {
-                const res = await workerFetch(`/pdf/${run.id}`);
-                if (!res.ok) throw new Error();
-                const { signedUrl } = await res.json();
-                window.open(signedUrl, '_blank');
+                await openBriefFile(run.id, 'pdf');
               } catch { /* noop */ } finally { btn.disabled = false; }
             }}
             style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}

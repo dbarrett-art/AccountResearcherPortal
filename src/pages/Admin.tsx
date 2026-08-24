@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { supabase, workerFetch, SUPABASE_URL, SUPABASE_ANON_KEY } from '../lib/supabase';
+import { supabase, workerFetch, openBriefFile, SUPABASE_URL, SUPABASE_ANON_KEY } from '../lib/supabase';
 import Layout from '../components/Layout';
 import StatusBadge from '../components/StatusBadge';
 import ProgressBar from '../components/ProgressBar';
@@ -1008,10 +1008,7 @@ function RunMonitorTab() {
                       btn.disabled = true;
                       btn.textContent = '...';
                       try {
-                        const res = await workerFetch(`/pdf/${r.id}`);
-                        if (!res.ok) throw new Error();
-                        const { signedUrl } = await res.json();
-                        window.open(signedUrl, '_blank');
+                        await openBriefFile(r.id, 'pdf');
                       } catch { /* noop */ } finally { btn.disabled = false; btn.textContent = 'PDF'; }
                     }}
                     style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--accent)', fontSize: 'inherit', fontFamily: 'inherit' }}
@@ -1402,12 +1399,21 @@ function HealthTab() {
         results.push({ name: 'GitHub Actions', status: 'pending', checked: now, message: 'Unable to check' });
       }
 
-      // Supabase Storage — check briefs bucket
+      // Supabase Storage — check the briefs bucket via the Worker.
+      // The old probe hit /storage/v1/bucket/briefs with the anon key, which only
+      // ever answered because the bucket was public read. The Worker uses the
+      // service key, and reports `public` so a bucket reverting to public read
+      // shows up here as an alarm instead of as a green tick.
       try {
-        const res = await fetch(`${SUPABASE_URL}/storage/v1/bucket/briefs`, {
-          headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
+        const res = await workerFetch('/storage-health');
+        const data = await res.json().catch(() => ({}));
+        const exposed = data?.public === true;
+        results.push({
+          name: 'Supabase Storage',
+          status: !res.ok || !data?.ok ? 'error' : exposed ? 'error' : 'ok',
+          checked: now,
+          message: data?.message || `HTTP ${res.status}`,
         });
-        results.push({ name: 'Supabase Storage', status: res.ok ? 'ok' : 'error', checked: now, message: res.ok ? 'briefs bucket accessible' : `HTTP ${res.status}` });
       } catch (e: any) {
         results.push({ name: 'Supabase Storage', status: 'error', checked: now, message: e.message });
       }
