@@ -130,11 +130,9 @@ interface Props {
   placeholder?: string;
   autoFocus?: boolean;
   disabled?: boolean;
-  /** Show the measured endpoint latency under the field. Off by default. */
-  showLatency?: boolean;
   /**
-   * Injectable for tests and for the preview page. Typed off workerFetch so a
-   * wrapper that only adds timing cannot drift from the real signature.
+   * Injectable for tests. Typed off workerFetch so a stand-in cannot drift from
+   * the real signature.
    */
   fetcher?: typeof workerFetch;
 }
@@ -185,7 +183,6 @@ export default function AccountSearch({
   placeholder = 'Start typing a company name or website',
   autoFocus = false,
   disabled = false,
-  showLatency = false,
   fetcher = workerFetch,
 }: Props) {
   const [query, setQuery] = useState('');
@@ -194,7 +191,6 @@ export default function AccountSearch({
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(0);
-  const [latency, setLatency] = useState<number | null>(null);
   /**
    * Non-null once the net-new-prospect path is taken: the company name the person
    * searched for, held while they type the domain. Separate from `value` because
@@ -248,7 +244,6 @@ export default function AccountSearch({
       abortRef.current?.abort();
       seqRef.current++;
       setResults(cached);
-      setLatency(0);
       setHighlight(0);
       setError(null);
       setLoading(false);
@@ -269,7 +264,6 @@ export default function AccountSearch({
             interpreted_as: { kind: 'name', apex: null },
             candidates: [], count: 0, no_match: true,
           });
-          setLatency(0);
           setError(null);
           setLoading(false);
           setOpen(true);
@@ -285,7 +279,6 @@ export default function AccountSearch({
 
     setLoading(true);
     setError(null);
-    const started = performance.now();
 
     try {
       const res = await fetcher(
@@ -313,7 +306,6 @@ export default function AccountSearch({
       }
 
       setResults(data);
-      setLatency(Math.round(performance.now() - started));
       setHighlight(0);
       setOpen(true);
     } catch (err) {
@@ -410,7 +402,6 @@ export default function AccountSearch({
     setQuery('');
     setResults(null);
     setError(null);
-    setLatency(null);
     setNewProspectName(null);
     setDomainDraft('');
     setDomainTouched(false);
@@ -627,10 +618,6 @@ export default function AccountSearch({
             {results.count} {results.count === 1 ? 'account' : 'accounts'} found
             {results.interpreted_as.apex && ` for ${results.interpreted_as.apex}`}
             {results.truncated && ' (showing the top 10)'}
-            {showLatency && latency === 0 && ' · cached, no request'}
-            {showLatency && latency != null && latency > 0 && ` · ${latency}ms round trip`}
-            {showLatency && latency != null && latency > 0 && results.latency_ms != null &&
-              ` · ${results.latency_ms}ms in the Worker`}
           </>
         )}
       </div>
