@@ -50,11 +50,27 @@ export default function PreviewAccountSearch() {
     fontSize: 12, color: 'var(--text-secondary)', marginTop: 10, lineHeight: 1.6,
   };
 
+  // whitespace_status is sent explicitly rather than left to be derived. Derivation
+  // works — the Worker does it when the field is absent — but it can only ever
+  // produce the two values the payload already implies. It cannot produce
+  // 'unresolved', and 'unresolved' is the value that matters: a lookup that failed
+  // or left candidates unresolved is not a net-new prospect, and the Worker refuses
+  // it rather than running on a whitespace answer nobody gave. Sending the field
+  // means this page is on the contract that has a place to say so.
+  //
+  // This picker cannot currently reach 'unresolved': a search error clears the
+  // results and leaves nothing selectable, so there is no selection to submit. The
+  // guard is at the door for the clients that follow, not for this one.
+  //
+  // usage_known is deliberately NOT sent. It is derived at the Worker, so a client
+  // cannot assert usage alongside a no_record declaration.
   const payload = selection?.kind === 'whitespace_account'
     ? {
         company: selection.name,
         url: selection.domain ? `https://${selection.domain}` : null,
         whitespace_account_id: selection.account_id,
+        whitespace_status: 'matched',
+        domain_source: 'whitespace',
         include_contacts: true,
         market: 'auto',
       }
@@ -64,6 +80,10 @@ export default function PreviewAccountSearch() {
           url: `https://${selection.domain}`,
           whitespace_account_id: null,
           no_whitespace_data: true,
+          whitespace_status: 'no_record',
+          // Nothing suggested it and nothing looked it up — a person typed it. M3
+          // must not treat it with the authority of a domain off a resolved record.
+          domain_source: 'user_entered',
           include_contacts: true,
           market: 'auto',
         }
@@ -121,6 +141,10 @@ export default function PreviewAccountSearch() {
               <br />
               <code>company</code> and <code>url</code> come from the whitespace record, not
               from what was typed.
+              <br />
+              <code>whitespace_status: "matched"</code> is what licenses the brief to state
+              usage, ARR and seat figures at all — sourced to that record, never supplemented
+              from anywhere else.
             </div>
           )}
 
@@ -131,6 +155,13 @@ export default function PreviewAccountSearch() {
               “nothing was decided here”, which still leaves M1.5 free to match the typed
               name as free text — the wrong-company path. This says the book was searched
               and has no row, so M1.5 skips the lookup altogether.
+              <br /><br />
+              <code>whitespace_status: "no_record"</code> is the same fact on the three-valued
+              field. Its third value, <code>"unresolved"</code>, is the one this page cannot
+              send: a lookup that errored or left candidates unresolved is refused at
+              <code> /submit</code> rather than run as a new prospect. Absence from the book is
+              not absence of usage — the brief will say the figures are unknown, and it is not
+              permitted to call this account a non-customer.
               <br /><br />
               <code>url</code> is what was typed by hand. Nothing suggested it and nothing
               verified it: there is no record to check it against, and inventing one is
