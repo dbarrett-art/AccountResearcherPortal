@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { workerFetch } from '../lib/supabase';
+import { ClaimAuditBadge } from '../components/ClaimAudit';
 import Layout from '../components/Layout';
 import StatusBadge from '../components/StatusBadge';
 import TableSkeleton from '../components/TableSkeleton';
@@ -26,6 +27,14 @@ interface RunEntry {
   summary: string | null;
   pdf_url: string | null;
   icp_score: string | null;
+  /**
+   * Unsourced Figma claims found in this brief. Supplied by the Worker's
+   * /team-hierarchy, which counts them in one query for the whole page rather
+   * than one per row. Absent on an older Worker deploy, so it is optional and
+   * read as zero — a missing flag is the status quo; a flag on a clean brief
+   * would be a false accusation.
+   */
+  claim_audit_count?: number;
 }
 
 interface UserStats {
@@ -173,6 +182,9 @@ function BriefRow({ run, indent }: { run: RunEntry; indent: number }) {
       <span style={{ fontSize: 13, fontWeight: 500, minWidth: 140 }}>{run.company}</span>
       <span style={{ flex: '0 0 auto' }}><StatusBadge status={run.status} /></span>
       <span style={{ flex: '0 0 auto' }}><IcpBadge score={run.icp_score} /></span>
+      <span style={{ flex: '0 0 auto' }}>
+        <ClaimAuditBadge count={run.claim_audit_count ?? 0} compact />
+      </span>
       <span style={{
         flex: 1, fontSize: 12, color: 'var(--text-secondary)',
         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',

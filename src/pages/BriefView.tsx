@@ -8,6 +8,7 @@ import usePageTitle from '../hooks/usePageTitle';
 import useWindowWidth from '../hooks/useWindowWidth';
 import { ArrowLeft, FileText, X, ChevronDown, ExternalLink, Send, Trash2, Activity, Share2, RefreshCw, Paperclip, ClipboardList, Copy, Check, MoreHorizontal, Mail } from 'lucide-react';
 import { isMeaningfulFeedback } from '../lib/feedback';
+import { ClaimAuditBanner, useClaimAuditFindings } from '../components/ClaimAudit';
 // DOMPurify removed — CitedProse now renders React elements instead of innerHTML
 
 /* ------------------------------------------------------------------ */
@@ -3393,6 +3394,10 @@ export default function BriefView() {
 
   const [run, setRun] = useState<Run | null>(null);
   const [brief, setBrief] = useState<Brief | null>(null);
+  // Unsourced Figma claims the pipeline found in this brief after generating it.
+  // Empty on almost every brief: the audit only runs when there was no whitespace
+  // record to check the claims against.
+  const claimAuditFindings = useClaimAuditFindings(run_id);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
@@ -4463,6 +4468,12 @@ export default function BriefView() {
             )}
           </div>
         )}
+
+        {/* ============ Claim audit ============ */}
+        {/* Above the brief, not below it and not behind an icon. The claim is in
+            the prose the AE is about to read, and by the time they have read it
+            the warning has arrived too late. */}
+        <ClaimAuditBanner findings={claimAuditFindings} />
 
         {/* ============ Brief content sections ============ */}
         {pov && (

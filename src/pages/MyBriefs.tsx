@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { supabase, workerFetch } from '../lib/supabase';
 import Layout from '../components/Layout';
 import Banner from '../components/Banner';
 import StatusBadge from '../components/StatusBadge';
+import { ClaimAuditBadge, useClaimAuditCounts } from '../components/ClaimAudit';
 import ProgressBar from '../components/ProgressBar';
 import TableSkeleton from '../components/TableSkeleton';
 import usePageTitle from '../hooks/usePageTitle';
@@ -184,6 +185,13 @@ export default function MyBriefs() {
   }, [userProfile]);
 
   // Poll progress for running runs
+  // Which listed briefs carry an unsourced Figma claim. Fetched for the whole
+  // page in one query — if seeing the flag required opening each brief, only the
+  // briefs somebody already suspected would ever be checked.
+  const claimAuditCounts = useClaimAuditCounts(
+    useMemo(() => runs.filter(r => r.brief_id).map(r => r.id), [runs])
+  );
+
   const runningIds = runs.filter(r => r.status === 'running').map(r => r.id).join(',');
   useEffect(() => {
     if (!runningIds || !session) return;
@@ -341,9 +349,12 @@ export default function MyBriefs() {
                       <span style={{ marginLeft: 6, fontSize: 14 }}>{LANGUAGE_FLAGS[run.market]}</span>
                     )}
                   </span>
-                  {(userProfile?.role === 'manager' || userProfile?.role === 'admin') && (
-                    <IcpBadge score={run.icp_score} />
-                  )}
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <ClaimAuditBadge count={claimAuditCounts[run.id] ?? 0} compact />
+                    {(userProfile?.role === 'manager' || userProfile?.role === 'admin') && (
+                      <IcpBadge score={run.icp_score} />
+                    )}
+                  </span>
                 </div>
 
                 {/* Team member subtitle when showing all */}
@@ -452,6 +463,11 @@ export default function MyBriefs() {
                       {run.market && run.market !== 'en' && run.market !== 'auto' && LANGUAGE_FLAGS[run.market] && (
                         <span title={run.market.toUpperCase()} style={{ marginLeft: 6, fontSize: 14 }}>
                           {LANGUAGE_FLAGS[run.market]}
+                        </span>
+                      )}
+                      {(claimAuditCounts[run.id] ?? 0) > 0 && (
+                        <span style={{ marginLeft: 8, verticalAlign: 'middle' }}>
+                          <ClaimAuditBadge count={claimAuditCounts[run.id]} />
                         </span>
                       )}
                     </td>
