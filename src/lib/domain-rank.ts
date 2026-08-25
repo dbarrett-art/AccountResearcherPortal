@@ -15,32 +15,58 @@
  * option is pre-selected in the list and what reason sits next to it, and the
  * AE's confirm click is what chooses.
  *
- * The two rules
- * ─────────────
+ * The rules
+ * ─────────
+ *   0. The domain Salesforce's own `Website` field points at. `entur.no` for
+ *      "Entur AS" over `entur.org`.
  *   1. Apex beats subdomain WHEN BOTH ARE ON THE RECORD. `hsbc.com` over
  *      `noexternalmail.hsbc.com`.
  *   2. A domain label matching the account name. `nets.eu` for "Nets" over
  *      `nexigroup.com`.
  *   3. Otherwise the order they arrived in.
  *
- * Rule 1 is deliberately relative — a domain is only demoted as a subdomain if
- * some OTHER domain on the same record is its parent. That needs no public
- * suffix list, which matters: the alternative is a third copy of the
- * `apexDomain` table (the pipeline has one, the Worker mirrors it, and there is
- * a parity script gating the two) living in the portal, where nothing would
- * check it. The cost of staying relative is that a record holding only
- * `mail.toyota.co.jp` cannot be helped by ranking at all — no rule can see that
- * a lone domain is a mail host. That case is exactly what the advisory page
- * check is for.
+ * Rule 0 exists because rules 1–3 cannot answer the case the feature was built
+ * for. Entur AS holds `entur.org` and `entur.no`: both are apex, both match the
+ * account name, so rule 1 and rule 2 both tie and it falls through to record
+ * order — the exact assumption this is meant to remove. The advisory page check
+ * cannot break the tie either; it returns "looks right" for both, with the same
+ * reasoning, because both genuinely are Entur's sites. Only Salesforce's own
+ * answer separates them, and it says `entur.no`.
  *
- * Salesforce's own `Website` field would settle most of this outright, and is
- * not available: the whitespace Sigma table has no `WEBSITE` column — only
- * `DOMAINS__C` and `DOMAIN_COUNT`. Getting it means joining the workbook to
- * `CLEANED_SALESFORCE_ACCOUNT`, which is separate work. Nothing here references
- * or approximates it.
+ * Rules 1 and 2 stay, unchanged, underneath it. `website` is null on plenty of
+ * records and points at nothing on the record on plenty more, and in both cases
+ * the ranking has to keep working exactly as it did.
+ *
+ * Why rule 0 is a HOST-RELATIONSHIP test and not an apex-equality one
+ * ──────────────────────────────────────────────────────────────────
+ * The brief calls it "apex matches apex", and computing an apex correctly needs a
+ * public suffix list — `isbank.com.tr` apexes to `isbank.com.tr`, not `com.tr`,
+ * and getting that wrong merges 40 unrelated Turkish companies into one bucket.
+ * There are already three copies of that table (the pipeline, the Worker, and a
+ * parity script gating the two) and a fourth living here, where nothing would
+ * check it, is a worse trade than the one below.
+ *
+ * So rule 0 fires when the `Website` host, reduced to a bare host, is the same
+ * as a domain on the record, or is a subdomain of it, or has it as a subdomain.
+ * That is the same relative move rule 1 makes, and it needs no suffix list.
+ *
+ * It costs one case: a `Website` of `a.example.com` against a record holding
+ * only `b.example.com` — siblings under a shared apex, related by neither
+ * direction. Apex equality would fire there and this does not. Nothing in the
+ * 1,010 sample looks like that, and the consequence when it happens is a fall
+ * through to rules 1–3, which is where the ranking was before this rule existed.
+ *
+ * What is NOT done with `website`
+ * ───────────────────────────────
+ * It is never offered as an option. It is a Salesforce text field holding
+ * whatever a human typed — `https://www.hsbc.com/`, `hsbc.com`, occasionally
+ * something that is not a URL at all — and the radio list is every domain the
+ * whitespace record actually holds, not that list plus a hearsay entry. If the
+ * `Website` names a domain the record does not have, rule 0 simply does not
+ * fire.
  */
 
-export type DomainReason = 'apex' | 'name_match';
+export type DomainReason = 'salesforce_website' | 'apex' | 'name_match';
 
 export interface RankedDomain {
   domain: string;
@@ -53,10 +79,29 @@ export interface RankedDomain {
 }
 
 /**
- * Rule 1 dominates rule 2, so the apex weight has to exceed the name weight;
- * anything else and a name-matching subdomain would beat its own parent.
+ * Rule 0 dominates rule 1, which dominates rule 2.
+ *
+ * The weights are not decorative, and the two rule-0 tiers are the reason.
+ *
+ * A `Website` of `us.hsbc.com` against a record holding both `us.hsbc.com` and
+ * `hsbc.com` satisfies rule 0 twice — one exactly, one as its parent. Salesforce
+ * named the first, so the first has to win. Worst case for the named host is
+ * EXACT with SHADOWED_BY_SIBLING and no name match; best case for the merely
+ * related one is RELATED with APEX_OF_SIBLING and NAME_MATCH. So
+ * EXACT - 2 > RELATED + 3, i.e. EXACT > RELATED + 5.
+ *
+ * RELATED in turn has to clear the best a non-rule-0 domain can score,
+ * APEX_OF_SIBLING + NAME_MATCH (3), from the worst a rule-0 domain can start at,
+ * SHADOWED_BY_SIBLING (-2). Anything over 5 does.
+ *
+ * 8 and 16 rather than 6 and 12, so a fourth rule does not silently land inside
+ * a gap that was exactly wide enough and no wider.
  */
 const SCORE = {
+  /** Salesforce's `Website` IS this domain. */
+  SALESFORCE_WEBSITE_EXACT: 16,
+  /** Salesforce's `Website` is a subdomain of this domain, or vice versa. */
+  SALESFORCE_WEBSITE_RELATED: 8,
   /** Some other domain on this record is a subdomain of this one. */
   APEX_OF_SIBLING: 2,
   /** Some other domain on this record is this one's parent. */
@@ -66,6 +111,7 @@ const SCORE = {
 };
 
 export const REASON_LABEL: Record<DomainReason, string> = {
+  salesforce_website: 'Salesforce website',
   apex: 'apex domain',
   name_match: 'matches account name',
 };
@@ -126,6 +172,56 @@ function nameableLabels(domain: string): string[] {
 }
 
 /**
+ * The bare host of a domain or of whatever is in Salesforce's `Website`.
+ *
+ * Scheme, credentials, port, path, query, fragment, a leading `www.` and a
+ * trailing dot all come off; the rest is lowercased. Same normalisation the
+ * record's own domains get, so the two sides of rule 0 are comparable.
+ *
+ * Returns '' for anything that is not shaped like a host — `Website` is free
+ * text and holds phone numbers, "n/a", and bare company names often enough that
+ * a garbage value has to read as "no website" rather than as a host that
+ * matches nothing.
+ */
+export function bareHost(raw: string | null | undefined): string {
+  let v = String(raw || '').trim().toLowerCase();
+  if (!v) return '';
+  v = v.replace(/^[a-z][a-z0-9+.-]*:\/\//, '');   // scheme
+  v = v.replace(/^[^/@]*@/, '');                  // user:pass@
+  v = v.split(/[/?#]/)[0];                        // path, query, fragment
+  v = v.replace(/:\d+$/, '');                     // port
+  v = v.replace(/^www\./, '').replace(/\.$/, '');
+  if (!v || /\s/.test(v)) return '';
+  // label(.label)+ with an alphabetic TLD of two or more. `co.uk` and `com.tr`
+  // pass as a matter of course; punycode passes as ordinary labels.
+  if (!/^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/.test(v)) return '';
+  return v;
+}
+
+/**
+ * How this domain relates to the host in Salesforce's `Website`.
+ *
+ * 'exact' when they are the same host, 'related' when one is a subdomain of the
+ * other, null otherwise. See the header for why this is relative rather than an
+ * apex comparison, and SCORE for why the two arms are not worth the same.
+ */
+export function websiteRelation(
+  domain: string,
+  websiteHost: string,
+): 'exact' | 'related' | null {
+  if (!domain || !websiteHost) return null;
+  if (domain === websiteHost) return 'exact';
+  if (websiteHost.endsWith(`.${domain}`)) return 'related';
+  if (domain.endsWith(`.${websiteHost}`)) return 'related';
+  return null;
+}
+
+/** Does rule 0 fire on this domain at all? */
+export function matchesWebsite(domain: string, websiteHost: string): boolean {
+  return websiteRelation(domain, websiteHost) !== null;
+}
+
+/**
  * Does any label of this domain look like this account's name?
  *
  * Exact on a token or on the whole name run together, or a prefix relationship
@@ -152,8 +248,18 @@ export function labelMatchesName(domain: string, accountName: string): boolean {
  * Rank every domain on the record. Never drops one, never truncates: the AE has
  * to be able to see why the account matched, and a hidden option is the
  * "+N more" treatment this replaces.
+ *
+ * @param domains     every domain on the whitespace record
+ * @param accountName the account's canonical name
+ * @param website     Salesforce's `Website` for this account, as stored. Null,
+ *                    absent or unparseable all mean the same thing: rule 0 does
+ *                    not fire and rules 1–3 decide alone.
  */
-export function rankDomains(domains: (string | null | undefined)[], accountName: string): RankedDomain[] {
+export function rankDomains(
+  domains: (string | null | undefined)[],
+  accountName: string,
+  website?: string | null,
+): RankedDomain[] {
   const seen = new Set<string>();
   const clean: string[] = [];
   for (const raw of domains || []) {
@@ -163,10 +269,20 @@ export function rankDomains(domains: (string | null | undefined)[], accountName:
     clean.push(d);
   }
 
+  const websiteHost = bareHost(website);
+
   return clean
     .map((domain, original_index) => {
       const reasons: DomainReason[] = [];
       let score = 0;
+
+      const relation = websiteRelation(domain, websiteHost);
+      if (relation) {
+        score += relation === 'exact'
+          ? SCORE.SALESFORCE_WEBSITE_EXACT
+          : SCORE.SALESFORCE_WEBSITE_RELATED;
+        reasons.push('salesforce_website');
+      }
 
       const isParentOfSibling = clean.some(o => o !== domain && o.endsWith(`.${domain}`));
       const isChildOfSibling = clean.some(o => o !== domain && domain.endsWith(`.${o}`));
@@ -190,8 +306,15 @@ export function rankDomains(domains: (string | null | undefined)[], accountName:
     .sort((a, b) => (b.score - a.score) || (a.original_index - b.original_index));
 }
 
-/** Human-readable reason for one option, or null when there is nothing to say. */
+/**
+ * Human-readable reason for one option, or null when there is nothing to say.
+ *
+ * Capped at the strongest reason rather than joined. `Salesforce website · apex
+ * domain · matches account name` is three claims where one settles it, and the
+ * chip this lands in has one line to say it.
+ */
 export function reasonText(ranked: RankedDomain): string | null {
   if (!ranked.reasons.length) return null;
+  if (ranked.reasons.includes('salesforce_website')) return REASON_LABEL.salesforce_website;
   return ranked.reasons.map(r => REASON_LABEL[r]).join(' · ');
 }

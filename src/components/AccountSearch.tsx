@@ -77,6 +77,18 @@ export interface WhitespaceCandidate {
   region: string | null;
   billing_country: string | null;
   total_whitespace: number | null;
+  /**
+   * Salesforce's own `Website`, as stored — the field that settles which of the
+   * account's domains it actually considers its site. Passed straight to
+   * rankDomains as rule 0 and read for nothing else; it is never offered as an
+   * option, because the radio list is every domain the whitespace record holds
+   * and not that list plus a hearsay entry.
+   *
+   * Null on a record where Salesforce has none, and null on every record until
+   * the whitespace loader has run since the column was added. Rule 0 goes quiet
+   * in both cases and rules 1-3 decide alone.
+   */
+  website: string | null;
   domains: string[];
   primary_domain: string | null;
   rank_tier: number;
@@ -514,7 +526,7 @@ export default function AccountSearch({
    * and `domain_confirmed: false` is what says it has not been answered.
    */
   const select = (c: WhitespaceCandidate) => {
-    const domain_options = rankDomains(c.domains, c.name);
+    const domain_options = rankDomains(c.domains, c.name, c.website);
     onChange({
       kind: 'whitespace_account',
       account_id: c.account_id,
@@ -790,6 +802,22 @@ export default function AccountSearch({
     const suggested = options[0];
     const suggestedReason = suggested ? reasonText(suggested) : null;
 
+    /**
+     * Whether the advisory check's one-line reason is worth printing.
+     *
+     * On Entur it was not: the record holds entur.org and entur.no, both are
+     * genuinely Entur's sites, and the check returned the same sentence for both.
+     * Two rows repeating one line is noise, and the verdict chip already carries
+     * the finding. So the reason is shown only when it actually separates the
+     * options — or when there is a single option, where there is nothing for it
+     * to be redundant with and it is the whole substance of the check.
+     */
+    const settledVerdicts = options
+      .map(o => checks[`${value.account_id}|${o.domain}`])
+      .filter((c): c is DomainCheckResult => !!c && c !== 'checking');
+    const showVerdictReason =
+      options.length === 1 || new Set(settledVerdicts.map(c => c.reason)).size > 1;
+
     return (
       <div ref={rootRef}>
         <label style={{ display: 'block', fontSize: 14, fontWeight: 500, marginBottom: 6 }}>
@@ -929,7 +957,7 @@ export default function AccountSearch({
                                 {Icon && <Icon size={10} />}
                                 {style.label}
                               </span>
-                              {check.reason && (
+                              {check.reason && showVerdictReason && (
                                 <span style={{ color: 'var(--text-tertiary)' }}>{check.reason}</span>
                               )}
                             </div>
@@ -972,22 +1000,25 @@ export default function AccountSearch({
                 >
                   Confirm {value.domain}
                 </button>
-                <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
-                  {options.length === 1
-                    ? 'The only domain on this record'
-                    : `All ${options.length} domains on this record`}
-                  {domainCheck && options.length > MAX_DOMAIN_CHECKS &&
-                    ` · top ${MAX_DOMAIN_CHECKS} checked`}
-                </span>
+                {/* The button label is the whole statement of this state: it
+                    names the domain and the fact that it is not yet confirmed.
+                    It used to sit next to "All N domains on this record" and
+                    above "Not confirmed yet — the request is incomplete until you
+                    confirm a domain", with the payload block saying it a fourth
+                    time. The radio list already shows how many domains there
+                    are, one per row and none hidden.
+
+                    The cap disclosure stays, and only when it applies: the list
+                    is complete but the ANNOTATIONS on it are not, and a silent
+                    truncation reads as "all of these were checked". */}
+                {domainCheck && options.length > MAX_DOMAIN_CHECKS && (
+                  <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
+                    top {MAX_DOMAIN_CHECKS} of {options.length} checked
+                  </span>
+                )}
               </div>
             </>
           )}
-        </div>
-
-        <div style={{ fontSize: 12, color: 'var(--badge-yellow-text)', marginTop: 6, lineHeight: 1.6 }}>
-          {options.length === 0
-            ? 'There is no domain to confirm, so this account cannot be researched as it stands.'
-            : 'Not confirmed yet — the request is incomplete until you confirm a domain.'}
         </div>
       </div>
     );
@@ -1285,7 +1316,7 @@ export default function AccountSearch({
                         overflow, which is exactly the assumption being removed. */}
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
                       <Link size={10} />
-                      {rankDomains(c.domains, c.name)[0]?.domain || 'no domain on record'}
+                      {rankDomains(c.domains, c.name, c.website)[0]?.domain || 'no domain on record'}
                     </span>
                     {c.domains.length > 1 && <span>{c.domains.length} domains</span>}
                     <span>{c.sales_segment || '—'}</span>
