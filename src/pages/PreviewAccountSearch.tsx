@@ -184,14 +184,18 @@ export function AccountSearchPreviewBody({
           onChange={(e) => setDomainCheck(e.target.checked)}
           style={{ marginTop: 3, flexShrink: 0, accentColor: 'var(--accent)' }}
         />
-        <span>
-          <strong style={{ color: 'var(--text-primary)', fontWeight: 500 }}>
-            Check each domain’s home page
-          </strong>{' '}
-          — fetches the root URL, reads the <code>&lt;title&gt;</code> and meta description,
-          and asks Haiku whether it is that company’s site. Advisory: it annotates the
-          options and never picks, reorders, or blocks. A fetch or model failure reads
-          “couldn’t check”, never a guess.
+        {/* One line on screen. The paragraph that used to be here — how it
+            fetches, what it reads, that it is advisory, what a failure looks
+            like — is reviewer context, and it now lives in the title attribute
+            and in the task report rather than above the field it describes. */}
+        <span title={
+          'Fetches the root URL, reads the <title> and meta description, and asks Haiku ' +
+          'whether it is that company’s site. Advisory: it annotates the options and never ' +
+          'picks, reorders or blocks. A fetch or model failure reads “couldn’t check”, ' +
+          'never a guess.'
+        }>
+          Check each domain’s home page{' '}
+          <span style={{ color: 'var(--text-tertiary)' }}>— advisory</span>
         </span>
       </label>
 
@@ -249,48 +253,19 @@ export function AccountSearchPreviewBody({
           }}>{JSON.stringify(payload, null, 2)}</pre>
         )}
 
-        {locked && !locked.domain_confirmed && (
-          <div style={noteStyle}>
-            <code>url</code> follows the radio above. It is the ranking’s suggestion right
-            now, not a choice — and until it is confirmed there is nothing here that Submit
-            would be allowed to send.
-            <br /><br />
-            {locked.domain_options.length === 0
-              ? <>There is no domain on this record to confirm, so <code>url</code> is{' '}
-                  <code>null</code> and stays that way. This is a real state — the book
-                  holds accounts whose <code>DOMAINS__C</code> cell is empty — and it is a
-                  dead end here rather than a fork: research has to run against something.</>
-              : locked.domain_options.length === 1
-                ? <>This account holds one domain, and it still gets confirmed. “The only
-                    domain we hold” is not the same statement as “the right domain”, and the
-                    1,010 accounts pointing somewhere Salesforce does not consider theirs are
-                    what happens when the difference goes unasked.</>
-                : <>All {locked.domain_options.length} domains on the record are listed, none
-                    truncated. The old panel showed one and “+{locked.domain_options.length - 1}
-                    {' '}more”, which reads as “the real one, plus overflow” — and the one it
-                    showed was whichever came first out of the <code>DOMAINS__C</code> cell.</>}
-          </div>
-        )}
+        {/* The two rationale blocks that used to sit here — one arguing why
+            "+N more" was the wrong treatment and what `url` follows, one
+            explaining the lock, the canonical name and what
+            whitespace_status: "matched" licenses — are gone. Both were making a
+            case to a reviewer rather than helping anyone pick a domain, and
+            between them they pushed the payload below the fold on every account
+            with more than two domains.
 
-        {locked?.domain_confirmed && (
-          <div style={noteStyle}>
-            <code>whitespace_account_id</code> is the lock. M1.5 resolves whitespace by
-            equality on that Salesforce ID and never re-matches the company name or the
-            domain, so no substring can send the brief to a different account.
-            <br />
-            <code>company</code> comes from the whitespace record, not from what was typed.
-            <br />
-            <code>url</code> is the domain that was confirmed above — not{' '}
-            <code>primary_domain</code>, and not whichever domain came first on the record.
-            It drives the scrape, the web research, and the domain contact discovery runs
-            against, which is why it is a decision rather than a default.
-            <br />
-            <code>whitespace_status: "matched"</code> is what licenses the brief to state
-            usage, ARR and seat figures at all — sourced to that record, never supplemented
-            from anywhere else.
-          </div>
-        )}
-
+            What they said is not lost: it is the header comment of this file and
+            of AccountSearch, where the next person to change this behaviour will
+            actually be reading. The state they described is still on screen — the
+            "incomplete — domain not confirmed" chip above, and the dashed,
+            dimmed payload under it. */}
         {selection?.kind === 'new_prospect' && (
           <div style={noteStyle}>
             <code>no_whitespace_data: true</code> is a positive statement, not the absence

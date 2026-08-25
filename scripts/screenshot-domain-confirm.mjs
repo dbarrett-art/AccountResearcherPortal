@@ -37,9 +37,10 @@ const OUT = resolve(flag('out', 'screenshots/domain-confirm'));
 
 /**
  * The matrix the sign-off asks for: one, two and five domains, each unconfirmed
- * and confirmed, with the advisory check off and on — plus the two states that
- * only exist at the edges (an account holding no domain, and the candidate
- * dropdown, whose "+N more" wording changed).
+ * and confirmed, with the advisory check off and on — plus the three states that
+ * only exist at the edges (a `Website` naming no domain on the record, a record
+ * with no `Website` at all, and a record with no domain at all) and the candidate
+ * dropdown.
  *
  * `confirmed` shots are captured with the check off: once the domain is
  * confirmed the annotation is gone from the screen, so a confirmed × haiku
@@ -55,6 +56,10 @@ const SHOTS = [
   { fixture: 'five',   confirmed: false, haiku: false },
   { fixture: 'five',   confirmed: false, haiku: true },
   { fixture: 'five',   confirmed: true,  haiku: false },
+  { fixture: 'nofix',  confirmed: false, haiku: false },
+  { fixture: 'nofix',  confirmed: false, haiku: true },
+  { fixture: 'nets',   confirmed: false, haiku: false },
+  { fixture: 'nets',   confirmed: false, haiku: true },
   { fixture: 'none',   confirmed: false, haiku: false },
   { fixture: 'search', confirmed: false, haiku: false, type: 'hsbc' },
 ];
