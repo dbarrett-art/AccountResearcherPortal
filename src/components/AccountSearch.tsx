@@ -203,7 +203,23 @@ interface Props {
   fetcher?: typeof workerFetch;
 }
 
-const MIN_QUERY_LEN = 2;
+/**
+ * Shortest query that runs a search. Raised 2 -> 3 on 2026-08-25, in step with
+ * MIN_QUERY_LEN in the Worker's account-search.js -- the client gate exists to
+ * save the round trip, so a client that is looser than the server just pays for
+ * a request the server refuses.
+ *
+ * A trigram index cannot serve a pattern shorter than three characters, as
+ * '%hs%' or as 'hs%', so every two-character query was a full scan of all 20,769
+ * active accounts however the table is indexed -- and it was the first search
+ * every keystroke sequence triggered. 119ms at two characters against a 34-39ms
+ * floor; 37ms at three.
+ *
+ * 62 active accounts have a name of two characters or fewer and are no longer
+ * reachable by typing the name in full. They are still reachable by domain, and
+ * the helper text below says what to do rather than showing an empty list.
+ */
+const MIN_QUERY_LEN = 3;
 // The endpoint's own server-side work is single-digit milliseconds and the round
 // trip is ~50ms, so the debounce is the largest single contributor to how the
 // field feels. 120ms still coalesces a burst of typing into one request — a
