@@ -48,14 +48,41 @@ npm run lint         # ESLint
 ## Type-ahead account picker
 
 `src/components/AccountSearch.tsx` — self-contained type-ahead over the real whitespace
-book via the Worker's `GET /account-search`. Selecting a candidate locks the submission
-to that account's domain + Salesforce ID, replacing free-text company entry (which the
-pipeline used to re-match later, sometimes onto a different company).
+book via the Worker's `GET /account-search`. It asks two questions in order:
+
+1. **Which account.** Picking a candidate locks the submission to that account's
+   Salesforce ID, replacing free-text company entry (which the pipeline used to re-match
+   later, sometimes onto a different company).
+2. **Which domain.** A separate, explicit confirm step, taken for every account
+   including one holding a single domain. The selection comes back with
+   `domain_confirmed: false` and every domain on the record ranked; a host must treat
+   that as an incomplete request. The domain used to be settled silently as
+   `primary_domain` — the first entry in the `DOMAINS__C` cell — and 1,010 accounts had
+   it pointing somewhere Salesforce does not consider theirs.
+
+`src/lib/domain-rank.ts` ranks the options: apex over subdomain when both are on the
+record, then a domain label matching the account name, then the record's own order. It is
+deliberately free of any public-suffix list (a relative suffix comparison instead), so the
+portal does not become a third copy of `apexDomain`. Tests in `domain-rank.test.ts` assert
+the named accounts — Entur, Nets, LVMH, HSBC, Toyota.
+
+The advisory page check is behind a switch on the preview page. It calls the Worker's
+`POST /domain-check`, which fetches the domain's root URL, reads the `<title>` and meta
+description, and asks Haiku whether the page presents itself as that company. It
+annotates options and never picks, reorders, or blocks; a fetch or model failure reads
+"couldn't check" and never a guess. Measured ~200ms–1s to fetch plus ~1s for the model,
+which is why it is async and the card renders before it.
 
 `src/pages/PreviewAccountSearch.tsx` at `/preview/account-search` is an admin-only,
-unlinked review harness. It exercises the live endpoint but cannot submit a run. **Submit
+unlinked review harness. It exercises the live endpoints but cannot submit a run. **Submit
 still uses free-text entry** — wiring the component in is a separate task pending sign-off,
 and the preview route should be removed once that lands.
+
+`harness/` is a dev-server-only vite entry (`/AccountResearcherPortal/harness/`) that
+renders the same preview body against fixtures, for screenshots. `vite build` reads the
+root `index.html` and never touches it, so none of it ships.
+`scripts/screenshot-domain-confirm.mjs` drives it with Puppeteer resolved out of the
+prospect-research repo.
 
 ## Related Repos
 

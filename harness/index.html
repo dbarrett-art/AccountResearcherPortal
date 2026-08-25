@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;0,6..72,700;1,6..72,400;1,6..72,500&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+    <title>Harness — domain confirmation</title>
+  </head>
+  <body>
+    <!--
+      Screenshot harness. Dev-server only.
+
+      `vite build` takes its input from the root index.html and never sees this
+      file, so nothing here can reach GitHub Pages. It exists so the domain
+      confirmation states can be captured deterministically, without an admin
+      session and without the live endpoint deciding which domains an account
+      holds on the day the screenshots are taken.
+    -->
+    <div id="root"></div>
+    <script type="module" src="./main.tsx"></script>
+  </body>
+</html>

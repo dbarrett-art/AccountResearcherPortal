@@ -25,3 +25,9 @@ dist-ssr
 
 # Supabase local metadata (contains project ref, pooler URL)
 supabase/.temp/
+
+# Sign-off screenshots. Regenerated on demand by
+# scripts/screenshot-domain-confirm.mjs; ~6MB of retina PNGs is not worth
+# carrying in the repo forever. The reviewed set is uploaded to the public
+# cc-reports Supabase bucket and linked from the task report.
+screenshots/

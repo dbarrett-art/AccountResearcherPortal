@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Search, Check, Link, Shield, AlertTriangle } from 'lucide-react';
+import { Search, Check, Link, Shield, AlertTriangle, Clock, X, ExternalLink } from 'lucide-react';
 import { workerFetch } from '../lib/supabase';
 import { parseDomainInput } from '../lib/domain';
+import { rankDomains, reasonText, type RankedDomain } from '../lib/domain-rank';
 
 /**
  * AccountSearch — type-ahead over the real whitespace book.
@@ -18,12 +19,29 @@ import { parseDomainInput } from '../lib/domain';
  * the only outside dependency is `workerFetch`, which is overridable. It can be
  * dropped into the Submit form as-is.
  *
+ * Two questions, both asked out loud
+ * ──────────────────────────────────
+ * WHICH ACCOUNT, then WHICH DOMAIN. Picking a candidate answers the first and
+ * only the first: the selection comes back with `domain_confirmed: false` and a
+ * ranked list of every domain on the record, and a host must treat that as an
+ * incomplete request. Confirming the domain answers the second.
+ *
+ * The domain used to be settled silently as `primary_domain` — the first entry
+ * in a comma-separated spreadsheet cell, `is_primary` first and no logic after
+ * that. It is what gets scraped, what the web research is built on, and what
+ * contact discovery runs against, and 1,010 accounts had it pointing somewhere
+ * Salesforce does not consider theirs: Toyota at `mail.toyota.co.jp`, LVMH at
+ * `sephora.com`, the Dutch government at the tax office. Ranking (see
+ * lib/domain-rank) makes the suggestion defensible; the confirm step makes it a
+ * decision.
+ *
  * What it deliberately does NOT do
  * ───────────────────────────────
- * Auto-select. Not even when exactly one candidate comes back. A single result
- * is still a guess about intent, and the whole point of the change is that a
- * human confirms which account this brief is about. `onChange` fires only from
- * a click or Enter on a highlighted row.
+ * Auto-select. Not even when exactly one candidate comes back, and not even
+ * when the account holds exactly one domain. A single result is still a guess
+ * about intent, and "this is the only domain we hold" is not "this is the right
+ * domain". `onChange` fires only from a click or Enter on a highlighted row,
+ * and `domain_confirmed` flips only on the confirm button.
  *
  * No match is a state, not an empty list. An empty dropdown reads as "still
  * loading" or "keep typing"; this says the whitespace book has no record, and
@@ -73,9 +91,50 @@ export interface LockedAccountSelection {
   account_id: string;
   /** Canonical account name from the whitespace book, not what was typed. */
   name: string;
-  /** Primary domain from the whitespace book. */
+  /**
+   * The domain this brief will run against: the AE's choice once
+   * `domain_confirmed` is true, and the ranked suggestion until then.
+   *
+   * Null only when the record holds no domain at all.
+   */
   domain: string | null;
+  /**
+   * False until the AE has explicitly confirmed the domain, including when the
+   * account holds exactly one.
+   *
+   * A host must treat an unconfirmed selection as incomplete and refuse to
+   * submit it. "This is the only domain we hold" is not the same statement as
+   * "this is the right domain", and the whole reason 1,010 accounts lock a
+   * domain Salesforce does not consider theirs is that nobody was ever asked.
+   */
+  domain_confirmed: boolean;
+  /**
+   * Every domain on the record, ranked best-first, each carrying why it ranked
+   * where it did. Never truncated — a hidden option is the "+N more" treatment
+   * this replaces.
+   */
+  domain_options: RankedDomain[];
   candidate: WhitespaceCandidate;
+}
+
+/**
+ * Advisory verdicts from `POST /domain-check`.
+ *
+ * Annotation only. Nothing in this component reads a verdict to decide an
+ * order, a pre-selection, or whether confirmation is allowed — it is printed
+ * next to an option and that is the end of its authority. A check built on a
+ * page title and a meta description is not good enough to outrank a person who
+ * knows the account.
+ */
+export type DomainVerdict = 'looks_right' | 'different_company' | 'not_a_website' | 'couldnt_check';
+
+export interface DomainCheckResult {
+  domain: string;
+  verdict: DomainVerdict;
+  /** One line, from the model or from whatever went wrong. */
+  reason: string;
+  page?: { title: string; description: string; status: number } | null;
+  latency_ms?: number;
 }
 
 /**
@@ -126,6 +185,13 @@ interface Props {
    * is the domain" is one of its answers.
    */
   allowNewProspect?: boolean;
+  /**
+   * Annotate each domain option with the advisory page check (see
+   * DomainVerdict). Off by default: it costs a fetch and a Haiku call per
+   * option, and every path through the confirmation step works identically
+   * without it.
+   */
+  domainCheck?: boolean;
   label?: string;
   placeholder?: string;
   autoFocus?: boolean;
@@ -159,11 +225,59 @@ const DEBOUNCE_MS = 120;
  */
 const CACHE_MAX = 200;
 
+/**
+ * Ceiling on advisory page checks per account.
+ *
+ * Not a display cap — every domain is listed, always. This caps only how many
+ * get annotated, because each one is a root-URL fetch plus a model call and the
+ * widest records in the book hold well over twenty domains. The five checked are
+ * the five the ranking put on top, which are the five an AE actually reads.
+ */
+const MAX_DOMAIN_CHECKS = 5;
+
 const MATCH_LABEL: Record<MatchTier, string> = {
   domain_exact: 'exact domain',
   name_exact: 'exact name',
   prefix: 'starts with',
   contains: 'contains',
+};
+
+/**
+ * The four verdicts the annotation can show, and nothing else.
+ *
+ * Used as the allowlist when a response comes back: a verdict outside this list
+ * is treated as "couldn't check" rather than mapped to the nearest match.
+ */
+const VERDICT_ORDER: DomainVerdict[] = [
+  'looks_right', 'different_company', 'not_a_website', 'couldnt_check',
+];
+
+/**
+ * How each verdict reads. Wording is the AE's, not the model's — "looks right"
+ * rather than "verified", because a page title and a meta description do not
+ * verify anything.
+ */
+const VERDICT_STYLE: Record<DomainVerdict, {
+  label: string; bg: string; fg: string; icon: typeof Check | null;
+}> = {
+  looks_right: {
+    label: 'looks right',
+    bg: 'var(--badge-green-bg)', fg: 'var(--badge-green-text)', icon: Check,
+  },
+  different_company: {
+    label: 'looks like a different company',
+    bg: 'var(--badge-red-bg)', fg: 'var(--badge-red-text)', icon: AlertTriangle,
+  },
+  not_a_website: {
+    label: 'not a website',
+    bg: 'var(--badge-yellow-bg)', fg: 'var(--badge-yellow-text)', icon: X,
+  },
+  couldnt_check: {
+    // No icon and no colour. "We could not ask" is not a finding, and dressing
+    // it as one would make an unreachable host look like a red flag.
+    label: 'couldn’t check',
+    bg: 'var(--badge-muted-bg)', fg: 'var(--badge-muted-text)', icon: null,
+  },
 };
 
 function formatMoney(v: number | null): string {
@@ -179,6 +293,7 @@ export default function AccountSearch({
   value,
   onChange,
   allowNewProspect = false,
+  domainCheck = false,
   label = 'Company',
   placeholder = 'Start typing a company name or website',
   autoFocus = false,
@@ -200,6 +315,15 @@ export default function AccountSearch({
   const [newProspectName, setNewProspectName] = useState<string | null>(null);
   const [domainDraft, setDomainDraft] = useState('');
   const [domainTouched, setDomainTouched] = useState(false);
+  /**
+   * Advisory check results, keyed `${account_id}|${domain}`. `'checking'` while a
+   * request is in flight; absent means not asked.
+   *
+   * Rendered as it arrives and never awaited — the card and the domain list are
+   * on screen before the first request is issued, and an AE who has already made
+   * up their mind should not be waiting on a model to tell them so.
+   */
+  const [checks, setChecks] = useState<Record<string, DomainCheckResult | 'checking'>>({});
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const abortRef = useRef<AbortController | undefined>(undefined);
@@ -225,6 +349,16 @@ export default function AccountSearch({
   const seqRef = useRef(0);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
+  /**
+   * Advisory results kept for the session, keyed the same way as `checks`.
+   *
+   * Survives clearing the selection and coming back, which an AE comparing two
+   * accounts does constantly. A page's title does not change in the minutes a
+   * submission takes to decide, and re-fetching it is a fetch plus a model call
+   * to learn the same thing.
+   */
+  const checkCacheRef = useRef<Map<string, DomainCheckResult>>(new Map());
+  const checkAbortRef = useRef<AbortController | undefined>(undefined);
 
   const runSearch = useCallback(async (q: string) => {
     const trimmed = q.trim();
@@ -355,15 +489,45 @@ export default function AccountSearch({
     return candidates.filter(c => c.rank_tier === top).length;
   }, [candidates]);
 
+  /**
+   * Choosing a candidate settles WHICH ACCOUNT, and nothing else.
+   *
+   * It used to also settle the domain, silently, as `primary_domain` — the first
+   * entry in a comma-separated spreadsheet cell. That is where `mail.toyota.co.jp`
+   * and `sephora.com` came from. The domain is now a second, explicit question,
+   * and `domain_confirmed: false` is what says it has not been answered.
+   */
   const select = (c: WhitespaceCandidate) => {
+    const domain_options = rankDomains(c.domains, c.name);
     onChange({
       kind: 'whitespace_account',
       account_id: c.account_id,
       name: c.name,
-      domain: c.primary_domain,
+      // Offered, not chosen. The confirm click is what chooses.
+      domain: domain_options[0]?.domain ?? null,
+      domain_confirmed: false,
+      domain_options,
       candidate: c,
     });
     setOpen(false);
+  };
+
+  /** Move the radio. Still unconfirmed — picking is not confirming. */
+  const chooseDomain = (domain: string) => {
+    if (value?.kind !== 'whitespace_account') return;
+    if (domain === value.domain) return;
+    onChange({ ...value, domain, domain_confirmed: false });
+  };
+
+  const confirmDomain = () => {
+    if (value?.kind !== 'whitespace_account' || !value.domain) return;
+    onChange({ ...value, domain_confirmed: true });
+  };
+
+  /** Reopen the question without losing the account. */
+  const reopenDomain = () => {
+    if (value?.kind !== 'whitespace_account') return;
+    onChange({ ...value, domain_confirmed: false });
   };
 
   const startNewProspect = (typedQuery: string) => {
@@ -438,6 +602,84 @@ export default function AccountSearch({
     const el = listRef.current?.querySelector<HTMLElement>(`[data-idx="${highlight}"]`);
     el?.scrollIntoView({ block: 'nearest' });
   }, [highlight]);
+
+  // ── Advisory page check ───────────────────────────────────────────────────
+
+  const pendingAccountId = value?.kind === 'whitespace_account' && !value.domain_confirmed
+    ? value.account_id
+    : null;
+  // A string rather than the array, so the effect below does not re-run on every
+  // render just because `domain_options` is a fresh reference.
+  const checkableDomains = value?.kind === 'whitespace_account' && !value.domain_confirmed
+    ? value.domain_options.slice(0, MAX_DOMAIN_CHECKS).map(o => o.domain).join(',')
+    : '';
+
+  useEffect(() => {
+    if (!domainCheck || !pendingAccountId || !checkableDomains) return;
+
+    checkAbortRef.current?.abort();
+    const controller = new AbortController();
+    checkAbortRef.current = controller;
+
+    const domains = checkableDomains.split(',');
+    const known: Record<string, DomainCheckResult | 'checking'> = {};
+    const todo: string[] = [];
+    for (const domain of domains) {
+      const key = `${pendingAccountId}|${domain}`;
+      const hit = checkCacheRef.current.get(key);
+      if (hit) known[key] = hit;
+      else { known[key] = 'checking'; todo.push(domain); }
+    }
+    // Cached verdicts and in-flight markers land in one paint, before any
+    // request goes out, so the list never flashes empty on a second look.
+    setChecks(prev => ({ ...prev, ...known }));
+
+    for (const domain of todo) {
+      const key = `${pendingAccountId}|${domain}`;
+      fetcher('/domain-check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ account_id: pendingAccountId, domain }),
+        signal: controller.signal,
+      })
+        .then(async (res) => {
+          if (!res.ok) throw new Error(`check failed (${res.status})`);
+          return await res.json() as Partial<DomainCheckResult>;
+        })
+        .then((body) => {
+          // The verdict is whatever the endpoint said, or nothing. An
+          // unrecognised value is not repaired into the nearest plausible one:
+          // a fabricated "looks right" is worse than an admitted blank.
+          const verdict = VERDICT_ORDER.includes(body?.verdict as DomainVerdict)
+            ? body!.verdict as DomainVerdict
+            : 'couldnt_check';
+          const result: DomainCheckResult = {
+            domain,
+            verdict,
+            reason: body?.reason || (verdict === 'couldnt_check' ? 'no reason given' : ''),
+            page: body?.page ?? null,
+            latency_ms: body?.latency_ms,
+          };
+          checkCacheRef.current.set(key, result);
+          if (!controller.signal.aborted) setChecks(prev => ({ ...prev, [key]: result }));
+        })
+        .catch((err: Error) => {
+          if (controller.signal.aborted || err.name === 'AbortError') return;
+          // Deliberately NOT cached. A real verdict is a fact about the page and
+          // holds for the session; a network failure is a fact about this
+          // moment, and sticking it to the domain would mean the annotation
+          // never recovers.
+          setChecks(prev => ({
+            ...prev,
+            [key]: { domain, verdict: 'couldnt_check', reason: err.message || 'the check could not be run', page: null },
+          }));
+        });
+    }
+
+    return () => controller.abort();
+  }, [domainCheck, pendingAccountId, checkableDomains, fetcher]);
+
+  useEffect(() => () => { checkAbortRef.current?.abort(); }, []);
 
   const inputStyle: React.CSSProperties = {
     background: 'var(--bg-input)',
@@ -517,8 +759,227 @@ export default function AccountSearch({
     );
   }
 
-  // ── Locked state ──────────────────────────────────────────────────────────
+  // ── The account is settled; the domain is the open question ───────────────
+  //
+  // Reached for EVERY whitespace account, one domain or five. A record holding a
+  // single domain still gets asked, because "this is the only domain we hold" is
+  // a different statement from "this is the right domain", and the second one is
+  // the only one worth locking a brief to.
+  //
+  // The payload is deliberately still visible to the host while this is on
+  // screen — an unconfirmed selection is an incomplete request, not a hidden
+  // one, and a host that hid it would be back to a domain nobody looked at.
+  if (value?.kind === 'whitespace_account' && !value.domain_confirmed) {
+    const options = value.domain_options;
+    const suggested = options[0];
+    const suggestedReason = suggested ? reasonText(suggested) : null;
+
+    return (
+      <div ref={rootRef}>
+        <label style={{ display: 'block', fontSize: 14, fontWeight: 500, marginBottom: 6 }}>
+          {label}
+        </label>
+
+        {/* Which account: settled. Neutral border, not green — nothing is done yet. */}
+        <div style={{
+          background: 'var(--bg-surface)',
+          border: '1px solid var(--border-strong)',
+          borderRadius: 6,
+          padding: '10px 12px',
+          display: 'flex',
+          alignItems: 'flex-start',
+          gap: 10,
+        }}>
+          <Shield size={15} style={{ marginTop: 2, flexShrink: 0, color: 'var(--text-secondary)' }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 3 }}>{value.name}</div>
+            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', lineHeight: 1.7 }}>
+              <div>
+                <span style={{ opacity: 0.75 }}>Salesforce ID</span>{' '}
+                <code style={{ fontSize: 11 }}>{value.account_id}</code>
+              </div>
+              <div>
+                <span style={{ opacity: 0.75 }}>ARR</span> {formatMoney(value.candidate.arr)}
+                {'   '}
+                <span style={{ opacity: 0.75 }}>Segment</span> {value.candidate.sales_segment || '—'}
+                {'   '}
+                <span style={{ opacity: 0.75 }}>Region</span> {value.candidate.region || '—'}
+              </div>
+            </div>
+          </div>
+          {changeButton}
+        </div>
+
+        {/* Which domain: the question. */}
+        <div style={{
+          marginTop: 8,
+          background: 'var(--bg-surface)',
+          border: '1px solid var(--accent)',
+          borderRadius: 8,
+          padding: '12px 14px',
+        }}>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
+            Confirm the research domain
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 10 }}>
+            This is the site that gets scraped, the basis of the web research, and the
+            domain contact discovery runs against.
+          </div>
+
+          {options.length === 0 ? (
+            <div style={{
+              fontSize: 12, color: 'var(--badge-yellow-text)', background: 'var(--badge-yellow-bg)',
+              border: '1px solid var(--border)', borderRadius: 6, padding: '8px 10px', lineHeight: 1.6,
+            }}>
+              This account holds no domain at all, so there is nothing to confirm. Research
+              cannot run without one — pick a different account, or take the new-prospect
+              path and type the domain by hand.
+            </div>
+          ) : (
+            <>
+              <div role="radiogroup" aria-label="Research domain">
+                {options.map((option, i) => {
+                  const chosen = option.domain === value.domain;
+                  const isSuggested = i === 0;
+                  const check = checks[`${value.account_id}|${option.domain}`];
+                  return (
+                    <label
+                      key={option.domain}
+                      style={{
+                        display: 'flex', gap: 9, alignItems: 'flex-start',
+                        padding: '8px 10px',
+                        marginBottom: 6,
+                        border: `1px solid ${chosen ? 'var(--accent)' : 'var(--border)'}`,
+                        background: chosen ? 'var(--accent-subtle)' : 'transparent',
+                        borderRadius: 6,
+                        cursor: disabled ? 'not-allowed' : 'pointer',
+                      }}
+                    >
+                      <input
+                        type="radio"
+                        name={`research-domain-${value.account_id}`}
+                        checked={chosen}
+                        disabled={disabled}
+                        onChange={() => chooseDomain(option.domain)}
+                        style={{ marginTop: 3, flexShrink: 0, accentColor: 'var(--accent)' }}
+                      />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{
+                          display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap',
+                        }}>
+                          <code style={{
+                            fontSize: 12, fontFamily: 'var(--font-mono)',
+                            color: 'var(--text-primary)', wordBreak: 'break-all',
+                          }}>
+                            {option.domain}
+                          </code>
+                          {/* The reason sits on the suggestion, so the suggestion is
+                              legible rather than magic. It stays on the suggestion
+                              even after the AE picks something else — it describes
+                              the ranking, not the current radio. */}
+                          {isSuggested && (
+                            <span style={{
+                              fontSize: 10, padding: '1px 6px', borderRadius: 10,
+                              background: 'var(--badge-blue-bg)', color: 'var(--badge-blue-text)',
+                              whiteSpace: 'nowrap',
+                            }}>
+                              suggested{suggestedReason ? ` · ${suggestedReason}` : ''}
+                            </span>
+                          )}
+                        </div>
+
+                        {check === 'checking' && (
+                          <div style={{
+                            display: 'flex', alignItems: 'center', gap: 4, marginTop: 4,
+                            fontSize: 11, color: 'var(--text-tertiary)',
+                          }}>
+                            <Clock size={11} /> checking the page…
+                          </div>
+                        )}
+                        {check && check !== 'checking' && (() => {
+                          const style = VERDICT_STYLE[check.verdict];
+                          const Icon = style.icon;
+                          return (
+                            <div style={{
+                              display: 'flex', alignItems: 'flex-start', gap: 5, marginTop: 4,
+                              fontSize: 11, lineHeight: 1.5, color: style.fg,
+                            }}>
+                              <span style={{
+                                display: 'inline-flex', alignItems: 'center', gap: 3,
+                                background: style.bg, color: style.fg,
+                                padding: '1px 6px', borderRadius: 10, whiteSpace: 'nowrap',
+                                flexShrink: 0,
+                              }}>
+                                {Icon && <Icon size={10} />}
+                                {style.label}
+                              </span>
+                              {check.reason && (
+                                <span style={{ color: 'var(--text-tertiary)' }}>{check.reason}</span>
+                              )}
+                            </div>
+                          );
+                        })()}
+                      </div>
+
+                      {/* Look at it yourself. The whole problem is a domain nobody
+                          opened, so the cheapest fix is one click away. */}
+                      <a
+                        href={`https://${option.domain}`}
+                        target="_blank"
+                        rel="noreferrer noopener"
+                        onClick={(e) => e.stopPropagation()}
+                        title={`Open ${option.domain} in a new tab`}
+                        style={{ color: 'var(--text-tertiary)', flexShrink: 0, marginTop: 2 }}
+                      >
+                        <ExternalLink size={12} />
+                      </a>
+                    </label>
+                  );
+                })}
+              </div>
+
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 10, flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  onClick={confirmDomain}
+                  disabled={disabled || !value.domain}
+                  style={{
+                    background: value.domain ? 'var(--accent)' : 'transparent',
+                    border: `1px solid ${value.domain ? 'var(--accent)' : 'var(--border-strong)'}`,
+                    borderRadius: 6,
+                    padding: '6px 14px',
+                    fontSize: 12,
+                    fontWeight: 500,
+                    color: value.domain ? '#fff' : 'var(--text-tertiary)',
+                    cursor: value.domain && !disabled ? 'pointer' : 'not-allowed',
+                  }}
+                >
+                  Confirm {value.domain}
+                </button>
+                <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
+                  {options.length === 1
+                    ? 'The only domain on this record'
+                    : `All ${options.length} domains on this record`}
+                  {domainCheck && options.length > MAX_DOMAIN_CHECKS &&
+                    ` · top ${MAX_DOMAIN_CHECKS} checked`}
+                </span>
+              </div>
+            </>
+          )}
+        </div>
+
+        <div style={{ fontSize: 12, color: 'var(--badge-yellow-text)', marginTop: 6, lineHeight: 1.6 }}>
+          {options.length === 0
+            ? 'There is no domain to confirm, so this account cannot be researched as it stands.'
+            : 'Not confirmed yet — the request is incomplete until you confirm a domain.'}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Locked state ───────────────────────────────────────────────────────
   if (value) {
+    const confirmedByHand = value.kind === 'whitespace_account';
     return (
       <div ref={rootRef}>
         <label style={{ display: 'block', fontSize: 14, fontWeight: 500, marginBottom: 6 }}>
@@ -537,9 +998,31 @@ export default function AccountSearch({
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 3 }}>{value.name}</div>
             <div style={{ fontSize: 11, color: 'var(--text-tertiary)', lineHeight: 1.7 }}>
-              <div>
-                <span style={{ opacity: 0.75 }}>Locked domain</span>{' '}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <span style={{ opacity: 0.75 }}>Research domain</span>
                 <code style={{ fontSize: 11 }}>{value.domain || '— none on record —'}</code>
+                {/* Says who decided, because that is the whole change. */}
+                <span style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 3,
+                  fontSize: 10, padding: '1px 6px', borderRadius: 10,
+                  background: 'var(--badge-green-bg)', color: 'var(--badge-green-text)',
+                }}>
+                  <Check size={9} /> confirmed
+                </span>
+                {confirmedByHand && (
+                  <button
+                    type="button"
+                    onClick={reopenDomain}
+                    disabled={disabled}
+                    style={{
+                      background: 'none', border: 'none', padding: 0,
+                      fontSize: 11, color: 'var(--accent)', textDecoration: 'underline',
+                      cursor: disabled ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    change
+                  </button>
+                )}
               </div>
               <div>
                 <span style={{ opacity: 0.75 }}>Salesforce ID</span>{' '}
@@ -556,9 +1039,10 @@ export default function AccountSearch({
           </div>
           {changeButton}
         </div>
-        <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>
-          Research will run against this account. The domain and Salesforce ID above are
-          what get sent, not the text you typed.
+        <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4, lineHeight: 1.6 }}>
+          Research will run against this account and this domain. Both were chosen here —
+          not derived from the text you typed, and not taken from whichever domain happened
+          to come first on the record.
         </div>
       </div>
     );
@@ -779,11 +1263,15 @@ export default function AccountSearch({
                     fontSize: 11, color: 'var(--text-tertiary)',
                     display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center',
                   }}>
+                    {/* The ranking's top pick, not `primary_domain`. And a plain
+                        count rather than "+N more" — the old wording implied the
+                        first domain was the account's real one and the rest were
+                        overflow, which is exactly the assumption being removed. */}
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
                       <Link size={10} />
-                      {c.primary_domain || 'no domain on record'}
+                      {rankDomains(c.domains, c.name)[0]?.domain || 'no domain on record'}
                     </span>
-                    {c.domains.length > 1 && <span>+{c.domains.length - 1} more</span>}
+                    {c.domains.length > 1 && <span>{c.domains.length} domains</span>}
                     <span>{c.sales_segment || '—'}</span>
                     <span>{c.region || '—'}</span>
                     <span style={{ opacity: 0.7 }}>{MATCH_LABEL[c.match]}</span>
