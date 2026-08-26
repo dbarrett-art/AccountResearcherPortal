@@ -50,10 +50,16 @@ export default function App() {
       <Route path="/admin" element={<ProtectedRoute requireRole="admin"><Admin /></ProtectedRoute>} />
       <Route path="/briefs/:run_id" element={<ProtectedRoute><BriefView /></ProtectedRoute>} />
       <Route path="/shared/:token" element={<SharedBriefView />} />
-      {/* Review harness for the type-ahead account picker. Admin-only and not
-          linked from any navigation: it exercises the live /account-search
-          endpoint against real data but cannot submit a run. Remove once the
-          picker is wired into /submit and signed off. */}
+      {/* Review harness for the account picker that /submit now uses. Admin-only
+          and not linked from any navigation: it exercises the live
+          /account-search endpoint against real data but cannot submit a run,
+          spend a credit or dispatch anything.
+
+          Kept deliberately after the 2026-08-26 cutover rather than removed. It
+          is the only place the picker can be driven against the live book with
+          no credit at stake, which is what makes it useful for reviewing a
+          change to it — and it costs nothing to keep. Its banner says Submit
+          uses this component so nobody reads the route as unreleased. */}
       <Route path="/preview/account-search" element={<ProtectedRoute requireRole="admin"><PreviewAccountSearch /></ProtectedRoute>} />
       <Route path="/debug" element={<ProtectedRoute><PipelineDebug /></ProtectedRoute>} />
       <Route path="/debug/:run_id" element={<ProtectedRoute><PipelineDebug /></ProtectedRoute>} />

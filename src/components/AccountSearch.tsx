@@ -18,8 +18,11 @@ import { salesforceAccountUrl } from '../lib/salesforce-url';
  * Enexis Netbeheer).
  *
  * Self-contained on purpose: no layout assumptions, no page-specific state, and
- * the only outside dependency is `workerFetch`, which is overridable. It can be
- * dropped into the Submit form as-is.
+ * the only outside dependency is `workerFetch`, which is overridable.
+ *
+ * This is the production Submit field as of 2026-08-26. It is no longer a
+ * preview: /submit renders it and free-text company/website entry is gone from
+ * that page. /preview/account-search still exists as the review harness.
  *
  * Two questions, both asked out loud
  * ──────────────────────────────────
@@ -67,6 +70,20 @@ import { salesforceAccountUrl } from '../lib/salesforce-url';
  * ends up telling an AE there is no room in an account nobody has ever measured.
  * The selection carries `no_whitespace_data: true` and no account_id, and the
  * pipeline keeps the two apart the whole way to the PDF.
+ *
+ * An account in the book with no domain in the book
+ * ────────────────────────────────────────────────
+ * A third case, and not a version of either of the first two: 567 of the 20,963
+ * active accounts hold no `account_domains` row. They have ARR, seats and an
+ * owner — the book knows them — it just has no domain for them, and 548 of the
+ * 567 have a Salesforce `Website` the loader never turned into a domain row.
+ *
+ * The confirm step there was a dead end until 2026-08-26. It now takes a typed
+ * domain and keeps the lock: `domain_source: 'user_entered'` on a
+ * LockedAccountSelection. Routing them to the net-new path instead would have
+ * been the same error this component exists to prevent — a brief telling an AE
+ * that an account nobody has ever measured has no room in it, except about an
+ * account that has been measured. See `domain_source`.
  */
 
 export type MatchTier = 'domain_exact' | 'name_exact' | 'prefix' | 'contains';
@@ -130,7 +147,8 @@ export interface LockedAccountSelection {
    * The domain this brief will run against: the AE's choice once
    * `domain_confirmed` is true, and the ranked suggestion until then.
    *
-   * Null only when the record holds no domain at all.
+   * Null only when the record holds no domain at all AND nothing has been typed
+   * for it yet — see `domain_source`.
    */
   domain: string | null;
   /**
@@ -147,8 +165,34 @@ export interface LockedAccountSelection {
    * Every domain on the record, ranked best-first, each carrying why it ranked
    * where it did. Never truncated — a hidden option is the "+N more" treatment
    * this replaces.
+   *
+   * Empty on the 567 active accounts that hold no domain at all. Those are the
+   * accounts `domain_source: 'user_entered'` exists for.
    */
   domain_options: RankedDomain[];
+  /**
+   * Where `domain` came from — and the reason this field is on the LOCKED branch
+   * rather than only on the net-new one.
+   *
+   * 567 of the 20,963 active accounts hold no `account_domains` row at all, and
+   * 548 of those DO have a Salesforce `Website`. They are real accounts with real
+   * ARR and real seats; the book simply has no domain for them. Before this field
+   * the confirm step was a dead end on all 567 — "pick a different account, or
+   * take the new-prospect path" — and the new-prospect path is the wrong answer
+   * for them twice over: it is unreachable once an account has been selected, and
+   * taking it would send `no_whitespace_data: true` about an account that plainly
+   * HAS whitespace data. That is this feature's own failure mode, pointed the
+   * other way.
+   *
+   * So the account stays locked and the domain gets typed. `'user_entered'` is
+   * the admission that nothing on the record backed it — the same meaning it
+   * carries on the net-new path — and it travels to `/submit` as `domain_source`
+   * so nothing downstream has to guess.
+   *
+   * `'whitespace'` is every ordinary selection: the domain came off the record
+   * and the AE chose it from the radio list.
+   */
+  domain_source: 'whitespace' | 'user_entered';
   candidate: WhitespaceCandidate;
 }
 
@@ -984,8 +1028,13 @@ export default function AccountSearch({
       domain: domain_options[0]?.domain ?? null,
       domain_confirmed: false,
       domain_options,
+      // Off the record until and unless somebody types one, which only the
+      // no-domain accounts can do.
+      domain_source: 'whitespace',
       candidate: c,
     });
+    setDomainDraft('');
+    setDomainTouched(false);
     setOpen(false);
   };
 
@@ -993,7 +1042,7 @@ export default function AccountSearch({
   const chooseDomain = (domain: string) => {
     if (value?.kind !== 'whitespace_account') return;
     if (domain === value.domain) return;
-    onChange({ ...value, domain, domain_confirmed: false });
+    onChange({ ...value, domain, domain_confirmed: false, domain_source: 'whitespace' });
   };
 
   const confirmDomain = () => {
@@ -1001,9 +1050,38 @@ export default function AccountSearch({
     onChange({ ...value, domain_confirmed: true });
   };
 
+  /**
+   * Confirm a domain typed by hand for a locked account that holds none.
+   *
+   * The account stays locked — `account_id`, `candidate` and every figure on the
+   * card are untouched, because they are all still true. Only the domain is
+   * hand-supplied, and `domain_source` says so.
+   *
+   * Confirmed in one action rather than filled-then-confirmed. There is no
+   * suggestion here to look at and disagree with, so a second click would be
+   * confirming the AE's own typing back to them — the same reasoning that gives
+   * the net-new path no separate confirm step.
+   */
+  const confirmTypedDomain = () => {
+    if (value?.kind !== 'whitespace_account') return;
+    const domain = parseDomainInput(domainDraft);
+    setDomainTouched(true);
+    if (!domain) return;
+    onChange({ ...value, domain, domain_confirmed: true, domain_source: 'user_entered' });
+    setDomainDraft('');
+    setDomainTouched(false);
+  };
+
   /** Reopen the question without losing the account. */
   const reopenDomain = () => {
     if (value?.kind !== 'whitespace_account') return;
+    // On a no-domain account the "question" is a text field, so reopening it with
+    // an empty box would throw away what was typed and read as a bug. The radio
+    // list needs no equivalent: the chosen option is still on `value.domain`.
+    if (value.domain_options.length === 0 && value.domain) {
+      setDomainDraft(value.domain);
+      setDomainTouched(false);
+    }
     onChange({ ...value, domain_confirmed: false });
   };
 
@@ -1308,14 +1386,93 @@ export default function AccountSearch({
           </div>
 
           {options.length === 0 ? (
-            <div style={{
-              fontSize: T.small, color: 'var(--badge-yellow-text)', background: 'var(--badge-yellow-bg)',
-              border: '1px solid var(--border)', borderRadius: T.radius, padding: '8px 10px', lineHeight: 1.6,
-            }}>
-              This account holds no domain at all, so there is nothing to confirm. Research
-              cannot run without one — pick a different account, or take the new-prospect
-              path and type the domain by hand.
-            </div>
+            /* ── No domain on the record: type one, keep the account ──────────
+               567 active accounts, and this used to be a dead end that told the
+               AE to "pick a different account" — there is no different account,
+               it is the one they want — "or take the new-prospect path", which
+               is unreachable from here and would declare an account with real
+               ARR to have no whitespace record.
+
+               So the lock stays and the domain is typed. Amber and not the
+               ordinary radio list, because the domain on this path is not backed
+               by anything: it goes out as `domain_source: 'user_entered'` and
+               the help text says so rather than leaving it to the payload. */
+            (() => {
+              const parsed = parseDomainInput(domainDraft);
+              const invalid = domainTouched && domainDraft.trim().length > 0 && !parsed;
+              return (
+                <div style={{
+                  background: 'var(--bg-surface)', border: '1px solid #d97706',
+                  borderRadius: T.radius, padding: '11px 13px',
+                }}>
+                  <div style={{
+                    fontSize: T.small, color: 'var(--text-secondary)',
+                    lineHeight: 1.6, marginBottom: 10,
+                  }}>
+                    The whitespace book holds no domain for this account, so there is nothing
+                    to choose between. The account is still the right one — its ARR, seats and
+                    owner above are real — so type the domain and the brief stays filed
+                    against this Salesforce record.
+                  </div>
+                  <label
+                    htmlFor="locked-account-domain"
+                    style={{ display: 'block', fontSize: T.small, fontWeight: T.label, marginBottom: 4 }}
+                  >
+                    Research domain
+                  </label>
+                  <input
+                    id="locked-account-domain"
+                    type="text"
+                    value={domainDraft}
+                    disabled={disabled}
+                    placeholder="example.com"
+                    onChange={(e) => setDomainDraft(e.target.value)}
+                    onBlur={() => setDomainTouched(true)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') { e.preventDefault(); confirmTypedDomain(); }
+                    }}
+                    aria-invalid={invalid}
+                    aria-describedby="locked-account-domain-help"
+                    style={{
+                      ...inputStyle,
+                      paddingLeft: 12,
+                      borderColor: invalid ? '#dc2626' : 'var(--border-strong)',
+                    }}
+                  />
+                  <div
+                    id="locked-account-domain-help"
+                    style={{
+                      fontSize: T.tiny, marginTop: 5, minHeight: 16, lineHeight: 1.5,
+                      color: invalid ? '#dc2626' : 'var(--text-tertiary)',
+                    }}
+                  >
+                    {invalid
+                      ? 'That does not look like a domain. Something of the form example.com.'
+                      : parsed && parsed !== domainDraft.trim().toLowerCase()
+                        ? <>Will be used as <code>{parsed}</code></>
+                        : 'Nothing on the record backs this one, so nothing checks it. It travels as user-entered.'}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={confirmTypedDomain}
+                    disabled={disabled || !parsed}
+                    style={{
+                      marginTop: 10,
+                      background: parsed ? '#d97706' : 'transparent',
+                      border: `1px solid ${parsed ? '#d97706' : 'var(--border-strong)'}`,
+                      borderRadius: T.radius,
+                      padding: '7px 14px',
+                      fontSize: T.small,
+                      fontWeight: T.label,
+                      color: parsed ? '#fff' : 'var(--text-tertiary)',
+                      cursor: parsed && !disabled ? 'pointer' : 'not-allowed',
+                    }}
+                  >
+                    Use this domain
+                  </button>
+                </div>
+              );
+            })()
           ) : (
             <>
               <div role="radiogroup" aria-label="Research domain">
@@ -1484,6 +1641,11 @@ export default function AccountSearch({
   // ── Locked state ───────────────────────────────────────────────────────
   if (value) {
     const confirmedByHand = value.kind === 'whitespace_account';
+    // A locked account whose domain was typed rather than picked. The card must
+    // say which, because the two are indistinguishable once the radio list is
+    // gone and only one of them was backed by the record.
+    const typedDomain = value.kind === 'whitespace_account'
+      && value.domain_source === 'user_entered';
     return (
       <div ref={rootRef}>
         <label style={labelStyle}>{label}</label>
@@ -1508,13 +1670,18 @@ export default function AccountSearch({
               <code style={{ fontSize: T.tiny, fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>
                 {value.domain || '— none on record —'}
               </code>
-              {/* Says who decided, because that is the whole change. */}
+              {/* Says who decided, because that is the whole change. Amber on a
+                  hand-typed one: still a decision somebody made, but not one the
+                  record can vouch for, and green would say otherwise. */}
               <span style={{
                 display: 'inline-flex', alignItems: 'center', gap: 3,
                 fontSize: T.pill, fontWeight: T.label, padding: '2px 7px', borderRadius: T.pill,
-                background: 'var(--badge-green-bg)', color: 'var(--badge-green-text)',
+                background: typedDomain ? 'var(--badge-yellow-bg)' : 'var(--badge-green-bg)',
+                color: typedDomain ? 'var(--badge-yellow-text)' : 'var(--badge-green-text)',
+                border: typedDomain ? '1px solid var(--badge-yellow-text)' : '1px solid transparent',
               }}>
-                <Check size={9} /> confirmed
+                {typedDomain ? <AlertTriangle size={9} /> : <Check size={9} />}
+                {typedDomain ? 'entered by hand' : 'confirmed'}
               </span>
               {confirmedByHand && (
                 <button
@@ -1534,9 +1701,13 @@ export default function AccountSearch({
           }
         />
         <div style={{ fontSize: T.small, color: 'var(--text-tertiary)', marginTop: 6, lineHeight: 1.6 }}>
-          Research will run against this account and this domain. Both were chosen here —
-          not derived from the text you typed, and not taken from whichever domain happened
-          to come first on the record.
+          {typedDomain
+            ? <>Research will run against this domain, which the whitespace book does not
+                hold and nothing has checked. The brief is still filed against this
+                Salesforce account, so its seats, ARR and opportunity are the real ones.</>
+            : <>Research will run against this account and this domain. Both were chosen here —
+                not derived from the text you typed, and not taken from whichever domain
+                happened to come first on the record.</>}
         </div>
       </div>
     );

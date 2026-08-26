@@ -93,6 +93,8 @@ function selectionFor(candidate: WhitespaceCandidate): AccountSelection {
     domain: domain_options[0]?.domain ?? null,
     domain_confirmed: false,
     domain_options,
+    // Off the record's own domain list, like every ordinary selection.
+    domain_source: 'whitespace',
     candidate,
   };
 }

@@ -10,13 +10,22 @@ import { getDomainCheck } from '../lib/preview-settings';
  * replace so that what gets signed off is the component and not the scaffolding
  * around it.
  *
- * NOT the Submit page. Submit is untouched and still takes free-text company and
- * website; this route exists so the picker's behaviour can be reviewed against
- * real data before anything is wired into a flow that spends credits and
- * dispatches pipeline runs. Nothing here submits anything — no /submit call, no
- * GHA dispatch, no credit decrement. The only network traffic is
- * GET /account-search and, when the advisory check is switched on,
- * POST /domain-check.
+ * SUBMIT NOW USES THIS COMPONENT. As of 2026-08-26 the cutover has landed:
+ * /submit renders `AccountSearch` and free-text company and website entry is gone
+ * from it. This route is no longer a preview of something unreleased — it is the
+ * review harness for a component in production, kept because it costs nothing and
+ * because it is the one place the picker can be exercised without a credit at
+ * stake.
+ *
+ * Still not the Submit page, and the difference is the only reason to come here:
+ * nothing here submits anything — no /submit call, no GHA dispatch, no credit
+ * decrement. The only network traffic is GET /account-search and, when the
+ * advisory check is switched on, POST /domain-check.
+ *
+ * One thing this route does NOT show, because Submit added it rather than the
+ * component: the submit gate. `domain_confirmed: false` disables Submit's button
+ * and prints why — see `lib/submission`, which holds that rule and the payload
+ * contract restated below.
  *
  * Admin-only via the route guard, and not linked from any navigation.
  *
@@ -48,9 +57,10 @@ import { getDomainCheck } from '../lib/preview-settings';
  *
  * THE PAYLOAD CONTRACT, which the deleted code was the only record of
  * ────────────────────────────────────────────────────────────────────
- * Nothing on this page builds a request body any more, so what the picker's
- * output is *for* lives here. Whatever wires this component into Submit has to
- * get these four right, and three of them are refusals:
+ * Nothing on this page builds a request body, so what the picker's output is
+ * *for* lives here. It is now ALSO enforced in code and under test — see
+ * `src/lib/submission.ts` and its tests, which is where the cutover put it. Four
+ * rules, three of them refusals:
  *
  *   `url` follows the radio, and is null only while the record holds no domain.
  *   It is not `primary_domain` and not the first entry in the DOMAINS__C cell.
@@ -155,6 +165,23 @@ export function AccountSearchPreviewBody({
         <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-tertiary)' }}>
           Preview
         </span>
+      </div>
+
+      {/* Says out loud that this is not a preview of something unreleased.
+          Without it, an admin landing here reads the picker as pending — and the
+          one thing they might then do is go and check whether Submit still has
+          the old fields, which it does not. Neutral rather than a success
+          colour: this is orientation, not an announcement. */}
+      <div style={{
+        marginBottom: 16, padding: '9px 12px', borderRadius: 6,
+        border: '1px solid var(--border)', background: 'var(--bg-surface)',
+        fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6,
+      }}>
+        <strong style={{ fontWeight: 500, color: 'var(--text-primary)' }}>Live on Submit.</strong>{' '}
+        This component is the Company field on <code>/submit</code> as of 26 Aug 2026;
+        free-text company and website entry is gone from that page. This route stays as the
+        review harness — it spends no credit and dispatches nothing — and it does not show
+        Submit's own submit gate.
       </div>
 
       {/* The advisory-check switch used to be here. It is now on by default and

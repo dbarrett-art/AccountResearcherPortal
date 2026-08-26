@@ -12,7 +12,13 @@ export interface UserProfile {
   feedback_gate_enabled?: boolean;
 }
 
-interface AuthContextType {
+/**
+ * Exported so the screenshot harness can render a page body against a stub
+ * profile instead of a live session. Nothing in the app should consume it
+ * directly — `useAuth()` is the accessor, and it throws outside a provider,
+ * which is the behaviour worth keeping.
+ */
+export interface AuthContextType {
   user: User | null;
   session: Session | null;
   userProfile: UserProfile | null;
@@ -27,7 +33,13 @@ interface AuthContextType {
   stopImpersonating: () => void;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+/*
+ * The screenshot harness renders a page body against a stub profile, which needs
+ * the context itself rather than the provider. This file already trips the
+ * fast-refresh rule on `useAuth`, so the export costs nothing new.
+ */
+// eslint-disable-next-line react-refresh/only-export-components
+export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 async function fetchOrCreateProfile(user: User): Promise<UserProfile | null> {
   // Try to fetch existing profile

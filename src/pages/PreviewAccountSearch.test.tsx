@@ -47,6 +47,7 @@ const lockedSelection = (domain_confirmed: boolean): AccountSelection => ({
   domain: 'entur.no',
   domain_confirmed,
   domain_options: [],
+  domain_source: 'whitespace',
   candidate: ENTUR,
 });
 

@@ -1,6 +1,8 @@
 import { createRoot } from 'react-dom/client';
 import '../src/index.css';
 import { AccountSearchPreviewBody } from '../src/pages/PreviewAccountSearch';
+import { SubmitBody } from '../src/pages/Submit';
+import { AuthContext, type AuthContextType, type UserProfile } from '../src/context/AuthContext';
 import {
   type AccountSelection,
   type WhitespaceCandidate,
@@ -27,11 +29,20 @@ import { rankDomains } from '../src/lib/domain-rank';
  * page, and the banner says so on screen so a screenshot cannot be mistaken for
  * a live check.
  *
+ *   ?page=preview|submit                which page body to render (default: preview)
  *   ?fixture=one|two|nets|five|nofix|nowebsite|nulls|none|search   which account
  *   ?confirmed=1                        skip to the confirmed state
+ *   ?typed=1                            on `none`, a domain typed for the locked account
  *   ?haiku=1|0                          advisory annotations on/off (default: on)
  *   ?theme=light|dark
  *   ?checkDelay=<ms>                     hold each /domain-check answer, to time the render
+ *
+ * `page=submit` renders the REAL Submit body (`SubmitBody`), which is what the
+ * cutover screenshots have to show — the picker inside the page that spends a
+ * credit, not the picker on a page that cannot. The stub fetcher answers
+ * /account-search and /domain-check and nothing else, so a submit attempt from a
+ * harness page fails at the network rather than dispatching: there is no session
+ * behind it and no /submit stub to catch it.
  */
 
 const params = new URLSearchParams(window.location.search);
@@ -560,6 +571,16 @@ const stubFetcher = (async (path: string, init?: RequestInit) => {
 // ─── Seeded selection ───────────────────────────────────────────────────────
 
 const confirmed = params.get('confirmed') === '1';
+/**
+ * A domain typed by hand for a locked account that holds none.
+ *
+ * Only meaningful on `none` (Roblox — in the book, no `account_domains` row), and
+ * it is the state the cutover added: 567 active accounts land here, and until
+ * 2026-08-26 the confirm step was a dead end on every one of them. `roblox.com`
+ * is what an AE would type, and the point of the shot is that the card still
+ * carries Roblox's own record while the chip admits the domain is not from it.
+ */
+const typed = params.get('typed') === '1';
 
 const selection: AccountSelection | null = fixture && fixtureName !== 'search'
   ? (() => {
@@ -568,6 +589,18 @@ const selection: AccountSelection | null = fixture && fixtureName !== 'search'
         fixture.candidate.name,
         fixture.candidate.website,
       );
+      if (typed && domain_options.length === 0) {
+        return {
+          kind: 'whitespace_account' as const,
+          account_id: fixture.candidate.account_id,
+          name: fixture.candidate.name,
+          domain: `${fixture.candidate.name.toLowerCase().replace(/[^a-z0-9]/g, '')}.com`,
+          domain_confirmed: true,
+          domain_options,
+          domain_source: 'user_entered' as const,
+          candidate: fixture.candidate,
+        };
+      }
       return {
         kind: 'whitespace_account' as const,
         account_id: fixture.candidate.account_id,
@@ -575,10 +608,70 @@ const selection: AccountSelection | null = fixture && fixtureName !== 'search'
         domain: domain_options[0]?.domain ?? null,
         domain_confirmed: confirmed && domain_options.length > 0,
         domain_options,
+        // The typed-domain path is `typed` above; every other seeded selection
+        // picked its domain off the record.
+        domain_source: 'whitespace' as const,
         candidate: fixture.candidate,
       };
     })()
   : null;
+
+/**
+ * A net-new prospect, for the Submit shot that has to show that path.
+ *
+ * There is no fixture account behind it — that is the state. `?fixture=prospect`
+ * on `page=submit`.
+ */
+const NEW_PROSPECT: AccountSelection = {
+  kind: 'new_prospect',
+  account_id: null,
+  name: 'Northwind Robotics',
+  domain: 'northwindrobotics.example',
+  no_whitespace_data: true,
+};
+
+// ─── Auth and status, stubbed ───────────────────────────────────────────────
+//
+// SubmitBody reads `useAuth()` for the session and the credit counter and
+// `useStatus()` for the API-degraded notice. StatusContext already defaults to
+// operational outside a provider, so only auth needs standing in.
+//
+// `session` is a truthy placeholder rather than a real one. handleSubmit returns
+// early without it, and a screenshot of a form whose button cannot fire for a
+// reason invisible on screen is worse than no screenshot; a real session is not
+// obtainable here and is not what these images are for. The stub fetcher has no
+// /submit route, so an attempt fails at the network.
+const AE_PROFILE: UserProfile = {
+  id: '350c544b-7748-497d-a4b5-c9dd97444648',
+  email: 'ae@figma.com',
+  name: 'An AE',
+  role: 'ae',
+  credits_remaining: 5,
+  manager_id: null,
+};
+
+const noop = async () => {};
+const authStub: AuthContextType = {
+  user: null,
+  session: { access_token: 'harness' } as AuthContextType['session'],
+  userProfile: AE_PROFILE,
+  realUserProfile: AE_PROFILE,
+  isImpersonating: false,
+  loading: false,
+  authError: null,
+  signOut: noop,
+  refreshProfile: noop,
+  clearAuthError: () => {},
+  impersonate: () => {},
+  stopImpersonating: () => {},
+};
+
+const page = params.get('page') === 'submit' ? 'submit' : 'preview';
+// On unless explicitly turned off, matching the component's own default. Passed
+// rather than read off Admin's localStorage key so a screenshot never depends on
+// what the browser profile happens to hold.
+const domainCheckOn = params.get('haiku') !== '0';
+const seeded = fixtureName === 'prospect' ? NEW_PROSPECT : selection;
 
 createRoot(document.getElementById('root')!).render(
   <div style={{ background: 'var(--bg-app)', minHeight: '100vh', padding: 32 }}>
@@ -588,17 +681,26 @@ createRoot(document.getElementById('root')!).render(
       fontSize: 11, color: 'var(--text-tertiary)', lineHeight: 1.6,
     }}>
       <strong style={{ color: 'var(--text-secondary)' }}>Screenshot harness</strong> —
-      {' '}fixture: <code>{fixtureName}</code>{fixture ? ` (${fixture.label})` : ''}.
+      {' '}page: <code>{page}</code>, fixture: <code>{fixtureName}</code>
+      {fixture ? ` (${fixture.label})` : ''}.
       Every domain verdict shown below is fixture data. No page was fetched and no
       model was called.
+      {page === 'submit' && ' The credit count is a stub and nothing here can dispatch a run.'}
     </div>
-    <AccountSearchPreviewBody
-      fetcher={stubFetcher}
-      // On unless explicitly turned off, matching the component's own default.
-      // The harness passes it rather than reading Admin's localStorage key so a
-      // screenshot never depends on what the browser profile happens to hold.
-      initialDomainCheck={params.get('haiku') !== '0'}
-      initialSelection={selection}
-    />
+    {page === 'submit' ? (
+      <AuthContext.Provider value={authStub}>
+        <SubmitBody
+          fetcher={stubFetcher}
+          initialDomainCheck={domainCheckOn}
+          initialSelection={seeded}
+        />
+      </AuthContext.Provider>
+    ) : (
+      <AccountSearchPreviewBody
+        fetcher={stubFetcher}
+        initialDomainCheck={domainCheckOn}
+        initialSelection={seeded}
+      />
+    )}
   </div>,
 );

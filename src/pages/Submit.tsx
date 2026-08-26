@@ -3,9 +3,57 @@ import { useAuth } from '../context/AuthContext';
 import { useStatus } from '../context/StatusContext';
 import Layout from '../components/Layout';
 import Banner from '../components/Banner';
+import AccountSearch, { type AccountSelection } from '../components/AccountSearch';
 import { supabase, workerFetch } from '../lib/supabase';
+import { submissionReadiness, buildSubmitBody } from '../lib/submission';
+import { getDomainCheck } from '../lib/preview-settings';
 import usePageTitle from '../hooks/usePageTitle';
 import useWindowWidth from '../hooks/useWindowWidth';
+
+/**
+ * Submit — the one page that spends a credit and dispatches a run.
+ *
+ * Free-text company and website entry was removed on 2026-08-26. It had been the
+ * production path for all 259 briefs ever generated, every one of which resolved
+ * its whitespace account by searching that text for a substring match — which is
+ * how a brief titled Entur came back carrying Accenture's $10.3M ARR and 186,763
+ * developers. The field is now the account picker: a real `whitespace_accounts`
+ * row, chosen from candidates, and a domain confirmed by hand.
+ *
+ * What that changes about this file
+ * ────────────────────────────────
+ * `company` and `url` are no longer state. They are derived from the selection at
+ * submit time by `lib/submission`, which also holds the payload contract and the
+ * gate. Nothing here assembles a request body inline any more, and nothing
+ * normalises a URL: both paths out of the picker hold a bare apex domain already,
+ * so `normaliseUrl` and `isValidUrl` went with the field that needed them.
+ *
+ * Everything else on the page is untouched — the credit counter, the duplicate
+ * warning, the language select, the feedback-gate panel, the credit-request modal
+ * and the post-submit toast all behave exactly as they did.
+ *
+ * The gate
+ * ────────
+ * A selection with `domain_confirmed: false` is an incomplete request and the
+ * submit button is disabled on it. Deliberately NOT auto-confirmed when the
+ * account holds exactly one domain: the confirm step exists because somebody has
+ * to have looked, and 1,010 accounts are locked to a domain Salesforce does not
+ * consider theirs precisely because nobody ever was. The reason the button is off
+ * is printed under it rather than left for the AE to work out.
+ *
+ * The gate is enforced twice, which is not belt-and-braces. `submitEnabled`
+ * disables the button; `buildSubmitBody` throws on an unready selection. The
+ * first is an affordance and the second is the invariant — a stray Enter on the
+ * form, or a later edit that drops the `disabled` prop, reaches the second.
+ *
+ * Nothing in the picker path can dispatch
+ * ──────────────────────────────────────
+ * The picker's only network calls are `GET /account-search` and
+ * `POST /domain-check`. `handleSubmit` is the sole caller of `/submit` on this
+ * page and it runs from the form's submit event alone. Selecting an account,
+ * moving the radio, confirming a domain and taking the net-new fork all go
+ * through `onChange` and touch no endpoint that costs anything.
+ */
 
 type BannerType = 'info' | 'warning' | 'error' | 'success';
 
@@ -15,48 +63,66 @@ interface BannerState {
   runId?: string;
 }
 
-function normaliseUrl(input: string): string {
-  let u = input.trim().replace(/\s+/g, '');
-  if (u.startsWith('http://')) {
-    u = u.replace('http://', 'https://');
-  } else if (!u.startsWith('https://')) {
-    u = 'https://' + u;
-  }
-  return u.replace(/\/+$/, '');
-}
-
-function isValidUrl(input: string): boolean {
-  try {
-    new URL(normaliseUrl(input));
-    return true;
-  } catch {
-    return false;
-  }
-}
+const LANGUAGES = [
+  { code: 'auto', label: 'Auto-detect', flag: '\u{1F310}' },
+  { code: 'en',   label: 'English',     flag: '\u{1F1EC}\u{1F1E7}' },
+  { code: 'de',   label: 'German',      flag: '\u{1F1E9}\u{1F1EA}' },
+  { code: 'fr',   label: 'French',      flag: '\u{1F1EB}\u{1F1F7}' },
+  { code: 'es',   label: 'Spanish',     flag: '\u{1F1EA}\u{1F1F8}' },
+  { code: 'it',   label: 'Italian',     flag: '\u{1F1EE}\u{1F1F9}' },
+  { code: 'nl',   label: 'Dutch',       flag: '\u{1F1F3}\u{1F1F1}' },
+  { code: 'pt',   label: 'Portuguese',  flag: '\u{1F1F5}\u{1F1F9}' },
+  { code: 'ja',   label: 'Japanese',    flag: '\u{1F1EF}\u{1F1F5}' },
+  { code: 'ko',   label: 'Korean',      flag: '\u{1F1F0}\u{1F1F7}' },
+  { code: 'sv',   label: 'Swedish',     flag: '\u{1F1F8}\u{1F1EA}' },
+  { code: 'no',   label: 'Norwegian',   flag: '\u{1F1F3}\u{1F1F4}' },
+];
 
 export default function Submit() {
   usePageTitle('Submit');
+  return (
+    <Layout>
+      <SubmitBody />
+    </Layout>
+  );
+}
+
+interface BodyProps {
+  /**
+   * Injectable so the screenshot harness drives the picker off fixtures rather
+   * than the live endpoint. Undefined on the route above, which is what makes the
+   * page people use the real one.
+   */
+  fetcher?: typeof workerFetch;
+  /** Pre-seeded selection, for the harness only. */
+  initialSelection?: AccountSelection | null;
+  /**
+   * Starting state of the advisory domain check. Undefined means "whatever
+   * Admin → Preview says", which on a browser that has never set it is on.
+   */
+  initialDomainCheck?: boolean;
+}
+
+/**
+ * The page body, minus the app chrome.
+ *
+ * Split out for the reason `AccountSearchPreviewBody` was: the screenshot harness
+ * renders exactly this — the same component tree in the same order — rather than
+ * an approximation that can drift from what ships. Auth and status come through
+ * their contexts, which the harness provides.
+ */
+export function SubmitBody({ fetcher, initialSelection = null, initialDomainCheck }: BodyProps) {
   const { session, userProfile, refreshProfile } = useAuth();
   const { indicator } = useStatus();
   const isDown = indicator === 'major' || indicator === 'critical';
   const isMobile = useWindowWidth() <= 768;
-  const LANGUAGES = [
-    { code: 'auto', label: 'Auto-detect', flag: '\u{1F310}' },
-    { code: 'en',   label: 'English',     flag: '\u{1F1EC}\u{1F1E7}' },
-    { code: 'de',   label: 'German',      flag: '\u{1F1E9}\u{1F1EA}' },
-    { code: 'fr',   label: 'French',      flag: '\u{1F1EB}\u{1F1F7}' },
-    { code: 'es',   label: 'Spanish',     flag: '\u{1F1EA}\u{1F1F8}' },
-    { code: 'it',   label: 'Italian',     flag: '\u{1F1EE}\u{1F1F9}' },
-    { code: 'nl',   label: 'Dutch',       flag: '\u{1F1F3}\u{1F1F1}' },
-    { code: 'pt',   label: 'Portuguese',  flag: '\u{1F1F5}\u{1F1F9}' },
-    { code: 'ja',   label: 'Japanese',    flag: '\u{1F1EF}\u{1F1F5}' },
-    { code: 'ko',   label: 'Korean',      flag: '\u{1F1F0}\u{1F1F7}' },
-    { code: 'sv',   label: 'Swedish',     flag: '\u{1F1F8}\u{1F1EA}' },
-    { code: 'no',   label: 'Norwegian',   flag: '\u{1F1F3}\u{1F1F4}' },
-  ];
 
-  const [company, setCompany] = useState('');
-  const [url, setUrl] = useState('');
+  /**
+   * The whole of "which company is this brief about". One field where there were
+   * two, and it carries a Salesforce ID rather than a string to be re-matched
+   * later.
+   */
+  const [selection, setSelection] = useState<AccountSelection | null>(initialSelection);
   const [market, setMarket] = useState('auto');
   const [includeContacts] = useState(true); // Always include contacts — M2 now ~$0.02 via Apollo
   const [submitting, setSubmitting] = useState(false);
@@ -65,6 +131,18 @@ export default function Submit() {
   const toastTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const [duplicate, setDuplicate] = useState<{ name: string; days: number; user: string } | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  /**
+   * The advisory domain check, read once at mount and not subscribed to.
+   *
+   * Its off-switch is in Admin → Preview and is per browser, which is a real
+   * limit now that this page is used by 194 people rather than by the one admin
+   * who could reach the preview: an AE's browser has nothing stored, so for them
+   * the check is on and there is no way to turn it off short of a deploy. Left as
+   * it stands rather than moved to a table, because the failure it would guard
+   * against degrades to a `couldn't check` chip the UI already renders and which
+   * blocks nothing.
+   */
+  const [domainCheck] = useState(() => initialDomainCheck ?? getDomainCheck());
 
   // Feedback gate state
   const [feedbackBlocked, setFeedbackBlocked] = useState<{ run_id: string; title: string; created_at: string }[]>([]);
@@ -75,6 +153,10 @@ export default function Submit() {
   const [creditReason, setCreditReason] = useState('');
   const [creditSubmitting, setCreditSubmitting] = useState(false);
   const [creditResult, setCreditResult] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
+
+  const call = fetcher ?? workerFetch;
+  const readiness = submissionReadiness(selection);
+  const submitEnabled = readiness.ready && !submitting;
 
   useEffect(() => { refreshProfile(); }, [refreshProfile]);
 
@@ -102,11 +184,23 @@ export default function Submit() {
     }
   }, []);
 
+  /**
+   * The duplicate check runs on the CANONICAL account name now, rather than on
+   * every keystroke of a free-text field.
+   *
+   * Cheaper — one query per selection instead of one per 600ms of typing — and
+   * more accurate: `runs.company` holds the normalised name a previous run was
+   * filed under, and "Entur AS" matches a previous Entur brief where the four
+   * characters somebody happened to stop typing at would not. The debounce stays
+   * for an AE flicking between two candidates.
+   */
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => checkDuplicate(company), 600);
+    if (!selection) { setDuplicate(null); return; }
+    const name = selection.name;
+    debounceRef.current = setTimeout(() => checkDuplicate(name), 300);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [company, checkDuplicate]);
+  }, [selection, checkDuplicate]);
 
   // Check for in-progress run on mount
   useEffect(() => {
@@ -132,22 +226,27 @@ export default function Submit() {
     setBanner(null);
     if (!session) return;
 
-    const normalisedUrl = normaliseUrl(url);
-    if (!isValidUrl(url)) {
-      setBanner({ type: 'error', msg: 'Please enter a valid website URL' });
+    // The invariant, not the affordance. `buildSubmitBody` throws on an unready
+    // selection; this turns that into a message and never proceeds. There is no
+    // URL validation left to do — the domain came off the record, or through
+    // parseDomainInput.
+    let body;
+    try {
+      body = buildSubmitBody(selection, { market, includeContacts });
+    } catch {
+      setBanner({ type: 'error', msg: readiness.ready ? 'Nothing to submit.' : readiness.reason });
       return;
     }
-    setUrl(normalisedUrl);
 
     setSubmitting(true);
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000);
 
     try {
-      const res = await workerFetch('/submit', {
+      const res = await call('/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ company, url: normalisedUrl, include_contacts: includeContacts, market }),
+        body: JSON.stringify(body),
         signal: controller.signal,
       });
       clearTimeout(timeout);
@@ -184,12 +283,10 @@ export default function Submit() {
             type: 'warning',
             msg: `You're #${data.queue_position || '?'} in the queue — estimated wait ~${data.estimated_wait_minutes || '?'} mins. We'll update you when your run starts.`,
           });
-          setCompany('');
-          setUrl('');
+          setSelection(null);
         } else {
           setBanner({ type: 'success', msg: 'Research submitted! Check My Briefs for updates.' });
-          setCompany('');
-          setUrl('');
+          setSelection(null);
           if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
           setToast(true);
           toastTimerRef.current = setTimeout(() => setToast(false), 8000);
@@ -222,7 +319,7 @@ export default function Submit() {
     setCreditSubmitting(true);
     setCreditResult(null);
     try {
-      const res = await workerFetch('/request-credits', {
+      const res = await call('/request-credits', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ amount: creditAmount, reason: creditReason || undefined }),
@@ -248,8 +345,22 @@ export default function Submit() {
     padding: '8px 12px', fontSize: 13, color: 'var(--text-primary)', width: '100%', outline: 'none',
   };
 
+  /**
+   * 13px, down from 14 — the one thing on this page that changed to fit the
+   * picker rather than the other way round.
+   *
+   * Submit's three field labels were the only 14px text in the app: the body rule
+   * is 13, inputs are 13, buttons are 12-13, card titles are 13, and the picker's
+   * own label follows the rule. Two of the three labels are gone with the fields
+   * they belonged to; leaving the survivor at 14 would have put two label sizes
+   * in one four-line form.
+   */
+  const labelStyle: React.CSSProperties = {
+    display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 6,
+  };
+
   return (
-    <Layout>
+    <>
       <div style={{ maxWidth: 560 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)', paddingBottom: 20, marginBottom: 24 }}>
           <h1 style={{ fontSize: 16, fontWeight: 600, margin: 0 }}>New Research Request</h1>
@@ -273,34 +384,26 @@ export default function Submit() {
         )}
 
         <form onSubmit={handleSubmit}>
+          {/* Company and Website, which were two free-text inputs. The picker
+              answers both questions, and answers them with a Salesforce record
+              rather than a string. `allowNewProspect` because this page can cope
+              with a submission carrying no whitespace record, which is exactly
+              the condition that flag documents. */}
           <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', fontSize: 14, fontWeight: 500, marginBottom: 6 }}>Company</label>
-            <input
-              type="text" required value={company} autoFocus
-              onChange={(e) => setCompany(e.target.value)}
-              placeholder="e.g. Standard Chartered Bank"
-              style={inputStyle}
-              onFocus={(e) => (e.currentTarget.style.borderColor = 'var(--accent)')}
-              onBlur={(e) => (e.currentTarget.style.borderColor = 'var(--border-strong)')}
+            <AccountSearch
+              value={selection}
+              onChange={setSelection}
+              allowNewProspect
+              domainCheck={domainCheck}
+              label="Company"
+              autoFocus={!initialSelection}
+              disabled={submitting}
+              fetcher={fetcher}
             />
-          </div>
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', fontSize: 14, fontWeight: 500, marginBottom: 6 }}>Website</label>
-            <input
-              type="text" required value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder="e.g. sc.com or www.sc.com"
-              style={inputStyle}
-              onFocus={(e) => (e.currentTarget.style.borderColor = 'var(--accent)')}
-              onBlur={(e) => (e.currentTarget.style.borderColor = 'var(--border-strong)')}
-            />
-            <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>
-              e.g. company.com or www.company.com — https:// added automatically
-            </div>
           </div>
 
           <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', fontSize: 14, fontWeight: 500, marginBottom: 6 }}>Language</label>
+            <label style={labelStyle}>Language</label>
             <select value={market} onChange={e => setMarket(e.target.value)} style={{
               background: 'var(--bg-input)', border: '1px solid var(--border-strong)',
               borderRadius: 6, padding: '8px 12px', color: 'var(--text-primary)',
@@ -322,20 +425,34 @@ export default function Submit() {
           {/* Contacts always included — M2 now ~$0.02 via Apollo (was ~$6.37 with EnrichLayer) */}
 
           <button
-            type="submit" disabled={submitting}
+            type="submit" disabled={!submitEnabled}
             style={{
               width: '100%', background: 'var(--accent)', color: '#fff',
               padding: isMobile ? '12px 14px' : '8px 14px',
               height: isMobile ? 48 : undefined,
               fontSize: isMobile ? 15 : 13, fontWeight: 500, borderRadius: 6, border: 'none',
-              opacity: submitting ? 0.4 : 1, cursor: submitting ? 'not-allowed' : 'pointer',
+              opacity: submitEnabled ? 1 : 0.4,
+              cursor: submitEnabled ? 'pointer' : 'not-allowed',
               transition: 'background 120ms',
             }}
-            onMouseEnter={(e) => { if (!submitting) e.currentTarget.style.background = 'var(--accent-hover)'; }}
+            onMouseEnter={(e) => { if (submitEnabled) e.currentTarget.style.background = 'var(--accent-hover)'; }}
             onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--accent)'; }}
           >
             {submitting ? 'Submitting...' : 'Run Research'}
           </button>
+
+          {/* Why the button is off. A dimmed control with nothing beside it reads
+              as a broken page, and the answer is always one action away — pick an
+              account, or confirm the domain. */}
+          {!readiness.ready && !submitting && (
+            <div style={{
+              fontSize: 12, color: 'var(--text-tertiary)', marginTop: 6,
+              textAlign: 'center', lineHeight: 1.5,
+            }}>
+              {readiness.reason}
+            </div>
+          )}
+
           {isMobile && (
             <div style={{ textAlign: 'center', marginTop: 8 }}>
               <span style={{ fontSize: 12, fontWeight: 500, color: creditsColor }}>
@@ -351,7 +468,7 @@ export default function Submit() {
           )}
           {isDown && (
             <p style={{ fontSize: 13, color: '#92400e', marginTop: 8 }}>
-              {'\u26A0'} Anthropic API is currently experiencing issues. Your brief will be queued and will complete once the API recovers.
+              {'⚠'} Anthropic API is currently experiencing issues. Your brief will be queued and will complete once the API recovers.
             </p>
           )}
         </form>
@@ -430,7 +547,7 @@ export default function Submit() {
               <button onClick={() => setCreditModalOpen(false)} style={{
                 background: 'none', border: 'none', fontSize: 18, cursor: 'pointer',
                 color: 'var(--text-secondary)', lineHeight: 1,
-              }}>{'\u00D7'}</button>
+              }}>{'×'}</button>
             </div>
 
             {creditResult?.type === 'success' ? (
@@ -505,9 +622,9 @@ export default function Submit() {
           <button onClick={() => { setToast(false); if (toastTimerRef.current) clearTimeout(toastTimerRef.current); }} style={{
             background: 'none', border: 'none', color: 'var(--text-tertiary)',
             cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: 0, flexShrink: 0,
-          }}>{'\u00D7'}</button>
+          }}>{'×'}</button>
         </div>
       )}
-    </Layout>
+    </>
   );
 }
