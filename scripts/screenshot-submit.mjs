@@ -69,6 +69,12 @@ const OUT = resolve(flag('out', 'screenshots/submit-cutover'));
  */
 const SHOTS = [
   { name: 'empty',       fixture: 'search' },
+  // The post-submit states. These are the reason this script grew: the first cut
+  // reset the form behind a banner, which left the picker's own query in place,
+  // re-opened its dropdown over the page and hid the banner underneath it.
+  { name: 'confirmation',          fixture: 'two',      sent: '1' },
+  { name: 'confirmation-queued',   fixture: 'two',      sent: 'queued' },
+  { name: 'confirmation-prospect', fixture: 'prospect', sent: '1' },
   { name: 'unconfirmed', fixture: 'two' },
   { name: 'unconfirmed-single-domain', fixture: 'one' },
   { name: 'confirmed',   fixture: 'two',  confirmed: true },
@@ -104,6 +110,7 @@ try {
       url.searchParams.set('theme', theme);
       if (shot.confirmed) url.searchParams.set('confirmed', '1');
       if (shot.typed) url.searchParams.set('typed', '1');
+      if (shot.sent) url.searchParams.set('sent', shot.sent);
       url.searchParams.set('haiku', '1');
 
       await page.goto(url.href, { waitUntil: 'networkidle0' });

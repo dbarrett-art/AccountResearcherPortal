@@ -4,6 +4,7 @@ import { useStatus } from '../context/StatusContext';
 import Layout from '../components/Layout';
 import Banner from '../components/Banner';
 import AccountSearch, { type AccountSelection } from '../components/AccountSearch';
+import SubmitConfirmation, { type SubmittedRun } from '../components/SubmitConfirmation';
 import { supabase, workerFetch } from '../lib/supabase';
 import { submissionReadiness, buildSubmitBody } from '../lib/submission';
 import { getDomainCheck } from '../lib/preview-settings';
@@ -30,7 +31,8 @@ import useWindowWidth from '../hooks/useWindowWidth';
  *
  * Everything else on the page is untouched — the credit counter, the duplicate
  * warning, the language select, the feedback-gate panel, the credit-request modal
- * and the post-submit toast all behave exactly as they did.
+ * and the API-degraded notice all behave exactly as they did. The floating
+ * post-submit toast is gone — see "After a successful submit" below.
  *
  * The gate
  * ────────
@@ -45,6 +47,24 @@ import useWindowWidth from '../hooks/useWindowWidth';
  * disables the button; `buildSubmitBody` throws on an unready selection. The
  * first is an affordance and the second is the invariant — a stray Enter on the
  * form, or a later edit that drops the `disabled` prop, reaches the second.
+ *
+ * After a successful submit
+ * ────────────────────────
+ * The form is REPLACED by `SubmitConfirmation`, not reset behind a banner. The
+ * first cut reset `selection` to null and left the form standing, which was worse
+ * than clunky: `AccountSearch` keeps its own `query` and result cache, so the
+ * search effect re-ran, hit that cache and re-opened the dropdown over the page —
+ * dropping the AE back into a half-typed search for the company they had just
+ * submitted, with the success banner rendering underneath the open dropdown.
+ *
+ * Replacing the form unmounts the picker, so that whole class of stale-state bug
+ * cannot arise and no extra resetting is needed. `submitted` is the switch; it
+ * holds what was sent, because `selection` is gone by then.
+ *
+ * A cache hit is NOT a submission and does not get the confirmation. `{cached:
+ * true}` means no run was dispatched and no credit spent — the form stays up with
+ * an informational banner. A QUEUED run does get it: the credit is spent and the
+ * row exists, so it is submitted, just not started.
  *
  * Nothing in the picker path can dispatch
  * ──────────────────────────────────────
@@ -101,6 +121,13 @@ interface BodyProps {
    * Admin → Preview says", which on a browser that has never set it is on.
    */
   initialDomainCheck?: boolean;
+  /** Pre-seeded confirmation, for the harness only. */
+  initialSubmitted?: SubmittedRun | null;
+  /**
+   * Injected by the harness, which renders outside a Router. Passed through to
+   * the confirmation's navigation buttons.
+   */
+  onNavigate?: (path: string) => void;
 }
 
 /**
@@ -111,7 +138,13 @@ interface BodyProps {
  * an approximation that can drift from what ships. Auth and status come through
  * their contexts, which the harness provides.
  */
-export function SubmitBody({ fetcher, initialSelection = null, initialDomainCheck }: BodyProps) {
+export function SubmitBody({
+  fetcher,
+  initialSelection = null,
+  initialDomainCheck,
+  initialSubmitted = null,
+  onNavigate,
+}: BodyProps) {
   const { session, userProfile, refreshProfile } = useAuth();
   const { indicator } = useStatus();
   const isDown = indicator === 'major' || indicator === 'critical';
@@ -127,8 +160,15 @@ export function SubmitBody({ fetcher, initialSelection = null, initialDomainChec
   const [includeContacts] = useState(true); // Always include contacts — M2 now ~$0.02 via Apollo
   const [submitting, setSubmitting] = useState(false);
   const [banner, setBanner] = useState<BannerState | null>(null);
-  const [toast, setToast] = useState(false);
-  const toastTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  /**
+   * Non-null once a run has actually been dispatched or queued. While it is set,
+   * the confirmation replaces the form.
+   *
+   * Holds its own copy of what was sent rather than reading `selection`, which is
+   * cleared at the same moment — and rather than reading the run row back, which
+   * would be a round trip to learn something this page already knew.
+   */
+  const [submitted, setSubmitted] = useState<SubmittedRun | null>(initialSubmitted);
   const [duplicate, setDuplicate] = useState<{ name: string; days: number; user: string } | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   /**
@@ -279,17 +319,26 @@ export function SubmitBody({ fetcher, initialSelection = null, initialDomainChec
             runId: data.run_id,
           });
         } else if (data.status === 'queued') {
-          setBanner({
-            type: 'warning',
-            msg: `You're #${data.queue_position || '?'} in the queue — estimated wait ~${data.estimated_wait_minutes || '?'} mins. We'll update you when your run starts.`,
+          // Queued is submitted. The credit is spent and the row exists, so it
+          // gets the confirmation rather than a warning banner — with the queue
+          // position in place of the "~15 minutes" line.
+          setSubmitted({
+            selection: selection!,
+            market,
+            runId: data.run_id,
+            queue: {
+              position: data.queue_position ?? null,
+              waitMinutes: data.estimated_wait_minutes ?? null,
+            },
           });
           setSelection(null);
         } else {
-          setBanner({ type: 'success', msg: 'Research submitted! Check My Briefs for updates.' });
+          // No success banner and no toast. The confirmation says it, in the place
+          // the AE is already looking; the banner used to render underneath a
+          // reopened dropdown, and the toast repeated the same sentence a third
+          // time in the corner.
+          setSubmitted({ selection: selection!, market, runId: data.run_id });
           setSelection(null);
-          if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-          setToast(true);
-          toastTimerRef.current = setTimeout(() => setToast(false), 8000);
         }
         refreshProfile();
       } else {
@@ -377,12 +426,25 @@ export function SubmitBody({ fetcher, initialSelection = null, initialDomainChec
           )}
         </div>
 
-        {duplicate && (
+        {/* Both of these are about a request being composed, so neither belongs
+            next to a confirmation of one already sent. */}
+        {!submitted && duplicate && (
           <Banner type="info" style={{ marginBottom: 16 }}>
             {duplicate.name} was researched {duplicate.days} day{duplicate.days !== 1 ? 's' : ''} ago by {duplicate.user}. View that brief in My Briefs or submit a fresh request.
           </Banner>
         )}
 
+        {submitted ? (
+          <SubmitConfirmation
+            submitted={submitted}
+            onNavigate={onNavigate}
+            /* Back to a clean form. `selection` was already cleared at submit
+               time, and the picker remounts from scratch because it was
+               unmounted while the confirmation was up — which is what makes this
+               a genuinely fresh form rather than a reset one. */
+            onSubmitAnother={() => { setSubmitted(null); setBanner(null); }}
+          />
+        ) : (
         <form onSubmit={handleSubmit}>
           {/* Company and Website, which were two free-text inputs. The picker
               answers both questions, and answers them with a Salesforce record
@@ -472,6 +534,7 @@ export function SubmitBody({ fetcher, initialSelection = null, initialDomainChec
             </p>
           )}
         </form>
+        )}
 
         {banner && (
           <div style={{ marginTop: 16 }}>
@@ -603,26 +666,6 @@ export function SubmitBody({ fetcher, initialSelection = null, initialDomainChec
               </div>
             )}
           </div>
-        </div>
-      )}
-      {/* ── Post-submit toast ── */}
-      {toast && (
-        <div style={{
-          position: 'fixed', bottom: 24, right: 24, zIndex: 1100,
-          background: 'var(--bg-elevated)', color: 'var(--text-primary)',
-          border: '1px solid var(--border)', borderRadius: 10,
-          padding: '14px 18px', maxWidth: 340,
-          boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
-          display: 'flex', gap: 12, alignItems: 'flex-start',
-        }}>
-          <div style={{ flex: 1, fontSize: 13, lineHeight: 1.5 }}>
-            <div style={{ fontWeight: 600, marginBottom: 4 }}>Research submitted!</div>
-            This typically takes around 15 minutes — possibly longer if the system is busy. Check back later to view your brief.
-          </div>
-          <button onClick={() => { setToast(false); if (toastTimerRef.current) clearTimeout(toastTimerRef.current); }} style={{
-            background: 'none', border: 'none', color: 'var(--text-tertiary)',
-            cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: 0, flexShrink: 0,
-          }}>{'×'}</button>
         </div>
       )}
     </>

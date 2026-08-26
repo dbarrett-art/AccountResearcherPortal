@@ -1,7 +1,9 @@
 import { createRoot } from 'react-dom/client';
+import { MemoryRouter } from 'react-router-dom';
 import '../src/index.css';
 import { AccountSearchPreviewBody } from '../src/pages/PreviewAccountSearch';
 import { SubmitBody } from '../src/pages/Submit';
+import { type SubmittedRun } from '../src/components/SubmitConfirmation';
 import { AuthContext, type AuthContextType, type UserProfile } from '../src/context/AuthContext';
 import {
   type AccountSelection,
@@ -33,6 +35,7 @@ import { rankDomains } from '../src/lib/domain-rank';
  *   ?fixture=one|two|nets|five|nofix|nowebsite|nulls|none|search   which account
  *   ?confirmed=1                        skip to the confirmed state
  *   ?typed=1                            on `none`, a domain typed for the locked account
+ *   ?sent=1|queued                      the post-submit confirmation (page=submit only)
  *   ?haiku=1|0                          advisory annotations on/off (default: on)
  *   ?theme=light|dark
  *   ?checkDelay=<ms>                     hold each /domain-check answer, to time the render
@@ -630,6 +633,19 @@ const NEW_PROSPECT: AccountSelection = {
   no_whitespace_data: true,
 };
 
+/**
+ * The post-submit confirmation, seeded.
+ *
+ * `?sent=1` for a dispatched run, `?sent=queued` for one that queued behind
+ * MAX_CONCURRENT_RUNS. Both are confirmations — a queued run's credit is spent and
+ * its row exists — and the only difference on screen is the timing line and the
+ * border, which is why both need capturing.
+ *
+ * The run id is a fixed literal rather than generated: `Math.random` and
+ * `Date.now` would make every screenshot differ from the last for no reason.
+ */
+const sentParam = params.get('sent');
+
 // ─── Auth and status, stubbed ───────────────────────────────────────────────
 //
 // SubmitBody reads `useAuth()` for the session and the credit counter and
@@ -667,13 +683,30 @@ const authStub: AuthContextType = {
 };
 
 const page = params.get('page') === 'submit' ? 'submit' : 'preview';
+
+const submittedSeed: SubmittedRun | null = sentParam
+  ? {
+      selection: (fixtureName === 'prospect' ? NEW_PROSPECT : selection)!,
+      market: 'auto',
+      runId: '18c5bf5b-338f-4726-9dd6-cbb6df976b95',
+      queue: sentParam === 'queued' ? { position: 2, waitMinutes: 24 } : undefined,
+    }
+  : null;
 // On unless explicitly turned off, matching the component's own default. Passed
 // rather than read off Admin's localStorage key so a screenshot never depends on
 // what the browser profile happens to hold.
 const domainCheckOn = params.get('haiku') !== '0';
 const seeded = fixtureName === 'prospect' ? NEW_PROSPECT : selection;
 
+/**
+ * A MemoryRouter, because the confirmation panel calls `useNavigate` and that
+ * hook throws outside a router context — not because anything here navigates.
+ * `onNavigate` below intercepts the buttons so a screenshot cannot wander off the
+ * page it is meant to be of. In memory rather than browser history so the harness
+ * cannot touch the URL the screenshot script drove it to.
+ */
 createRoot(document.getElementById('root')!).render(
+  <MemoryRouter>
   <div style={{ background: 'var(--bg-app)', minHeight: '100vh', padding: 32 }}>
     <div style={{
       maxWidth: 560, marginBottom: 20, padding: '8px 12px', borderRadius: 6,
@@ -693,6 +726,11 @@ createRoot(document.getElementById('root')!).render(
           fetcher={stubFetcher}
           initialDomainCheck={domainCheckOn}
           initialSelection={seeded}
+          initialSubmitted={submittedSeed}
+          // Rendered outside a Router, so the confirmation's buttons cannot
+          // navigate. Logged instead of throwing — the images are of the panel,
+          // not of where its buttons go.
+          onNavigate={(path) => console.log(`[harness] navigate ${path}`)}
         />
       </AuthContext.Provider>
     ) : (
@@ -702,5 +740,6 @@ createRoot(document.getElementById('root')!).render(
         initialSelection={seeded}
       />
     )}
-  </div>,
+  </div>
+  </MemoryRouter>,
 );
