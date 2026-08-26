@@ -66,23 +66,64 @@ deliberately free of any public-suffix list (a relative suffix comparison instea
 portal does not become a third copy of `apexDomain`. Tests in `domain-rank.test.ts` assert
 the named accounts — Entur, Nets, LVMH, HSBC, Toyota.
 
-The advisory page check is behind a switch on the preview page. It calls the Worker's
-`POST /domain-check`, which fetches the domain's root URL, reads the `<title>` and meta
-description, and asks Haiku whether the page presents itself as that company. It
-annotates options and never picks, reorders, or blocks; a fetch or model failure reads
-"couldn't check" and never a guess. Measured ~200ms–1s to fetch plus ~1s for the model,
-which is why it is async and the card renders before it.
+The account card shows eight fields off the `whitespace_accounts` row, laid out by kind
+rather than as one muted line: the owner and Salesforce ID under the name (owner is
+identity, and it is what catches a wrong account at a glance); segment, region and
+employees as chips (categorical); ARR, total whitespace, full seats and dev seats as a
+four-across metric row (measured). Four is the limit at 560px — a fifth wraps.
+`src/lib/account-format.ts` renders **`—` for null and the figure for zero**, which is
+load-bearing: `employees` is null on 1,251 of 20,963 active accounts and
+`total_whitespace` on 3,026, while `full_seats` is genuinely zero on 16,116, and
+collapsing those says Figma measured an account nobody has measured.
+
+Tokens come from `src/index.css` and Submit: 13px text, 6px radius on fields and buttons,
+8px on panels, 600 for headings and 500 elsewhere. `var(--accent)` marks a **selected
+item** and nothing else — the chosen domain row, the same treatment as `Territory.tsx`'s
+FilterChip and `PipelineDebug.tsx`'s selected module tile. It is deliberately *not* on
+any container; an accent border round the domain block was what made it read as bolted on.
+The app is dark-first (`--bg-app: #0f0f0f` is `:root`, light is the `[data-theme]`
+override), so check dark first — the neutral chip fill had to move off
+`--badge-muted-bg`, which in light theme is one step from `--bg-surface` and invisible.
+
+The advisory page check is **on by default**. It calls the Worker's `POST /domain-check`,
+which fetches the domain's root URL, reads the `<title>` and meta description, and asks
+Haiku whether the page presents itself as that company. It annotates options and never
+picks, reorders, or blocks; a fetch or model failure reads "couldn't check" and never a
+guess. Verdicts read `<Account>'s site` / `different company` / `not a website` /
+`couldn't check` — "looks right" was a fair hedge for something you switched on and
+overclaims as a default. The one-line reason is dropped when it is identical across every
+option (Entur returns the same sentence for both of its domains) and kept where it
+distinguishes one.
+
+Measured: five domains in parallel resolve in 1.2–1.8s (Worker repo's
+`scripts/measure-domain-check-latency.mjs`), and the card plus domain list paint at a
+median 24ms with `checking…` per row resolving in place
+(`scripts/measure-card-render.mjs`, which also asserts the confirm button is enabled and
+the radio still moves while the check is in flight). Its off-switch is in **Admin →
+Preview** (`src/lib/preview-settings.ts`, localStorage) so noise can be turned off
+without a deploy — per browser, which is enough while the only route that reads it is
+admin-only and one of 194 users is an admin.
 
 `src/pages/PreviewAccountSearch.tsx` at `/preview/account-search` is an admin-only,
 unlinked review harness. It exercises the live endpoints but cannot submit a run. **Submit
 still uses free-text entry** — wiring the component in is a separate task pending sign-off,
 and the preview route should be removed once that lands.
 
+Its "What happens next" panel used to be a block of pretty-printed JSON. It now says the
+four consequences in plain language — what gets researched, what it is filed against,
+where the contacts come from, and that the figures are a Sigma export loaded on a date
+(read from `loaded_at`, never hardcoded). That last row is the answer to "why does this
+differ from Salesforce". The raw payload is still there, collapsed behind a disclosure,
+for whoever is changing the code.
+
 `harness/` is a dev-server-only vite entry (`/AccountResearcherPortal/harness/`) that
 renders the same preview body against fixtures, for screenshots. `vite build` reads the
 root `index.html` and never touches it, so none of it ships.
 `scripts/screenshot-domain-confirm.mjs` drives it with Puppeteer resolved out of the
-prospect-research repo.
+prospect-research repo, **dark theme first**. Every fixture is a real account read off
+`whitespace_accounts` at load 11, including the edges the card has to survive: no
+Salesforce `Website` (Maersk Supply Service), null `employees` and `total_whitespace`
+(Ministério das Finanças Angola), and no domain at all (Roblox).
 
 ## Related Repos
 
