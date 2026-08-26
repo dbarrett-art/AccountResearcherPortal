@@ -3,7 +3,9 @@ import Layout from '../components/Layout';
 import Banner from '../components/Banner';
 import usePageTitle from '../hooks/usePageTitle';
 import AccountSearch, { type AccountSelection } from '../components/AccountSearch';
+import { formatLoadDate } from '../lib/account-format';
 import type { workerFetch } from '../lib/supabase';
+import { getDomainCheck } from '../lib/preview-settings';
 
 /**
  * Preview of the type-ahead account picker, styled as the Submit page it will
@@ -20,16 +22,30 @@ import type { workerFetch } from '../lib/supabase';
  *
  * Admin-only via the route guard, and not linked from any navigation.
  *
- * The payload panel is the point of the page: it prints what each of the
- * outcomes actually sends, next to what that means downstream. A no-match is a
- * fork, not a dead end — a company can legitimately not be in the whitespace
- * book, and the net-new-prospect path lets the research proceed on a hand-typed
- * domain with the absence of whitespace data recorded rather than guessed around.
+ * "What happens next" is the panel under the picker, and it used to be a block
+ * of pretty-printed JSON. That was a reviewer's artefact that had become the
+ * primary presentation: an AE reading it has to know that `whitespace_status` is
+ * a three-valued field and that `url` follows the radio above, neither of which
+ * is their job. It now says the same four things in the language of the
+ * consequence — what gets researched, what it gets filed against, where the
+ * contacts come from, and where the figures come from.
  *
- * The panel also has a state for a request that is NOT yet sendable: an account
- * chosen whose domain has not been confirmed. It is shown rather than hidden on
- * purpose. Hiding it would mean the reviewer never sees that `url` follows the
- * radio above it, which is the whole subject of the domain-confirmation change.
+ * The last of those four is the one that earns its place hardest. "Figures from
+ * the Sigma whitespace export, loaded 26 Aug 2026" is the answer to "why does
+ * this differ from what I see in Salesforce", which is the complaint that
+ * started this whole thread. The date is read off the account's own `loaded_at`
+ * rather than written down here, because a hardcoded date is wrong the morning
+ * after the next load.
+ *
+ * The raw payload is still available, collapsed, at the bottom. It is the fast
+ * way to see that `url` follows the radio and that nothing would be sent while
+ * the domain is unconfirmed — a debugging affordance, which is what it always
+ * was, now labelled as one.
+ *
+ * The panel still has a state for a request that is NOT yet sendable: an account
+ * chosen whose domain has not been confirmed. It is dimmed rather than hidden on
+ * purpose. Hiding it would mean the reviewer never sees that the summary follows
+ * the radio, which is the whole subject of the domain-confirmation change.
  */
 
 export default function PreviewAccountSearch() {
@@ -48,7 +64,10 @@ interface BodyProps {
    * makes the reviewed page the real one.
    */
   fetcher?: typeof workerFetch;
-  /** Starting state of the advisory-check toggle. */
+  /**
+   * Starting state of the advisory check. Undefined means "whatever Admin →
+   * Preview says", which on a fresh browser is on.
+   */
   initialDomainCheck?: boolean;
   /** Pre-seeded selection, for the harness only. */
   initialSelection?: AccountSelection | null;
@@ -63,20 +82,26 @@ interface BodyProps {
  */
 export function AccountSearchPreviewBody({
   fetcher,
-  initialDomainCheck = false,
+  initialDomainCheck,
   initialSelection = null,
 }: BodyProps) {
   const [selection, setSelection] = useState<AccountSelection | null>(initialSelection);
   /**
-   * The advisory page check, behind a switch rather than a build flag, so it can
-   * be turned on and off against the same account during a review. Off by
-   * default: it spends a fetch and a Haiku call per domain option, and every
-   * path through the confirmation step behaves identically without it.
+   * The advisory page check, on by default, with its off-switch in Admin →
+   * Preview rather than on this page.
+   *
+   * Read once at mount and not subscribed to. It is a kill switch flipped by one
+   * admin on another tab; a page already open does not need to react to it
+   * mid-review, and a reload is a cheaper contract than a storage listener.
    */
-  const [domainCheck, setDomainCheck] = useState(initialDomainCheck);
+  const [domainCheck] = useState(
+    () => initialDomainCheck ?? getDomainCheck(),
+  );
 
-  // Submit's own primitives, reused rather than approximated: its card panel,
-  // its card heading, its helper-text scale.
+  // Submit's own primitives, reused rather than approximated: its card panel
+  // (Submit.tsx:379), its card heading, its helper-text scale. 8px on the panel
+  // and 6px inside it, which is the app's split — panels at 8, fields and
+  // buttons at 6.
   const cardStyle: React.CSSProperties = {
     background: 'var(--bg-surface)', border: '1px solid var(--border)',
     borderRadius: 8, padding: 16,
@@ -152,6 +177,64 @@ export function AccountSearchPreviewBody({
         }
       : null;
 
+  /**
+   * The same four facts the payload carries, said as consequences.
+   *
+   * Not a rendering of the payload — a rendering of what it causes. `mono: true`
+   * marks a value that is a literal an AE might paste somewhere (a domain, an
+   * ID) rather than a sentence.
+   */
+  const loadDate = locked ? formatLoadDate(locked.candidate.loaded_at) : null;
+
+  const summary: { label: string; value: string; mono?: boolean }[] | null = locked
+    ? [
+        {
+          label: 'Research',
+          value: locked.domain ?? 'nothing — this account holds no domain',
+          mono: !!locked.domain,
+        },
+        {
+          label: 'Filed against',
+          value: locked.candidate.account_owner
+            ? `${locked.name} — ${locked.candidate.account_owner}`
+            : locked.name,
+        },
+        {
+          // Apollo searches by domain, so this follows the radio too. Worth
+          // saying out loud: the domain above is not only what gets scraped, it
+          // is the email domain contact discovery filters on, and a wrong domain
+          // returns the wrong people rather than no people.
+          label: 'Contacts',
+          value: locked.domain
+            ? `Apollo, searching @${locked.domain} — plus web search for names Apollo misses`
+            : 'nothing to search — contact discovery needs a domain',
+        },
+        {
+          // The complaint this thread started from. Whitespace figures are a
+          // Sigma export loaded on a date, not a live Salesforce read, and the
+          // date is why the two disagree.
+          label: 'Figures from',
+          value: loadDate
+            ? `Sigma whitespace export, loaded ${loadDate}`
+            : 'Sigma whitespace export — load date not on this record',
+        },
+      ]
+    : selection?.kind === 'new_prospect'
+      ? [
+          { label: 'Research', value: selection.domain, mono: true },
+          { label: 'Filed against', value: 'no Salesforce account — a new prospect' },
+          {
+            label: 'Contacts',
+            value: `Apollo, searching @${selection.domain} — plus web search for names Apollo misses`,
+          },
+          {
+            label: 'Figures from',
+            value: 'nowhere — this account has no whitespace record, so seats, ARR and '
+              + 'opportunity read as unknown rather than zero',
+          },
+        ]
+      : null;
+
   return (
     <div style={{ maxWidth: 560 }}>
       <div style={{
@@ -170,34 +253,10 @@ export function AccountSearchPreviewBody({
         start a run, spend a credit, or write anything.
       </Banner>
 
-      {/* Review switch for the advisory check. Deliberately not a build flag: the
-          question being reviewed is whether the annotation earns its place next
-          to the options, and that is answered by turning it off and on over one
-          account. */}
-      <label style={{
-        display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 16,
-        fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6, cursor: 'pointer',
-      }}>
-        <input
-          type="checkbox"
-          checked={domainCheck}
-          onChange={(e) => setDomainCheck(e.target.checked)}
-          style={{ marginTop: 3, flexShrink: 0, accentColor: 'var(--accent)' }}
-        />
-        {/* One line on screen. The paragraph that used to be here — how it
-            fetches, what it reads, that it is advisory, what a failure looks
-            like — is reviewer context, and it now lives in the title attribute
-            and in the task report rather than above the field it describes. */}
-        <span title={
-          'Fetches the root URL, reads the <title> and meta description, and asks Haiku ' +
-          'whether it is that company’s site. Advisory: it annotates the options and never ' +
-          'picks, reorders or blocks. A fetch or model failure reads “couldn’t check”, ' +
-          'never a guess.'
-        }>
-          Check each domain’s home page{' '}
-          <span style={{ color: 'var(--text-tertiary)' }}>— advisory</span>
-        </span>
-      </label>
+      {/* The advisory-check switch used to be here. It is now on by default and
+          its off-switch is in Admin → Preview — see lib/preview-settings. A
+          control for something that is always on is not part of what is being
+          reviewed, and it was the first thing on the page. */}
 
       <div style={{ marginBottom: 16 }}>
         <AccountSearch
@@ -214,7 +273,7 @@ export function AccountSearchPreviewBody({
       <div style={cardStyle}>
         <div style={{ ...cardTitleStyle, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <span>
-            What Submit would send
+            What happens next
             {selection?.kind === 'new_prospect' && ' — new prospect'}
           </span>
           {payload && !sendable && (
@@ -237,20 +296,64 @@ export function AccountSearchPreviewBody({
           )}
         </div>
 
-        {!payload ? (
+        {!summary || !payload ? (
           <div style={{ fontSize: 12, color: 'var(--text-tertiary)', lineHeight: 1.6 }}>
-            Pick an account above — or take the new-prospect path on a no-match — and the
-            exact request body appears here.
+            Pick an account above — or take the new-prospect path on a no-match — and what
+            the run would do appears here.
           </div>
         ) : (
-          <pre style={{
-            ...codeBlockStyle,
-            // Shown, not hidden. The point of the state is that the reviewer can
-            // watch `url` change as the radio moves, and see that nothing would
-            // be sent until it is confirmed.
-            opacity: sendable ? 1 : 0.6,
-            borderStyle: sendable ? 'solid' : 'dashed',
-          }}>{JSON.stringify(payload, null, 2)}</pre>
+          <>
+            {/* Dimmed until the domain is confirmed, as the payload was. The
+                point of the state is that the reviewer can watch these lines
+                change as the radio moves, and see that nothing would be sent
+                until it is confirmed. */}
+            <div style={{ opacity: sendable ? 1 : 0.55 }}>
+              {summary.map((row, i) => (
+                <div
+                  key={row.label}
+                  style={{
+                    display: 'flex', gap: 12, alignItems: 'baseline',
+                    padding: '7px 0',
+                    borderTop: i === 0 ? 'none' : '1px solid var(--border)',
+                  }}
+                >
+                  <div style={{
+                    fontSize: 11, color: 'var(--text-tertiary)',
+                    width: 88, flexShrink: 0,
+                  }}>
+                    {row.label}
+                  </div>
+                  <div style={{
+                    fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.5,
+                    minWidth: 0, wordBreak: 'break-word',
+                    fontFamily: row.mono ? 'var(--font-mono)' : undefined,
+                  }}>
+                    {row.value}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Collapsed, and for whoever is changing this code rather than for
+                an AE. It is the fastest way to confirm that `url` follows the
+                radio and that `whitespace_status` says what it should — which is
+                a debugging question, not a thing to put in front of a person
+                picking a domain. */}
+            <details style={{ marginTop: 12 }}>
+              <summary style={{
+                fontSize: 11, color: 'var(--text-tertiary)', cursor: 'pointer',
+                listStyle: 'revert',
+              }}>
+                Raw request body
+                {!sendable && ' — incomplete, nothing would be sent'}
+              </summary>
+              <pre style={{
+                ...codeBlockStyle,
+                marginTop: 8,
+                borderStyle: sendable ? 'solid' : 'dashed',
+              }}>{JSON.stringify(payload, null, 2)}</pre>
+            </details>
+          </>
         )}
 
         {/* The two rationale blocks that used to sit here — one arguing why
