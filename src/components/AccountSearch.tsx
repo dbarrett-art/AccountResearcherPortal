@@ -4,6 +4,7 @@ import { workerFetch } from '../lib/supabase';
 import { parseDomainInput } from '../lib/domain';
 import { rankDomains, reasonText, type RankedDomain } from '../lib/domain-rank';
 import { displayName, possessive, formatMoney, formatCount } from '../lib/account-format';
+import { salesforceAccountUrl } from '../lib/salesforce-url';
 
 /**
  * AccountSearch — type-ahead over the real whitespace book.
@@ -332,8 +333,12 @@ const T = {
   small: 12,
   /** The smallest readable step — metric labels and verdict chips. */
   tiny: 11,
-  /** Metric values. The one size above body, because these are what gets read. */
-  metric: 15,
+  /**
+   * Metric values. Above body, because these are what gets read — and 16 rather
+   * than 15 so the four figures are unambiguously the largest thing in the card
+   * below the account name, which is the order an AE reads it in.
+   */
+  metric: 16,
   /** Fields and buttons, everywhere in the app. Not 8. */
   radius: 6,
   /** Chips and pills. */
@@ -378,6 +383,12 @@ const MAX_CHIP_NAME = 22;
 const VERDICT_STYLE: Record<DomainVerdict, {
   label: (accountName: string) => string;
   bg: string; fg: string; icon: typeof Check | null;
+  /**
+   * Overrides the border, which otherwise matches the fill and is invisible.
+   * Only `couldnt_check` sets it — see there. Every chip carries a 1px border
+   * either way so the four stay the same height.
+   */
+  border?: string;
 }> = {
   looks_right: {
     label: (accountName) => {
@@ -399,8 +410,16 @@ const VERDICT_STYLE: Record<DomainVerdict, {
   couldnt_check: {
     // No icon and no colour. "We could not ask" is not a finding, and dressing
     // it as one would make an unreachable host look like a red flag.
+    //
+    // A hairline and no fill, for the reason the card's own chips are: this is
+    // the chip that was actually hitting the --badge-muted-bg collision. In
+    // light theme that token is #f5f5f0 and the surface behind it is #f5f4f0,
+    // one step apart, so the only filled neutral chip in the component had no
+    // visible edge and read as a grey smudge on the domain row. The border makes
+    // it a chip; the muted text keeps it from reading as a finding.
     label: () => 'couldn’t check',
-    bg: 'var(--badge-muted-bg)', fg: 'var(--badge-muted-text)', icon: null,
+    bg: 'transparent', fg: 'var(--badge-muted-text)', icon: null,
+    border: 'var(--chip-border)',
   },
 };
 
@@ -413,13 +432,22 @@ const VERDICT_STYLE: Record<DomainVerdict, {
  * tint because it is the one an AE scans for; the rest are neutral.
  */
 function Chip({ text, accent = false }: { text: string; accent?: boolean }) {
-  // `--bg-elevated` and not `--badge-muted-bg` for the neutral fill. In light
-  // theme --badge-muted-bg is #f5f5f0 and --bg-surface, which is what the card
-  // is, is #f5f4f0 — one step apart, so the chip had no visible edge at all and
-  // the row read as three floating words. --bg-elevated is #eeedea against the
-  // same surface in light and #222 against #1a1a1a in dark, and the border
-  // carries it in both. Checked dark first: dark was the theme where the
-  // original happened to work, which is how the light case got missed.
+  // The neutral chip is a hairline and no fill, and that is a fix rather than a
+  // preference. Every fill available for it collides with the surface it sits on:
+  // --badge-muted-bg is #f5f5f0 in light against a --bg-surface of #f5f4f0, one
+  // step apart, and --bg-elevated is #eeedea against the same — the closest
+  // legible option, but still a fill whose only visible edge was the border
+  // drawn over it. Dropping the fill and keeping the border removes the
+  // collision instead of picking the least-bad side of it, and the text goes to
+  // --text-primary because a chip on the card carries a figure an AE reads.
+  //
+  // Segment keeps its accent tint. It is the one chip an AE scans for, so it is
+  // the one that should not look like the others.
+  //
+  // --chip-border and not --border: the border is now the whole chip, and in
+  // dark --border composites to 1.25:1 against #1a1a1a, which reads as an absent
+  // edge rather than a faint one. The token resolves to --border-strong in dark
+  // and --border in light; the measurements are in index.css.
   return (
     <span style={{
       fontSize: T.tiny,
@@ -427,9 +455,9 @@ function Chip({ text, accent = false }: { text: string; accent?: boolean }) {
       padding: '2px 8px',
       borderRadius: T.pill,
       whiteSpace: 'nowrap',
-      background: accent ? 'var(--accent-subtle)' : 'var(--bg-elevated)',
-      border: `1px solid ${accent ? 'var(--accent-subtle)' : 'var(--border)'}`,
-      color: accent ? 'var(--accent)' : 'var(--text-secondary)',
+      background: accent ? 'var(--accent-subtle)' : 'transparent',
+      border: `1px solid ${accent ? 'var(--accent-subtle)' : 'var(--chip-border)'}`,
+      color: accent ? 'var(--accent)' : 'var(--text-primary)',
     }}>
       {text}
     </span>
@@ -467,8 +495,15 @@ function MetricRow({ items }: { items: { label: string; value: string }[] }) {
             borderLeft: i === 0 ? 'none' : '1px solid var(--border)',
           }}
         >
+          {/* --text-secondary, not --text-tertiary. Tertiary is the app's
+              placeholder and caption token; these are the labels on four figures
+              an AE is meant to read and act on, and at 11px the tertiary value
+              (#99978f on #f5f4f0 in light) was too weak to carry them. The
+              letter-spacing is what an 11px 500 label needs to stop reading as
+              a smudge at that weight. */}
           <div style={{
-            fontSize: T.tiny, color: 'var(--text-tertiary)',
+            fontSize: T.tiny, fontWeight: T.label, color: 'var(--text-secondary)',
+            letterSpacing: '0.02em', marginBottom: 4,
             whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
           }}>
             {m.label}
@@ -497,11 +532,20 @@ function MetricRow({ items }: { items: { label: string; value: string }[] }) {
  * What it shows and why it is laid out by kind:
  *
  *   name          the account, canonical, 13px 600
- *   owner + ID    muted, directly under the name. Owner is identity, not a
- *                 metric, and it is the field that catches a wrong account at a
- *                 glance — an AE knows whose book an account sits in.
- *   chips         segment, region, employees. Categorical.
- *   metrics       ARR, total whitespace, full seats, dev seats. Measured.
+ *   owner + link  directly under the name, --text-secondary 500. Owner is
+ *                 identity, not a metric, and it is the field that catches a
+ *                 wrong account at a glance — an AE knows whose book an account
+ *                 sits in. Next to it, the way into the Salesforce record.
+ *   chips         segment, region, employees. Categorical. Hairline, no fill.
+ *   metrics       ARR, total whitespace, full seats, dev seats. Measured, and
+ *                 the largest text in the card below the name.
+ *
+ * Everything below the name was on --text-tertiary until 2026-08-26. Tertiary is
+ * the app's placeholder and caption token — 2.66:1 against the light card
+ * surface — and it was carrying four figures an AE is meant to read and act on,
+ * plus the name of the person whose book the account is in. It is now
+ * --text-secondary (5.90:1 light, 5.11:1 dark) for the labels and the owner, and
+ * --text-primary for the values and the chips.
  *
  * It replaced a single muted `ARR · Segment · Region` line, which fitted but
  * said too little to tell two same-named accounts apart — the entire problem the
@@ -525,6 +569,8 @@ function AccountCard({
   /** Rendered between the identity line and the chips. The confirmed domain row. */
   extra?: React.ReactNode;
 }) {
+  const sfUrl = salesforceAccountUrl(accountId);
+
   const chips: { text: string; accent?: boolean }[] = [];
   if (candidate.sales_segment) chips.push({ text: candidate.sales_segment, accent: true });
   if (candidate.region) chips.push({ text: candidate.region });
@@ -546,16 +592,43 @@ function AccountCard({
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: T.text, fontWeight: T.heading }}>{name}</div>
 
-        {/* Owner and Salesforce ID, one muted line. Not a metric row: neither is
-            a measurement, and the ID is here so it can be pasted into Salesforce
-            and checked. */}
+        {/* Owner and the way into Salesforce, one line. Not a metric row:
+            neither is a measurement.
+
+            --text-secondary and 500, not tertiary. The owner is the field that
+            catches a wrong account at a glance — an AE knows whose book an
+            account sits in — so it is not caption text.
+
+            The raw ID used to sit here in mono so it could be copied and pasted
+            into Salesforce by hand, which is a link with the last step left to
+            the reader. It is now the link, and the ID is on the `title` so it is
+            still copyable when the ID itself is what somebody needs. If the ID
+            is not a well-formed Account ID, salesforceAccountUrl returns null and
+            the raw ID comes back rather than a link to a Salesforce error page. */}
         <div style={{
-          fontSize: T.tiny, color: 'var(--text-tertiary)', marginTop: 2,
-          display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'baseline',
+          fontSize: T.tiny, fontWeight: T.label, color: 'var(--text-secondary)',
+          marginTop: 3,
+          display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center',
         }}>
           <span>{candidate.account_owner || 'no account owner on record'}</span>
           <span style={{ opacity: 0.5 }}>·</span>
-          <code style={{ fontSize: T.tiny, fontFamily: 'var(--font-mono)' }}>{accountId}</code>
+          {sfUrl ? (
+            <a
+              href={sfUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={accountId}
+              style={{
+                color: 'var(--accent)', textDecoration: 'none', fontWeight: T.label,
+                display: 'inline-flex', alignItems: 'center', gap: 3,
+              }}
+            >
+              Open in Salesforce
+              <ExternalLink size={10} />
+            </a>
+          ) : (
+            <code style={{ fontSize: T.tiny, fontFamily: 'var(--font-mono)' }}>{accountId}</code>
+          )}
         </div>
 
         {extra}
@@ -1205,6 +1278,10 @@ export default function AccountSearch({
                               <span style={{
                                 display: 'inline-flex', alignItems: 'center', gap: 3,
                                 background: style.bg, color: style.fg, fontWeight: T.label,
+                                // Matches the fill unless the verdict overrides it, so
+                                // the coloured chips look unbordered and all four keep
+                                // the same height.
+                                border: `1px solid ${style.border ?? style.bg}`,
                                 padding: '2px 7px', borderRadius: T.pill, whiteSpace: 'nowrap',
                                 flexShrink: 0,
                               }}>
@@ -1294,9 +1371,14 @@ export default function AccountSearch({
           extra={
             <div style={{
               display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap',
-              marginTop: 6, fontSize: T.tiny, color: 'var(--text-tertiary)',
+              marginTop: 6, fontSize: T.tiny, color: 'var(--text-secondary)',
             }}>
-              <span style={{ opacity: 0.75 }}>Research domain</span>
+              {/* Secondary and no opacity, matching the metric labels below and
+                  the owner line above. It was tertiary at 0.75 opacity, which
+                  once matched the rest of the card and now would be the only
+                  label on it still reading as caption text — and it labels the
+                  single value the whole confirm step exists to settle. */}
+              <span style={{ fontWeight: T.label }}>Research domain</span>
               <code style={{ fontSize: T.tiny, fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>
                 {value.domain || '— none on record —'}
               </code>

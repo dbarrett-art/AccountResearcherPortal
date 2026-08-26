@@ -58,6 +58,28 @@
   --badge-red-text: #f87171;
   --badge-muted-bg: rgba(255,255,255,0.06);
   --badge-muted-text: #888;
+  /*
+   * The border on an unfilled chip, where the border IS the chip.
+   *
+   * --border-strong in dark, --border in light. Composited against the card
+   * surface each theme actually uses:
+   *
+   *   dark  --border        0.08  -> #2c2c2c on #1a1a1a   1.25:1
+   *   dark  --border-strong 0.14  -> #3a3a3a on #1a1a1a   1.53:1
+   *   light --border        0.10  -> #dddcd8 on #f5f4f0   1.25:1
+   *   light --border-strong 0.20  -> #c4c3c0 on #f5f4f0   1.60:1
+   *
+   * The two --border values are the same ratio, so the asymmetry is not a
+   * contrast deficit on paper — it is that a WCAG ratio is not perceptually
+   * uniform across the luminance range, and 1.25:1 near black reads as an
+   * absent edge where the same ratio near white reads as a light one. Checked
+   * on screen in both themes, dark first, and dark needed the step up.
+   *
+   * Light stays on --border because that is every other hairline on this card
+   * — the panel edge, the metric dividers — and a chip outlined more heavily
+   * than the panel containing it is the opposite problem.
+   */
+  --chip-border: var(--border-strong);
   --badge-purple-bg: rgba(124,58,237,0.15);
   --badge-purple-text: #a78bfa;
 
@@ -121,6 +143,8 @@
   --badge-red-text: #991b1b;
   --badge-muted-bg: #f5f5f0;
   --badge-muted-text: #78716c;
+  /* See the dark value. Light keeps the app's normal hairline. */
+  --chip-border: var(--border);
   --badge-purple-bg: #f5f3ff;
   --badge-purple-text: #7c3aed;
 

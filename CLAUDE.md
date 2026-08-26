@@ -67,8 +67,8 @@ portal does not become a third copy of `apexDomain`. Tests in `domain-rank.test.
 the named accounts — Entur, Nets, LVMH, HSBC, Toyota.
 
 The account card shows eight fields off the `whitespace_accounts` row, laid out by kind
-rather than as one muted line: the owner and Salesforce ID under the name (owner is
-identity, and it is what catches a wrong account at a glance); segment, region and
+rather than as one muted line: the owner and a link into Salesforce under the name (owner
+is identity, and it is what catches a wrong account at a glance); segment, region and
 employees as chips (categorical); ARR, total whitespace, full seats and dev seats as a
 four-across metric row (measured). Four is the limit at 560px — a fifth wraps.
 `src/lib/account-format.ts` renders **`—` for null and the figure for zero**, which is
@@ -76,14 +76,36 @@ load-bearing: `employees` is null on 1,251 of 20,963 active accounts and
 `total_whitespace` on 3,026, while `full_seats` is genuinely zero on 16,116, and
 collapsing those says Figma measured an account nobody has measured.
 
+Nothing on the card sits on `--text-tertiary`. That token is the app's placeholder and
+caption colour — 2.66:1 against the light card surface — and it was carrying the four
+figures an AE is meant to act on plus the name of the person whose book the account is in.
+Labels and the owner line are `--text-secondary` at 500 (5.90:1 light, 5.11:1 dark), metric
+values are 16px 500 `--text-primary`, and chips are unfilled: `1px solid var(--chip-border)`
+with `--text-primary` text, segment keeping its `--accent-subtle` tint. `--chip-border`
+resolves to `--border-strong` in dark and `--border` in light, because on a chip whose
+border IS the chip, dark `--border` composites to 1.25:1 against `#1a1a1a` and reads as an
+absent edge. The measurements are in `src/index.css` above the token.
+
+`src/lib/salesforce-url.ts` builds the record link:
+`https://figma.lightning.force.com/lightning/r/Account/<id>/view`. Both halves were
+established against the live org, not assumed — `User.FullPhotoUrl` is
+`https://figma.file.force.com/...`, which fixes My Domain as `figma`, and an
+unauthenticated GET of that path 302s to
+`figma.my.salesforce.com/visualforce/session?url=<the same path>`, the Lightning session
+bootstrap. It accepts 15- and 18-char IDs (the two tables behind the export disagree) and
+returns **null** for anything that is not an Account ID, in which case the card falls back
+to printing the raw ID. The ID is on the link's `title` so it stays copyable.
+
 Tokens come from `src/index.css` and Submit: 13px text, 6px radius on fields and buttons,
 8px on panels, 600 for headings and 500 elsewhere. `var(--accent)` marks a **selected
 item** and nothing else — the chosen domain row, the same treatment as `Territory.tsx`'s
 FilterChip and `PipelineDebug.tsx`'s selected module tile. It is deliberately *not* on
 any container; an accent border round the domain block was what made it read as bolted on.
 The app is dark-first (`--bg-app: #0f0f0f` is `:root`, light is the `[data-theme]`
-override), so check dark first — the neutral chip fill had to move off
-`--badge-muted-bg`, which in light theme is one step from `--bg-surface` and invisible.
+override), so check dark first. `--badge-muted-bg` is one step from `--bg-surface` in light
+theme (`#f5f5f0` on `#f5f4f0`) and a chip filled with it has no visible edge at all; the
+`couldn't check` verdict chip was the last thing still doing that and is now a hairline
+too. Prefer an unfilled chip to picking a fill that nearly collides.
 
 The advisory page check is **on by default**. It calls the Worker's `POST /domain-check`,
 which fetches the domain's root URL, reads the `<title>` and meta description, and asks
@@ -109,12 +131,19 @@ unlinked review harness. It exercises the live endpoints but cannot submit a run
 still uses free-text entry** — wiring the component in is a separate task pending sign-off,
 and the preview route should be removed once that lands.
 
-Its "What happens next" panel used to be a block of pretty-printed JSON. It now says the
-four consequences in plain language — what gets researched, what it is filed against,
-where the contacts come from, and that the figures are a Sigma export loaded on a date
-(read from `loaded_at`, never hardcoded). That last row is the answer to "why does this
-differ from Salesforce". The raw payload is still there, collapsed behind a disclosure,
-for whoever is changing the code.
+It no longer has a "What happens next" panel. That went from pretty-printed JSON to four
+rows of prose to deleted (2026-08-26), the last step off a live review: the domain, the
+name and the owner are all on the card above it, and the unconfirmed state is communicated
+by the Confirm button existing, so the panel and its `incomplete — domain not confirmed`
+chip were restating the card. The raw payload is still there, collapsed behind a
+disclosure, and is now the only thing in that panel — a debugging affordance for whoever is
+changing the code.
+
+Two of those four rows were not duplicates and went with it: that the confirmed domain is
+also the email domain Apollo filters contacts on, and that the figures are a Sigma export
+loaded on a date (`loaded_at`, never hardcoded) — the answer to "why does this differ from
+Salesforce". Neither is on screen anywhere now. If either is missed, it belongs on the
+card, not in a second panel restating it.
 
 `harness/` is a dev-server-only vite entry (`/AccountResearcherPortal/harness/`) that
 renders the same preview body against fixtures, for screenshots. `vite build` reads the
