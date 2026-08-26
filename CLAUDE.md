@@ -131,19 +131,29 @@ unlinked review harness. It exercises the live endpoints but cannot submit a run
 still uses free-text entry** — wiring the component in is a separate task pending sign-off,
 and the preview route should be removed once that lands.
 
-It no longer has a "What happens next" panel. That went from pretty-printed JSON to four
-rows of prose to deleted (2026-08-26), the last step off a live review: the domain, the
-name and the owner are all on the card above it, and the unconfirmed state is communicated
-by the Confirm button existing, so the panel and its `incomplete — domain not confirmed`
-chip were restating the card. The raw payload is still there, collapsed behind a
-disclosure, and is now the only thing in that panel — a debugging affordance for whoever is
-changing the code.
+**Nothing renders below the picker** on the whitespace-account path. The "What happens
+next" panel went from pretty-printed JSON to four rows of prose to deleted, then the
+collapsed raw payload that was all that remained of it went too (both 2026-08-26, off a
+live review). The reasoning each time: the domain, the name and the owner are all on the
+card above, and the unconfirmed state is carried by the Confirm button existing, so the
+panel and its `incomplete — domain not confirmed` chip were restating the card. The one
+exception is the net-new-prospect note, which is not a summary — it says why
+`no_whitespace_data`, `whitespace_status: "no_record"` and `domain_source: "user_entered"`
+are each positive statements rather than omissions, which nothing on screen implies.
 
-Two of those four rows were not duplicates and went with it: that the confirmed domain is
-also the email domain Apollo filters contacts on, and that the figures are a Sigma export
-loaded on a date (`loaded_at`, never hardcoded) — the answer to "why does this differ from
-Salesforce". Neither is on screen anywhere now. If either is missed, it belongs on the
-card, not in a second panel restating it.
+`PreviewAccountSearch.test.tsx` asserts that emptiness in both directions — the three
+deleted strings absent on a locked account, the net-new note present — because that region
+has been emptied twice and each pass rewrote the guards around the note that has to stay.
+
+Three things went with those deletions and are **not on screen anywhere now**: that the
+confirmed domain is also the email domain Apollo filters contacts on; that the figures are
+a Sigma export loaded on a date (`loaded_at`, never hardcoded), which was the answer to
+"why does this differ from Salesforce"; and the request body itself. The payload contract
+the last of those documented — `url` follows the radio, `whitespace_status` is sent rather
+than derived so `'unresolved'` is expressible, `usage_known` and `domain_confirmed` are
+deliberately *not* sent — is now prose in the `PreviewAccountSearch.tsx` header, and that
+header is the reference for whatever wires this into Submit. If a fact is missed, it
+belongs on the card, not in a second panel restating the card.
 
 `harness/` is a dev-server-only vite entry (`/AccountResearcherPortal/harness/`) that
 renders the same preview body against fixtures, for screenshots. `vite build` reads the

@@ -39,11 +39,46 @@ import { getDomainCheck } from '../lib/preview-settings';
  * now. If either turns out to be missed, the card is where it should go, not a
  * second panel restating the card.
  *
- * What remains below the picker is the collapsed raw payload, kept on purpose.
- * It is the fast way to see that `url` follows the radio and that nothing would
- * be sent while the domain is unconfirmed — a debugging affordance for whoever
- * is changing this code, which is what it always was and is now the only thing
- * in the panel.
+ * The collapsed raw payload went the same way on the next pass. It survived one
+ * round as the only thing left in the panel, which is what made the answer
+ * obvious: a bordered box under the card holding a single closed disclosure is
+ * chrome around a debugging affordance, and the affordance is better served by
+ * the devtools of whoever is changing this code. Nothing renders below the
+ * picker now on the whitespace-account path.
+ *
+ * THE PAYLOAD CONTRACT, which the deleted code was the only record of
+ * ────────────────────────────────────────────────────────────────────
+ * Nothing on this page builds a request body any more, so what the picker's
+ * output is *for* lives here. Whatever wires this component into Submit has to
+ * get these four right, and three of them are refusals:
+ *
+ *   `url` follows the radio, and is null only while the record holds no domain.
+ *   It is not `primary_domain` and not the first entry in the DOMAINS__C cell.
+ *
+ *   `whitespace_status` is sent explicitly rather than left to be derived.
+ *   Derivation works — the Worker does it when the field is absent — but it can
+ *   only ever produce the two values the body already implies. It cannot produce
+ *   'unresolved', and 'unresolved' is the value that matters: a lookup that
+ *   failed or left candidates unresolved is not a net-new prospect, and the
+ *   Worker refuses it rather than running on a whitespace answer nobody gave.
+ *   This picker cannot currently reach it — a search error clears the results and
+ *   leaves nothing selectable — so that guard is at the door for the clients that
+ *   follow, not for this one.
+ *
+ *   `usage_known` is NOT sent. It is derived at the Worker, so that a client
+ *   cannot assert usage alongside a no_record declaration.
+ *
+ *   `domain_confirmed` is NOT sent either, and that is the same principle from
+ *   the other side. It is a gate on the client, not a claim about the account: a
+ *   caller able to send `domain_confirmed: true` could send it without ever
+ *   having asked anybody. What the Worker can rely on is that `url` arrived, not
+ *   that a client says a person looked at it.
+ *
+ * On the net-new path, `no_whitespace_data: true` and
+ * `whitespace_status: 'no_record'` are positive statements and
+ * `domain_source: 'user_entered'` is the admission that nothing verified the
+ * domain. The note still on screen for that path spells out why each one is
+ * load-bearing.
  */
 
 export default function PreviewAccountSearch() {
@@ -104,73 +139,11 @@ export function AccountSearchPreviewBody({
     background: 'var(--bg-surface)', border: '1px solid var(--border)',
     borderRadius: 8, padding: 16,
   };
-  // The portal's existing code-block treatment, from PipelineDebug's JSON panes.
-  const codeBlockStyle: React.CSSProperties = {
-    margin: 0, background: 'var(--bg-input)', border: '1px solid var(--border)',
-    borderRadius: 6, padding: 12, fontFamily: 'var(--font-mono)', fontSize: 12,
-    lineHeight: 1.5, color: 'var(--text-primary)',
-    whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-  };
+  // The note is the card's only child now, so no top margin — the panel's own
+  // 16px padding is the gap.
   const noteStyle: React.CSSProperties = {
-    fontSize: 12, color: 'var(--text-secondary)', marginTop: 10, lineHeight: 1.6,
+    fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6,
   };
-
-  const locked = selection?.kind === 'whitespace_account' ? selection : null;
-  /**
-   * Whether this payload could actually be sent.
-   *
-   * A whitespace account with an unconfirmed domain is a real, incomplete
-   * request: everything else about it is settled and `url` is not. The
-   * new-prospect path has no such state — the domain there is typed by hand and
-   * the typing IS the confirmation.
-   */
-  const sendable = locked ? locked.domain_confirmed && !!locked.domain : !!selection;
-
-  // whitespace_status is sent explicitly rather than left to be derived. Derivation
-  // works — the Worker does it when the field is absent — but it can only ever
-  // produce the two values the payload already implies. It cannot produce
-  // 'unresolved', and 'unresolved' is the value that matters: a lookup that failed
-  // or left candidates unresolved is not a net-new prospect, and the Worker refuses
-  // it rather than running on a whitespace answer nobody gave. Sending the field
-  // means this page is on the contract that has a place to say so.
-  //
-  // This picker cannot currently reach 'unresolved': a search error clears the
-  // results and leaves nothing selectable, so there is no selection to submit. The
-  // guard is at the door for the clients that follow, not for this one.
-  //
-  // usage_known is deliberately NOT sent. It is derived at the Worker, so a client
-  // cannot assert usage alongside a no_record declaration.
-  //
-  // domain_confirmed is NOT sent either, and that is the same principle from the
-  // other side. It is a gate on this client, not a claim about the account — a
-  // caller able to send `domain_confirmed: true` could send it without ever having
-  // asked anybody. What the Worker can rely on is that `url` arrived, not that a
-  // client says a person looked at it.
-  const payload = locked
-    ? {
-        company: locked.name,
-        // Follows the radio above. Null only while the record holds no domain.
-        url: locked.domain ? `https://${locked.domain}` : null,
-        whitespace_account_id: locked.account_id,
-        whitespace_status: 'matched',
-        domain_source: 'whitespace',
-        include_contacts: true,
-        market: 'auto',
-      }
-    : selection?.kind === 'new_prospect'
-      ? {
-          company: selection.name,
-          url: `https://${selection.domain}`,
-          whitespace_account_id: null,
-          no_whitespace_data: true,
-          whitespace_status: 'no_record',
-          // Nothing suggested it and nothing looked it up — a person typed it. M3
-          // must not treat it with the authority of a domain off a resolved record.
-          domain_source: 'user_entered',
-          include_contacts: true,
-          market: 'auto',
-        }
-      : null;
 
   return (
     <div style={{ maxWidth: 560 }}>
@@ -201,56 +174,19 @@ export function AccountSearchPreviewBody({
         />
       </div>
 
-      {/* No panel at all until something is picked. The card above is the
-          screen; an empty bordered box under it was the frame the deleted
-          summary used to sit in. */}
-      {payload && (
+      {/* Nothing below the picker on the whitespace-account path — no summary,
+          no chip, no payload. Everything the AE needs is on the card, and the
+          Confirm button carries the unconfirmed state by existing.
+
+          The net-new path is the one exception, and it is not a summary: it says
+          why `no_whitespace_data`, `whitespace_status: "no_record"` and
+          `domain_source: "user_entered"` are each positive statements rather
+          than omissions, which is not derivable from anything on screen. The
+          payload contract those sentences belong to is in the file header now
+          that nothing here builds one. */}
+      {selection?.kind === 'new_prospect' && (
       <div style={cardStyle}>
-        {/* Collapsed, and for whoever is changing this code rather than for an
-            AE. It is the fastest way to confirm that `url` follows the radio and
-            that `whitespace_status` says what it should — a debugging question,
-            not a thing to put in front of a person picking a domain.
-
-            `!sendable` is the only place the incomplete state is still stated in
-            words on this page, and it is stated about the payload rather than
-            about the request: nothing would be SENT. The "incomplete — domain
-            not confirmed" chip that used to head this panel is gone. The Confirm
-            button above communicates that by existing, which is what the review
-            concluded, and a second badge saying so was the panel arguing with
-            the card. */}
-        <details>
-          <summary style={{
-            fontSize: 11, color: 'var(--text-secondary)', cursor: 'pointer',
-            listStyle: 'revert',
-          }}>
-            Raw request body
-            {!sendable && ' — incomplete, nothing would be sent'}
-          </summary>
-          <pre style={{
-            ...codeBlockStyle,
-            marginTop: 8,
-            borderStyle: sendable ? 'solid' : 'dashed',
-          }}>{JSON.stringify(payload, null, 2)}</pre>
-        </details>
-
-        {/* The two rationale blocks that used to sit here — one arguing why
-            "+N more" was the wrong treatment and what `url` follows, one
-            explaining the lock, the canonical name and what
-            whitespace_status: "matched" licenses — are gone. Both were making a
-            case to a reviewer rather than helping anyone pick a domain, and
-            between them they pushed the payload below the fold on every account
-            with more than two domains.
-
-            What they said is not lost: it is the header comment of this file and
-            of AccountSearch, where the next person to change this behaviour will
-            actually be reading.
-
-            The chip that used to carry the unconfirmed state went the same way,
-            for the same reason, on 2026-08-26. What is left of that state on
-            screen is the Confirm button above still being there, and the dashed
-            border on the payload below. */}
-        {selection?.kind === 'new_prospect' && (
-          <div style={noteStyle}>
+        <div style={noteStyle}>
             <code>no_whitespace_data: true</code> is a positive statement, not the absence
             of one. Omitting <code>whitespace_account_id</code> on its own would only mean
             “nothing was decided here”, which still leaves M1.5 free to match the typed
@@ -275,8 +211,7 @@ export function AccountSearchPreviewBody({
             An account that <em>has</em> a record measuring zero opportunity gets{' '}
             <code>"record_no_opportunity"</code> and different words. Before this, both
             rendered as nothing at all.
-          </div>
-        )}
+        </div>
       </div>
       )}
     </div>
