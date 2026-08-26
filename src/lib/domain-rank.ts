@@ -15,6 +15,24 @@
  * option is pre-selected in the list and what reason sits next to it, and the
  * AE's confirm click is what chooses.
  *
+ * There is a second copy, and it does select
+ * ──────────────────────────────────────────
+ * The unattended paths — batch-run.js, overnight-batch-rerun.mjs — resolve their
+ * own accounts and have nobody to click, so a suggestion is not enough there.
+ * They rank with prospect-research/src/utils/domain-rank.mjs, a deliberate port
+ * of this file, and take its head as the answer. Ported rather than imported
+ * because the two repos deploy separately, exactly as the Worker's copy of the
+ * search normalisation is.
+ *
+ * CHANGE BOTH IN THE SAME COMMIT. prospect-research's
+ * scripts/verify-account-search-parity.mjs imports THIS file directly, compares
+ * every field of every ranked entry against the port over every active account in
+ * the live book, and fails on a divergence — but only when somebody runs it.
+ *
+ * That import is why this file must stay erasable-syntax-only: Node strips the
+ * types to load it, which `type` and `interface` survive and `enum` and
+ * `namespace` do not. Adding either would silently take the gate offline.
+ *
  * The rules
  * ─────────
  *   0. The domain Salesforce's own `Website` field points at. `entur.no` for
