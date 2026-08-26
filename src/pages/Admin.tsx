@@ -10,8 +10,9 @@ import useWindowWidth from '../hooks/useWindowWidth';
 import { useNavigate } from 'react-router-dom';
 import { Users, Activity, Heart, BarChart3, ExternalLink, Cpu, FileText, X, RefreshCw, Trash2, UserPlus, Check, RotateCcw, Link, MessageSquare, Download, Mail, Eye, UserCheck } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { getDomainCheck, setDomainCheck, DOMAIN_CHECK_DEFAULT } from '../lib/preview-settings';
 
-type Tab = 'users' | 'runs' | 'health' | 'credits' | 'api-credits' | 'assign' | 'feedback' | 'prompts';
+type Tab = 'users' | 'runs' | 'health' | 'credits' | 'api-credits' | 'assign' | 'feedback' | 'prompts' | 'preview';
 
 interface UserRow {
   id: string; name: string; email: string; role: string;
@@ -2298,6 +2299,80 @@ function FeedbackTab() {
   );
 }
 
+// --- Tab: Preview ---
+//
+// Off-switches for the preview routes. One entry so far: the advisory domain
+// check on /preview/account-search.
+//
+// The check went from opt-in to on-by-default on 2026-08-26, and this is where
+// its switch went rather than being deleted. The reason to keep it is specific:
+// the check's evidence is a page title and a meta description, and if that
+// starts producing noise -- a run of "couldn't check" while some CDN has a bad
+// afternoon, a "different company" on a domain that is fine -- somebody has to
+// be able to turn it off in the moment, not in a deploy.
+//
+// Per browser, not per org. See lib/preview-settings for why that is enough
+// today and what would change it: /preview/account-search needs the `admin`
+// role, and of 194 users exactly one account has it.
+
+function PreviewTab() {
+  const [domainCheck, setLocal] = useState(getDomainCheck);
+
+  const toggle = (on: boolean) => {
+    setDomainCheck(on);
+    setLocal(on);
+  };
+
+  return (
+    <div style={{ maxWidth: 620 }}>
+      <div style={{
+        background: 'var(--bg-surface)', border: '1px solid var(--border)',
+        borderRadius: 8, padding: 16,
+      }}>
+        <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 10 }}>
+          Account search preview
+        </div>
+
+        <label style={{
+          display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer',
+        }}>
+          <input
+            type="checkbox"
+            checked={domainCheck}
+            onChange={(e) => toggle(e.target.checked)}
+            style={{ marginTop: 3, flexShrink: 0, accentColor: 'var(--accent)' }}
+          />
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 500 }}>
+              Check each domain’s home page
+              {domainCheck === DOMAIN_CHECK_DEFAULT && (
+                <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-tertiary)', marginLeft: 6 }}>
+                  default
+                </span>
+              )}
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6, marginTop: 3 }}>
+              Fetches the root URL of each of the top five domains, reads the <code>&lt;title&gt;</code>
+              {' '}and meta description, and asks Haiku whether it is that company’s site. Advisory:
+              it annotates the options and never picks, reorders or blocks. A fetch or model failure
+              reads “couldn’t check”, never a guess.
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', lineHeight: 1.6, marginTop: 6 }}>
+              Costs one fetch and one Haiku call per domain option, up to five per account. Stored in
+              this browser, and read by <code>/preview/account-search</code> when the page loads —
+              reload that page after changing it.
+            </div>
+          </div>
+        </label>
+      </div>
+
+      <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 12, lineHeight: 1.6 }}>
+        Nothing here affects the Submit page, which still uses free-text entry.
+      </div>
+    </div>
+  );
+}
+
 // --- Main Admin Page ---
 const tabs: { id: Tab; label: string; icon: any }[] = [
   { id: 'users', label: 'Users', icon: Users },
@@ -2308,6 +2383,7 @@ const tabs: { id: Tab; label: string; icon: any }[] = [
   { id: 'assign', label: 'Assign Briefs', icon: Link },
   { id: 'feedback', label: 'Feedback', icon: MessageSquare },
   { id: 'prompts', label: 'Prompts', icon: FileText },
+  { id: 'preview', label: 'Preview', icon: Eye },
 ];
 
 export default function Admin() {
@@ -2379,6 +2455,7 @@ export default function Admin() {
       {activeTab === 'assign' && <AssignBriefsTab />}
       {activeTab === 'feedback' && <FeedbackTab />}
       {activeTab === 'prompts' && <PromptsTab />}
+      {activeTab === 'preview' && <PreviewTab />}
     </Layout>
   );
 }
