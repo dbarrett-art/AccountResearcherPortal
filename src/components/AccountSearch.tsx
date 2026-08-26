@@ -3,6 +3,7 @@ import { Search, Check, Link, Shield, AlertTriangle, Clock, X, ExternalLink } fr
 import { workerFetch } from '../lib/supabase';
 import { parseDomainInput } from '../lib/domain';
 import { rankDomains, reasonText, type RankedDomain } from '../lib/domain-rank';
+import { displayName, possessive, formatMoney, formatCount } from '../lib/account-format';
 
 /**
  * AccountSearch — type-ahead over the real whitespace book.
@@ -89,6 +90,27 @@ export interface WhitespaceCandidate {
    * in both cases and rules 1-3 decide alone.
    */
   website: string | null;
+  /**
+   * The account card's remaining fields, all off the same
+   * `whitespace_accounts` row and all added to the Worker's select on
+   * 2026-08-26. Nothing here is matched, ranked or filtered on.
+   *
+   * `account_owner` is the field that catches a wrong account at a glance —
+   * an AE knows whose book an account sits in, and ARR and segment do not
+   * carry that. It is never null on an active row.
+   *
+   * `employees` is null on 1,251 of the 20,963 active accounts and
+   * `total_whitespace` on 3,026, which is why every one of these renders `—`
+   * rather than `0` when it is missing. `full_seats` and `dev_seats` are never
+   * null but are zero on 16,116 accounts, and a zero there is a measurement:
+   * it prints as 0.
+   */
+  account_owner: string | null;
+  employees: number | null;
+  full_seats: number | null;
+  dev_seats: number | null;
+  /** When the load that wrote this row ran. The answer to "why does this differ from Salesforce". */
+  loaded_at: string | null;
   domains: string[];
   primary_domain: string | null;
   rank_tier: number;
@@ -199,9 +221,20 @@ interface Props {
   allowNewProspect?: boolean;
   /**
    * Annotate each domain option with the advisory page check (see
-   * DomainVerdict). Off by default: it costs a fetch and a Haiku call per
-   * option, and every path through the confirmation step works identically
-   * without it.
+   * DomainVerdict).
+   *
+   * ON by default since 2026-08-26. It was opt-in, which meant in practice it
+   * was never on for anybody who was not reviewing it — and the domain being
+   * wrong is the failure this whole step exists to catch.
+   *
+   * Being on by default is what the async handling below is for. The card and
+   * the domain list paint before the first request goes out, each row resolves
+   * `checking…` in place, and nothing waits: selection and confirmation are
+   * available the whole time. The check annotates and never picks, reorders or
+   * blocks, so an AE who has already decided never waits on it.
+   *
+   * The switch that used to be on the preview page now lives in Admin →
+   * Preview, so it can go off without a deploy if it starts producing noise.
    */
   domainCheck?: boolean;
   label?: string;
@@ -281,47 +314,275 @@ const VERDICT_ORDER: DomainVerdict[] = [
 ];
 
 /**
- * How each verdict reads. Wording is the AE's, not the model's — "looks right"
- * rather than "verified", because a page title and a meta description do not
- * verify anything.
+ * The portal's own values, not this component's.
+ *
+ * Read off src/index.css and src/pages/Submit.tsx: the body rule is 13px, every
+ * field and button in the app rounds at 6px, and headings are 600 with
+ * everything else at 500. The card was a notch off on all three — 14px text,
+ * 8px radius, mixed weights — which is most of why it read as something bolted
+ * on rather than part of the page.
+ *
+ * Named rather than inlined because there are now four states drawing the same
+ * card and a value that drifts in one of them is exactly the bug being fixed.
  */
+const T = {
+  /** Body and label text. The `body` rule in index.css. */
+  text: 13,
+  /** Supporting text: helper lines, the muted identity line, chips. */
+  small: 12,
+  /** The smallest readable step — metric labels and verdict chips. */
+  tiny: 11,
+  /** Metric values. The one size above body, because these are what gets read. */
+  metric: 15,
+  /** Fields and buttons, everywhere in the app. Not 8. */
+  radius: 6,
+  /** Chips and pills. */
+  pill: 10,
+  heading: 600,
+  label: 500,
+} as const;
+
+/**
+ * The field label. 13px 500, matching the `body` rule and every other piece of
+ * text in the app.
+ *
+ * One deliberate divergence, stated because it is the only place the card is not
+ * character-identical to Submit: Submit's three field labels (Company, Website,
+ * Language — Submit.tsx:277, 288, 303) are `fontSize: 14`. They are the outlier,
+ * not the rule — the body rule is 13, inputs are 13, buttons are 12-13, card
+ * titles are 13 — so this follows the rule. Wiring the picker into Submit is
+ * where the two get reconciled, and it is a separate task.
+ */
+const labelStyle: React.CSSProperties = {
+  display: 'block', fontSize: T.text, fontWeight: T.label, marginBottom: 6,
+};
+
+/**
+ * How each verdict reads.
+ *
+ * Reworded 2026-08-26, when the check went from opt-in to on by default. As an
+ * annotation somebody switched on, "looks right" was a fair hedge. Shown to
+ * every AE on every account it overclaims, because the evidence behind it is a
+ * page title and a meta description and nothing else. So each label now says
+ * what the check actually knows: that the page names this company, that it
+ * names a different one, that it is not a website, or that it could not be
+ * reached.
+ *
+ * `looks_right` takes the account name because that is the whole content of the
+ * finding — "Entur's site" is a claim a reader can check against the domain next
+ * to it, and "looks right" is not. Long names fall back rather than overflow the
+ * chip; the account name is on screen twice already by then.
+ */
+const MAX_CHIP_NAME = 22;
+
 const VERDICT_STYLE: Record<DomainVerdict, {
-  label: string; bg: string; fg: string; icon: typeof Check | null;
+  label: (accountName: string) => string;
+  bg: string; fg: string; icon: typeof Check | null;
 }> = {
   looks_right: {
-    label: 'looks right',
+    label: (accountName) => {
+      const short = displayName(accountName);
+      return short.length <= MAX_CHIP_NAME
+        ? `${possessive(short)} site`
+        : 'this account’s site';
+    },
     bg: 'var(--badge-green-bg)', fg: 'var(--badge-green-text)', icon: Check,
   },
   different_company: {
-    label: 'looks like a different company',
+    label: () => 'different company',
     bg: 'var(--badge-red-bg)', fg: 'var(--badge-red-text)', icon: AlertTriangle,
   },
   not_a_website: {
-    label: 'not a website',
+    label: () => 'not a website',
     bg: 'var(--badge-yellow-bg)', fg: 'var(--badge-yellow-text)', icon: X,
   },
   couldnt_check: {
     // No icon and no colour. "We could not ask" is not a finding, and dressing
     // it as one would make an unreachable host look like a red flag.
-    label: 'couldn’t check',
+    label: () => 'couldn’t check',
     bg: 'var(--badge-muted-bg)', fg: 'var(--badge-muted-text)', icon: null,
   },
 };
 
-function formatMoney(v: number | null): string {
-  if (v == null) return '—';
-  const n = Number(v);
-  if (!Number.isFinite(n)) return '—';
-  if (Math.abs(n) >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
-  if (Math.abs(n) >= 1_000) return `$${Math.round(n / 1_000)}K`;
-  return `$${Math.round(n)}`;
+/**
+ * One categorical label. Segment, region, employees.
+ *
+ * A chip and not a metric because these are kinds, not measurements — "MM" and
+ * "UKINN" do not belong in a row of figures, and putting them there was most of
+ * why the old single muted line read as a jumble. Segment carries the accent
+ * tint because it is the one an AE scans for; the rest are neutral.
+ */
+function Chip({ text, accent = false }: { text: string; accent?: boolean }) {
+  // `--bg-elevated` and not `--badge-muted-bg` for the neutral fill. In light
+  // theme --badge-muted-bg is #f5f5f0 and --bg-surface, which is what the card
+  // is, is #f5f4f0 — one step apart, so the chip had no visible edge at all and
+  // the row read as three floating words. --bg-elevated is #eeedea against the
+  // same surface in light and #222 against #1a1a1a in dark, and the border
+  // carries it in both. Checked dark first: dark was the theme where the
+  // original happened to work, which is how the light case got missed.
+  return (
+    <span style={{
+      fontSize: T.tiny,
+      fontWeight: T.label,
+      padding: '2px 8px',
+      borderRadius: T.pill,
+      whiteSpace: 'nowrap',
+      background: accent ? 'var(--accent-subtle)' : 'var(--bg-elevated)',
+      border: `1px solid ${accent ? 'var(--accent-subtle)' : 'var(--border)'}`,
+      color: accent ? 'var(--accent)' : 'var(--text-secondary)',
+    }}>
+      {text}
+    </span>
+  );
+}
+
+/**
+ * The metric row: four figures across, hairline dividers, label above value.
+ *
+ * Four is the limit at this width — a fifth wraps and the row stops reading as a
+ * row. So the four are the ones that answer "is this the account I think it is,
+ * and is there anything in it": ARR, total whitespace, full seats, dev seats.
+ * Employees is a chip above rather than a fifth column here.
+ *
+ * Every value comes through formatMoney or formatCount, both of which render `—`
+ * for null and `0` for zero. See formatCount for why the distinction is
+ * load-bearing.
+ */
+function MetricRow({ items }: { items: { label: string; value: string }[] }) {
+  return (
+    <div style={{
+      display: 'flex',
+      marginTop: 10,
+      borderTop: '1px solid var(--border)',
+      paddingTop: 8,
+    }}>
+      {items.map((m, i) => (
+        <div
+          key={m.label}
+          style={{
+            flex: 1,
+            minWidth: 0,
+            paddingLeft: i === 0 ? 0 : 10,
+            paddingRight: 4,
+            borderLeft: i === 0 ? 'none' : '1px solid var(--border)',
+          }}
+        >
+          <div style={{
+            fontSize: T.tiny, color: 'var(--text-tertiary)',
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+          }}>
+            {m.label}
+          </div>
+          <div style={{
+            fontSize: T.metric, fontWeight: T.label, color: 'var(--text-primary)',
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+          }}>
+            {m.value}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * The account, as one block — name, who owns it, what kind of account it is, and
+ * what is in it.
+ *
+ * One component rather than two, because the unconfirmed and confirmed states
+ * used to draw their own copy of this and the two had already drifted. The only
+ * difference between them is the border colour and whatever the caller puts in
+ * `extra`, so those are the only things parameterised.
+ *
+ * What it shows and why it is laid out by kind:
+ *
+ *   name          the account, canonical, 13px 600
+ *   owner + ID    muted, directly under the name. Owner is identity, not a
+ *                 metric, and it is the field that catches a wrong account at a
+ *                 glance — an AE knows whose book an account sits in.
+ *   chips         segment, region, employees. Categorical.
+ *   metrics       ARR, total whitespace, full seats, dev seats. Measured.
+ *
+ * It replaced a single muted `ARR · Segment · Region` line, which fitted but
+ * said too little to tell two same-named accounts apart — the entire problem the
+ * picker exists to solve.
+ */
+function AccountCard({
+  candidate,
+  name,
+  accountId,
+  borderColor,
+  icon,
+  action,
+  extra,
+}: {
+  candidate: WhitespaceCandidate;
+  name: string;
+  accountId: string;
+  borderColor: string;
+  icon: React.ReactNode;
+  action: React.ReactNode;
+  /** Rendered between the identity line and the chips. The confirmed domain row. */
+  extra?: React.ReactNode;
+}) {
+  const chips: { text: string; accent?: boolean }[] = [];
+  if (candidate.sales_segment) chips.push({ text: candidate.sales_segment, accent: true });
+  if (candidate.region) chips.push({ text: candidate.region });
+  if (candidate.employees != null) {
+    chips.push({ text: `${formatCount(candidate.employees)} employees` });
+  }
+
+  return (
+    <div style={{
+      background: 'var(--bg-surface)',
+      border: `1px solid ${borderColor}`,
+      borderRadius: T.radius,
+      padding: '11px 13px',
+      display: 'flex',
+      alignItems: 'flex-start',
+      gap: 10,
+    }}>
+      {icon}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: T.text, fontWeight: T.heading }}>{name}</div>
+
+        {/* Owner and Salesforce ID, one muted line. Not a metric row: neither is
+            a measurement, and the ID is here so it can be pasted into Salesforce
+            and checked. */}
+        <div style={{
+          fontSize: T.tiny, color: 'var(--text-tertiary)', marginTop: 2,
+          display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'baseline',
+        }}>
+          <span>{candidate.account_owner || 'no account owner on record'}</span>
+          <span style={{ opacity: 0.5 }}>·</span>
+          <code style={{ fontSize: T.tiny, fontFamily: 'var(--font-mono)' }}>{accountId}</code>
+        </div>
+
+        {extra}
+
+        {chips.length > 0 && (
+          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 8 }}>
+            {chips.map(c => <Chip key={c.text} text={c.text} accent={c.accent} />)}
+          </div>
+        )}
+
+        <MetricRow items={[
+          { label: 'ARR', value: formatMoney(candidate.arr) },
+          { label: 'Whitespace', value: formatMoney(candidate.total_whitespace) },
+          { label: 'Full seats', value: formatCount(candidate.full_seats) },
+          { label: 'Dev seats', value: formatCount(candidate.dev_seats) },
+        ]} />
+      </div>
+      {action}
+    </div>
+  );
 }
 
 export default function AccountSearch({
   value,
   onChange,
   allowNewProspect = false,
-  domainCheck = false,
+  domainCheck = true,
   label = 'Company',
   placeholder = 'Start typing a company name or website',
   autoFocus = false,
@@ -709,12 +970,14 @@ export default function AccountSearch({
 
   useEffect(() => () => { checkAbortRef.current?.abort(); }, []);
 
+  // Submit's own input, character for character (src/pages/Submit.tsx:247) with
+  // room on the left for the search icon.
   const inputStyle: React.CSSProperties = {
     background: 'var(--bg-input)',
     border: '1px solid var(--border-strong)',
-    borderRadius: 6,
+    borderRadius: T.radius,
     padding: '8px 12px 8px 32px',
-    fontSize: 13,
+    fontSize: T.text,
     color: 'var(--text-primary)',
     width: '100%',
     outline: 'none',
@@ -728,9 +991,10 @@ export default function AccountSearch({
       style={{
         background: 'transparent',
         border: '1px solid var(--border-strong)',
-        borderRadius: 6,
+        borderRadius: T.radius,
         padding: '4px 10px',
-        fontSize: 12,
+        fontSize: T.small,
+        fontWeight: T.label,
         color: 'var(--text-secondary)',
         cursor: disabled ? 'not-allowed' : 'pointer',
         flexShrink: 0,
@@ -748,25 +1012,27 @@ export default function AccountSearch({
   if (value?.kind === 'new_prospect') {
     return (
       <div ref={rootRef}>
-        <label style={{ display: 'block', fontSize: 14, fontWeight: 500, marginBottom: 6 }}>
-          {label}
-        </label>
+        <label style={labelStyle}>{label}</label>
+        {/* No AccountCard here, deliberately. There is no candidate: nothing was
+            matched, so there is no owner, no segment and no figure to show. A
+            card with four em dashes in it would look like an account whose
+            numbers failed to load rather than one the book has never seen. */}
         <div style={{
           background: 'var(--bg-surface)',
           border: '1px solid #d97706',
-          borderRadius: 6,
-          padding: '10px 12px',
+          borderRadius: T.radius,
+          padding: '11px 13px',
           display: 'flex',
           alignItems: 'flex-start',
           gap: 10,
         }}>
           <AlertTriangle size={15} style={{ marginTop: 2, flexShrink: 0, color: '#d97706' }} />
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 3 }}>{value.name}</div>
-            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', lineHeight: 1.7 }}>
+            <div style={{ fontSize: T.text, fontWeight: T.heading, marginBottom: 3 }}>{value.name}</div>
+            <div style={{ fontSize: T.tiny, color: 'var(--text-tertiary)', lineHeight: 1.7 }}>
               <div>
                 <span style={{ opacity: 0.75 }}>Domain (entered by hand)</span>{' '}
-                <code style={{ fontSize: 11 }}>{value.domain}</code>
+                <code style={{ fontSize: T.tiny, fontFamily: 'var(--font-mono)' }}>{value.domain}</code>
               </div>
               <div>
                 <span style={{ opacity: 0.75 }}>Salesforce ID</span> none — new prospect
@@ -778,7 +1044,7 @@ export default function AccountSearch({
           </div>
           {changeButton}
         </div>
-        <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4, lineHeight: 1.6 }}>
+        <div style={{ fontSize: T.small, color: 'var(--text-tertiary)', marginTop: 6, lineHeight: 1.6 }}>
           Research will run against this domain. The brief will state that this account has
           no whitespace record — seats, ARR and opportunity value unknown, which is not the
           same as zero.
@@ -820,60 +1086,40 @@ export default function AccountSearch({
 
     return (
       <div ref={rootRef}>
-        <label style={{ display: 'block', fontSize: 14, fontWeight: 500, marginBottom: 6 }}>
-          {label}
-        </label>
+        <label style={labelStyle}>{label}</label>
 
         {/* Which account: settled. Neutral border, not green — nothing is done yet. */}
-        <div style={{
-          background: 'var(--bg-surface)',
-          border: '1px solid var(--border-strong)',
-          borderRadius: 6,
-          padding: '10px 12px',
-          display: 'flex',
-          alignItems: 'flex-start',
-          gap: 10,
-        }}>
-          <Shield size={15} style={{ marginTop: 2, flexShrink: 0, color: 'var(--text-secondary)' }} />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 3 }}>{value.name}</div>
-            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', lineHeight: 1.7 }}>
-              <div>
-                <span style={{ opacity: 0.75 }}>Salesforce ID</span>{' '}
-                <code style={{ fontSize: 11 }}>{value.account_id}</code>
-              </div>
-              <div>
-                <span style={{ opacity: 0.75 }}>ARR</span> {formatMoney(value.candidate.arr)}
-                {'   '}
-                <span style={{ opacity: 0.75 }}>Segment</span> {value.candidate.sales_segment || '—'}
-                {'   '}
-                <span style={{ opacity: 0.75 }}>Region</span> {value.candidate.region || '—'}
-              </div>
-            </div>
-          </div>
-          {changeButton}
-        </div>
+        <AccountCard
+          candidate={value.candidate}
+          name={value.name}
+          accountId={value.account_id}
+          borderColor="var(--border-strong)"
+          icon={<Shield size={15} style={{ marginTop: 2, flexShrink: 0, color: 'var(--text-secondary)' }} />}
+          action={changeButton}
+        />
 
-        {/* Which domain: the question. */}
-        <div style={{
-          marginTop: 8,
-          background: 'var(--bg-surface)',
-          border: '1px solid var(--accent)',
-          borderRadius: 8,
-          padding: '12px 14px',
-        }}>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
+        {/* Which domain: the question.
+            No card. This is a field on the page, the same as Company above it,
+            and it used to be a second panel inside the first with
+            `1px solid var(--accent)` around the whole thing. Nothing else in the
+            portal puts the accent on a wrapper — Territory's FilterChip and
+            PipelineDebug's module tile both use it to mark a SELECTED ITEM, and
+            that is where it still is here, on the chosen domain row. An accent
+            border around the container was the single thing making this block
+            shout. */}
+        <div style={{ marginTop: 14 }}>
+          <div style={{ fontSize: T.text, fontWeight: T.heading, marginBottom: 3 }}>
             Confirm the research domain
           </div>
-          <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 10 }}>
+          <div style={{ fontSize: T.small, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 9 }}>
             This is the site that gets scraped, the basis of the web research, and the
             domain contact discovery runs against.
           </div>
 
           {options.length === 0 ? (
             <div style={{
-              fontSize: 12, color: 'var(--badge-yellow-text)', background: 'var(--badge-yellow-bg)',
-              border: '1px solid var(--border)', borderRadius: 6, padding: '8px 10px', lineHeight: 1.6,
+              fontSize: T.small, color: 'var(--badge-yellow-text)', background: 'var(--badge-yellow-bg)',
+              border: '1px solid var(--border)', borderRadius: T.radius, padding: '8px 10px', lineHeight: 1.6,
             }}>
               This account holds no domain at all, so there is nothing to confirm. Research
               cannot run without one — pick a different account, or take the new-prospect
@@ -893,9 +1139,12 @@ export default function AccountSearch({
                         display: 'flex', gap: 9, alignItems: 'flex-start',
                         padding: '8px 10px',
                         marginBottom: 6,
+                        // Accent on the SELECTED row, which is the one place
+                        // the portal uses it — same treatment as Territory's
+                        // FilterChip and PipelineDebug's selected module tile.
                         border: `1px solid ${chosen ? 'var(--accent)' : 'var(--border)'}`,
                         background: chosen ? 'var(--accent-subtle)' : 'transparent',
-                        borderRadius: 6,
+                        borderRadius: T.radius,
                         cursor: disabled ? 'not-allowed' : 'pointer',
                       }}
                     >
@@ -912,7 +1161,7 @@ export default function AccountSearch({
                           display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap',
                         }}>
                           <code style={{
-                            fontSize: 12, fontFamily: 'var(--font-mono)',
+                            fontSize: T.small, fontFamily: 'var(--font-mono)',
                             color: 'var(--text-primary)', wordBreak: 'break-all',
                           }}>
                             {option.domain}
@@ -923,7 +1172,8 @@ export default function AccountSearch({
                               the ranking, not the current radio. */}
                           {isSuggested && (
                             <span style={{
-                              fontSize: 10, padding: '1px 6px', borderRadius: 10,
+                              fontSize: T.pill, fontWeight: T.label, padding: '2px 7px',
+                              borderRadius: T.pill,
                               background: 'var(--badge-blue-bg)', color: 'var(--badge-blue-text)',
                               whiteSpace: 'nowrap',
                             }}>
@@ -932,12 +1182,16 @@ export default function AccountSearch({
                           )}
                         </div>
 
+                        {/* Resolves in place. The row is already on screen and
+                            already selectable — this is the only thing in it that
+                            arrives late, and it arrives without moving anything
+                            above or below it. */}
                         {check === 'checking' && (
                           <div style={{
                             display: 'flex', alignItems: 'center', gap: 4, marginTop: 4,
-                            fontSize: 11, color: 'var(--text-tertiary)',
+                            fontSize: T.tiny, color: 'var(--text-tertiary)',
                           }}>
-                            <Clock size={11} /> checking the page…
+                            <Clock size={11} className="pulse" /> checking…
                           </div>
                         )}
                         {check && check !== 'checking' && (() => {
@@ -946,16 +1200,16 @@ export default function AccountSearch({
                           return (
                             <div style={{
                               display: 'flex', alignItems: 'flex-start', gap: 5, marginTop: 4,
-                              fontSize: 11, lineHeight: 1.5, color: style.fg,
+                              fontSize: T.tiny, lineHeight: 1.5, color: style.fg,
                             }}>
                               <span style={{
                                 display: 'inline-flex', alignItems: 'center', gap: 3,
-                                background: style.bg, color: style.fg,
-                                padding: '1px 6px', borderRadius: 10, whiteSpace: 'nowrap',
+                                background: style.bg, color: style.fg, fontWeight: T.label,
+                                padding: '2px 7px', borderRadius: T.pill, whiteSpace: 'nowrap',
                                 flexShrink: 0,
                               }}>
                                 {Icon && <Icon size={10} />}
-                                {style.label}
+                                {style.label(value.name)}
                               </span>
                               {check.reason && showVerdictReason && (
                                 <span style={{ color: 'var(--text-tertiary)' }}>{check.reason}</span>
@@ -990,10 +1244,10 @@ export default function AccountSearch({
                   style={{
                     background: value.domain ? 'var(--accent)' : 'transparent',
                     border: `1px solid ${value.domain ? 'var(--accent)' : 'var(--border-strong)'}`,
-                    borderRadius: 6,
-                    padding: '6px 14px',
-                    fontSize: 12,
-                    fontWeight: 500,
+                    borderRadius: T.radius,
+                    padding: '7px 14px',
+                    fontSize: T.small,
+                    fontWeight: T.label,
                     color: value.domain ? '#fff' : 'var(--text-tertiary)',
                     cursor: value.domain && !disabled ? 'pointer' : 'not-allowed',
                   }}
@@ -1012,7 +1266,7 @@ export default function AccountSearch({
                     is complete but the ANNOTATIONS on it are not, and a silent
                     truncation reads as "all of these were checked". */}
                 {domainCheck && options.length > MAX_DOMAIN_CHECKS && (
-                  <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
+                  <span style={{ fontSize: T.tiny, color: 'var(--text-tertiary)' }}>
                     top {MAX_DOMAIN_CHECKS} of {options.length} checked
                   </span>
                 )}
@@ -1029,64 +1283,49 @@ export default function AccountSearch({
     const confirmedByHand = value.kind === 'whitespace_account';
     return (
       <div ref={rootRef}>
-        <label style={{ display: 'block', fontSize: 14, fontWeight: 500, marginBottom: 6 }}>
-          {label}
-        </label>
-        <div style={{
-          background: 'var(--bg-surface)',
-          border: '1px solid var(--status-complete-text, #16a34a)',
-          borderRadius: 6,
-          padding: '10px 12px',
-          display: 'flex',
-          alignItems: 'flex-start',
-          gap: 10,
-        }}>
-          <Shield size={15} style={{ marginTop: 2, flexShrink: 0, color: 'var(--status-complete-text, #16a34a)' }} />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 3 }}>{value.name}</div>
-            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', lineHeight: 1.7 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                <span style={{ opacity: 0.75 }}>Research domain</span>
-                <code style={{ fontSize: 11 }}>{value.domain || '— none on record —'}</code>
-                {/* Says who decided, because that is the whole change. */}
-                <span style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 3,
-                  fontSize: 10, padding: '1px 6px', borderRadius: 10,
-                  background: 'var(--badge-green-bg)', color: 'var(--badge-green-text)',
-                }}>
-                  <Check size={9} /> confirmed
-                </span>
-                {confirmedByHand && (
-                  <button
-                    type="button"
-                    onClick={reopenDomain}
-                    disabled={disabled}
-                    style={{
-                      background: 'none', border: 'none', padding: 0,
-                      fontSize: 11, color: 'var(--accent)', textDecoration: 'underline',
-                      cursor: disabled ? 'not-allowed' : 'pointer',
-                    }}
-                  >
-                    change
-                  </button>
-                )}
-              </div>
-              <div>
-                <span style={{ opacity: 0.75 }}>Salesforce ID</span>{' '}
-                <code style={{ fontSize: 11 }}>{value.account_id}</code>
-              </div>
-              <div>
-                <span style={{ opacity: 0.75 }}>ARR</span> {formatMoney(value.candidate.arr)}
-                {'   '}
-                <span style={{ opacity: 0.75 }}>Segment</span> {value.candidate.sales_segment || '—'}
-                {'   '}
-                <span style={{ opacity: 0.75 }}>Region</span> {value.candidate.region || '—'}
-              </div>
+        <label style={labelStyle}>{label}</label>
+        <AccountCard
+          candidate={value.candidate}
+          name={value.name}
+          accountId={value.account_id}
+          borderColor="var(--status-complete-text, #16a34a)"
+          icon={<Shield size={15} style={{ marginTop: 2, flexShrink: 0, color: 'var(--status-complete-text, #16a34a)' }} />}
+          action={changeButton}
+          extra={
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap',
+              marginTop: 6, fontSize: T.tiny, color: 'var(--text-tertiary)',
+            }}>
+              <span style={{ opacity: 0.75 }}>Research domain</span>
+              <code style={{ fontSize: T.tiny, fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>
+                {value.domain || '— none on record —'}
+              </code>
+              {/* Says who decided, because that is the whole change. */}
+              <span style={{
+                display: 'inline-flex', alignItems: 'center', gap: 3,
+                fontSize: T.pill, fontWeight: T.label, padding: '2px 7px', borderRadius: T.pill,
+                background: 'var(--badge-green-bg)', color: 'var(--badge-green-text)',
+              }}>
+                <Check size={9} /> confirmed
+              </span>
+              {confirmedByHand && (
+                <button
+                  type="button"
+                  onClick={reopenDomain}
+                  disabled={disabled}
+                  style={{
+                    background: 'none', border: 'none', padding: 0,
+                    fontSize: T.tiny, color: 'var(--accent)', textDecoration: 'underline',
+                    cursor: disabled ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  change
+                </button>
+              )}
             </div>
-          </div>
-          {changeButton}
-        </div>
-        <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4, lineHeight: 1.6 }}>
+          }
+        />
+        <div style={{ fontSize: T.small, color: 'var(--text-tertiary)', marginTop: 6, lineHeight: 1.6 }}>
           Research will run against this account and this domain. Both were chosen here —
           not derived from the text you typed, and not taken from whichever domain happened
           to come first on the record.
@@ -1100,9 +1339,7 @@ export default function AccountSearch({
 
   return (
     <div ref={rootRef} style={{ position: 'relative' }}>
-      <label style={{ display: 'block', fontSize: 14, fontWeight: 500, marginBottom: 6 }}>
-        {label}
-      </label>
+      <label style={labelStyle}>{label}</label>
       <div style={{ position: 'relative' }}>
         <Search
           size={14}
@@ -1139,7 +1376,7 @@ export default function AccountSearch({
         />
       </div>
 
-      <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4, minHeight: 17 }}>
+      <div style={{ fontSize: T.small, color: 'var(--text-tertiary)', marginTop: 4, minHeight: 17 }}>
         {loading && 'Searching the whitespace book…'}
         {!loading && error && <span style={{ color: '#dc2626' }}>{error}</span>}
         {!loading && !error && query.trim().length > 0 && query.trim().length < MIN_QUERY_LEN &&
@@ -1165,16 +1402,16 @@ export default function AccountSearch({
             borderRadius: 8,
             padding: '12px 14px',
           }}>
-            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
+            <div style={{ fontSize: T.text, fontWeight: T.heading, marginBottom: 4 }}>
               New prospect — “{newProspectName}”
             </div>
-            <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 10 }}>
+            <div style={{ fontSize: T.small, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 10 }}>
               Nothing in the whitespace book covers this company, so there is no domain on
               record to use. Type it in — the research runs against whatever you enter here.
             </div>
             <label
               htmlFor="new-prospect-domain"
-              style={{ display: 'block', fontSize: 12, fontWeight: 500, marginBottom: 4 }}
+              style={{ display: 'block', fontSize: T.small, fontWeight: T.label, marginBottom: 4 }}
             >
               Company domain
             </label>
@@ -1201,7 +1438,7 @@ export default function AccountSearch({
             />
             <div
               id="new-prospect-domain-help"
-              style={{ fontSize: 11, marginTop: 5, minHeight: 16, lineHeight: 1.5,
+              style={{ fontSize: T.tiny, marginTop: 5, minHeight: 16, lineHeight: 1.5,
                        color: invalid ? '#dc2626' : 'var(--text-tertiary)' }}
             >
               {invalid
@@ -1218,10 +1455,10 @@ export default function AccountSearch({
                 style={{
                   background: parsed ? '#d97706' : 'transparent',
                   border: `1px solid ${parsed ? '#d97706' : 'var(--border-strong)'}`,
-                  borderRadius: 6,
+                  borderRadius: T.radius,
                   padding: '6px 14px',
-                  fontSize: 12,
-                  fontWeight: 500,
+                  fontSize: T.small,
+                  fontWeight: T.label,
                   color: parsed ? '#fff' : 'var(--text-tertiary)',
                   cursor: parsed && !disabled ? 'pointer' : 'not-allowed',
                 }}
@@ -1235,9 +1472,9 @@ export default function AccountSearch({
                 style={{
                   background: 'transparent',
                   border: '1px solid var(--border-strong)',
-                  borderRadius: 6,
+                  borderRadius: T.radius,
                   padding: '6px 12px',
-                  fontSize: 12,
+                  fontSize: T.small,
                   color: 'var(--text-secondary)',
                   cursor: disabled ? 'not-allowed' : 'pointer',
                 }}
@@ -1245,7 +1482,7 @@ export default function AccountSearch({
                 Back to search
               </button>
             </div>
-            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 10, lineHeight: 1.6 }}>
+            <div style={{ fontSize: T.tiny, color: 'var(--text-tertiary)', marginTop: 10, lineHeight: 1.6 }}>
               The brief will say plainly that this account has no whitespace record. Seats,
               ARR and opportunity value will read as unknown rather than as zero.
             </div>
@@ -1272,7 +1509,7 @@ export default function AccountSearch({
           {tiedCount > 1 && (
             <div style={{
               padding: '8px 12px',
-              fontSize: 11,
+              fontSize: T.tiny,
               color: 'var(--text-secondary)',
               background: 'rgba(234,179,8,0.10)',
               borderBottom: '1px solid var(--border)',
@@ -1301,13 +1538,13 @@ export default function AccountSearch({
               >
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{
-                    fontSize: 13, fontWeight: 500, marginBottom: 2,
+                    fontSize: T.text, fontWeight: T.label, marginBottom: 2,
                     whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                   }}>
                     {c.name}
                   </div>
                   <div style={{
-                    fontSize: 11, color: 'var(--text-tertiary)',
+                    fontSize: T.tiny, color: 'var(--text-tertiary)',
                     display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center',
                   }}>
                     {/* The ranking's top pick, not `primary_domain`. And a plain
@@ -1325,8 +1562,8 @@ export default function AccountSearch({
                   </div>
                 </div>
                 <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>{formatMoney(c.arr)}</div>
-                  <div style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>ARR</div>
+                  <div style={{ fontSize: T.text, fontWeight: T.heading }}>{formatMoney(c.arr)}</div>
+                  <div style={{ fontSize: T.pill, color: 'var(--text-tertiary)' }}>ARR</div>
                 </div>
                 {i === highlight && (
                   <Check size={14} style={{ marginTop: 3, color: 'var(--accent)', flexShrink: 0 }} />
@@ -1337,15 +1574,15 @@ export default function AccountSearch({
 
           {showNoMatch && (
             <div style={{ padding: '12px 14px' }}>
-              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
+              <div style={{ fontSize: T.text, fontWeight: T.heading, marginBottom: 4 }}>
                 No whitespace record for “{results!.query}”
               </div>
-              <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+              <div style={{ fontSize: T.small, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
                 {results!.interpreted_as.kind === 'domain'
                   ? <>Nothing in the whitespace book owns <code>{results!.interpreted_as.apex}</code>. Try the company name, or a domain the account is more likely listed under.</>
                   : <>No account name matches. Try fewer words, a different spelling, or the company’s website domain.</>}
               </div>
-              <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 8, lineHeight: 1.6 }}>
+              <div style={{ fontSize: T.tiny, color: 'var(--text-tertiary)', marginTop: 8, lineHeight: 1.6 }}>
                 Only accounts currently in the whitespace book are searchable. A company
                 Figma has no Salesforce account for will not appear here — that is the
                 answer, not a search failure.
@@ -1358,12 +1595,12 @@ export default function AccountSearch({
                     marginTop: 10,
                     background: 'transparent',
                     border: '1px solid #d97706',
-                    borderRadius: 6,
+                    borderRadius: T.radius,
                     padding: '6px 12px',
-                    fontSize: 12,
+                    fontSize: T.small,
                     color: '#d97706',
                     cursor: 'pointer',
-                    fontWeight: 500,
+                    fontWeight: T.label,
                   }}
                 >
                   This is a new prospect — proceed without whitespace data
