@@ -26,7 +26,7 @@ import { rankDomains } from '../src/lib/domain-rank';
  * page, and the banner says so on screen so a screenshot cannot be mistaken for
  * a live check.
  *
- *   ?fixture=one|two|five|nofix|nowebsite|nulls|none|search   which account
+ *   ?fixture=one|two|nets|five|nofix|nowebsite|nulls|none|search   which account
  *   ?confirmed=1                        skip to the confirmed state
  *   ?haiku=1|0                          advisory annotations on/off (default: on)
  *   ?theme=light|dark
@@ -44,8 +44,16 @@ document.documentElement.setAttribute('data-theme', theme);
 // of the domain list and the Salesforce `Website`, and the card is now a function
 // of eight more columns besides.
 //
+// The line each row carries is a DESCRIPTION OF THE SITE as of 2026-08-26, not a
+// justification of the verdict, and every one below was measured by running
+// cloudflare-worker/scripts/describe-domain-options.mjs against the real domains.
+// None was written by hand: an invented description is a screenshot of a feature
+// that does not exist, and the one thing these images are for is showing that the
+// descriptions tell an account's domains apart.
+//
 // Each fixture exercises a different rule or a different edge:
 //   two      Entur AS -- rule 0 breaking a tie rules 1-3 cannot
+//   nets     Nets -- one passing, one wrong company, one unreachable
 //   five     HSBC -- rule 0 and rule 1 agreeing over five options
 //   one      Adyen -- one domain, and the confirm step still happens
 //   nofix    Government of the Netherlands -- a `Website` naming no domain on
@@ -57,18 +65,19 @@ document.documentElement.setAttribute('data-theme', theme);
 //            `—` while `dev_seats: 0` reads 0
 //   none     Roblox -- in the book with no domain at all
 //
-// The fixture that used to be here as `nets` is gone. It stood for "no `Website`
-// at all", which was every account in the book until the loader ran; load 11 has
-// since given Nets `www.nets.eu`, so it was documenting a state it no longer had.
-// Maersk Supply Service is one of the 20 active accounts where `website` is
-// genuinely null, and it is real.
+// `nets` is back, standing for something else. It used to mean "no `Website` at
+// all", which load 11 settled by giving Nets `www.nets.eu`; Maersk Supply Service
+// covers that state now and is one of the 20 active accounts where the column is
+// genuinely null. Nets returns as the three-verdict account: its own site, its
+// parent trading under another name, and a subdomain of the parent that serves
+// nothing. It is the account where the description does more than the chip.
 const LOADED_AT = '2026-08-26T07:52:08.733542+00:00';
 
 interface Fixture {
   label: string;
   candidate: WhitespaceCandidate;
   /** Fixture verdicts, keyed by domain. Absent means "couldn't check". */
-  verdicts: Record<string, { verdict: DomainVerdict; reason: string }>;
+  verdicts: Record<string, { verdict: DomainVerdict; description: string }>;
 }
 
 function candidate(over: Partial<WhitespaceCandidate>): WhitespaceCandidate {
@@ -126,7 +135,7 @@ const FIXTURES: Record<string, Fixture> = {
     verdicts: {
       'adyen.com': {
         verdict: 'looks_right',
-        reason: 'title reads “Adyen | The financial technology platform”',
+        description: 'Fintech platform for payments, data management, and financial products',
       },
     },
   },
@@ -135,10 +144,17 @@ const FIXTURES: Record<string, Fixture> = {
   //
   // Both are apex and both match the account name, so rule 1 and rule 2 tie and
   // ordering used to fall through to whatever came first out of DOMAINS__C --
-  // entur.org. The advisory check cannot break the tie either: it returns "looks
-  // right" for both, with the same sentence, because both genuinely are Entur's
-  // sites. That identical pair of reasons is why the reason line is now dropped
-  // when it does not distinguish the options.
+  // entur.org.
+  //
+  // The advisory check cannot break the tie either, and this is the account that
+  // proves it: entur.org 302s to https://entur.no/ and the two serve the
+  // byte-for-byte same page. Neither of them is a developer portal -- that is
+  // developer.entur.org, which the record does not hold. So no description could
+  // honestly separate these two by what the sites DO, and the check does not
+  // pretend to: it says the redirect, which is the real distinction. Both rows
+  // pass, neither carries a chip, and the lines read "Norway's national journey
+  // planner for public transport" and "Redirects to entur.no -- ...". An AE can
+  // see they are one site.
   //
   // Real record, verified in Sigma 2026-08-25: DOMAINS__C is
   // 'entur.org,entur.no' and Salesforce's Website is 'www.entur.no'.
@@ -166,11 +182,11 @@ const FIXTURES: Record<string, Fixture> = {
     verdicts: {
       'entur.no': {
         verdict: 'looks_right',
-        reason: 'title names Entur',
+        description: 'Norway\'s national journey planner for public transport',
       },
       'entur.org': {
         verdict: 'looks_right',
-        reason: 'title names Entur',
+        description: 'Redirects to entur.no — Norway\'s national journey planner for public transport',
       },
     },
   },
@@ -211,25 +227,76 @@ const FIXTURES: Record<string, Fixture> = {
     verdicts: {
       'hsbc.com': {
         verdict: 'looks_right',
-        reason: 'title reads “HSBC | Banking and financial services”',
+        description: 'HSBC Group corporate website and global banking services',
       },
-      // Measured against the real host: it has no DNS record at all, so the
-      // honest verdict is COULDNT_CHECK and not a finding about the page.
       'noexternalmail.hsbc.com': {
         verdict: 'couldnt_check',
-        reason: 'DNS did not resolve — no such host',
+        description: 'No such host — DNS did not resolve',
       },
       'hsbc.co.in': {
         verdict: 'looks_right',
-        reason: 'title reads “HSBC India”',
+        description: 'Redirects to hsbc.bank.in — HSBC India retail banking site',
       },
       'hsbc.com.cn': {
-        verdict: 'couldnt_check',
-        reason: 'HTTP 403',
+        verdict: 'looks_right',
+        description: 'HSBC China retail banking site with credit cards, wealth management, loans',
       },
       'hsbc.com.hk': {
         verdict: 'looks_right',
-        reason: 'title reads “HSBC Hong Kong”',
+        description: 'HSBC Hong Kong retail banking site offering accounts, insurance, credit cards',
+      },
+    },
+  },
+
+  // Three domains, three different answers -- the account the row rule was signed
+  // off against.
+  //
+  // nets.eu is Nets' own site and carries no chip. nexigroup.com is the Italian
+  // parent trading under its own name, which is the wrong-company case this whole
+  // feature exists for, and it is where the description does more than the chip:
+  // "different company" asserts, "Nexi Group, European paytech and Nets' parent
+  // company" explains. external.nexigroup.com has no DNS record at all.
+  //
+  // One measurement note, because the fixture would otherwise look wrong to
+  // anyone re-running the script: from Node, nets.eu fails as
+  // UNABLE_TO_VERIFY_LEAF_SIGNATURE -- the server omits its intermediate
+  // certificate and undici will not chase the AIA extension to find it. curl and
+  // every browser do, and so does the Workers runtime, so the deployed endpoint
+  // sees the page. The verdict below was measured against the real title and meta
+  // description, fetched with curl and handed to the same prompt.
+  nets: {
+    label: 'three domains, three verdicts',
+    candidate: candidate({
+      account_id: '001PX00000QVdcQYAT',
+      name: 'Nets',
+      arr: 36060,
+      sales_segment: 'MM',
+      region: 'UKINN',
+      billing_country: null,
+      account_owner: 'George Harding',
+      employees: 3351,
+      total_whitespace: 132786,
+      full_seats: 38,
+      dev_seats: 31,
+      website: 'www.nets.eu',
+      domains: ['external.nexigroup.com', 'nets.eu', 'nexigroup.com'],
+      primary_domain: 'external.nexigroup.com',
+      rank_tier: 1,
+      match: 'name_exact',
+      matched_on: 'name',
+    }),
+    verdicts: {
+      'nets.eu': {
+        verdict: 'looks_right',
+        description: 'Payment solutions and services for financial institutions and merchants',
+      },
+      'nexigroup.com': {
+        verdict: 'different_company',
+        description: 'Nexi Group, European paytech and Nets\' parent company',
+      },
+      'external.nexigroup.com': {
+        verdict: 'couldnt_check',
+        description: 'No such host — DNS did not resolve',
       },
     },
   },
@@ -261,24 +328,24 @@ const FIXTURES: Record<string, Fixture> = {
     }),
     verdicts: {
       'belastingdienst.nl': {
-        verdict: 'different_company',
-        reason: 'title reads “Belastingdienst” — the tax office',
+        verdict: 'looks_right',
+        description: 'Dutch tax authority portal for filings and tax information',
       },
       'ns.nl': {
         verdict: 'different_company',
-        reason: 'title reads “NS — Nederlandse Spoorwegen”',
+        description: 'Nederlandse Spoorwegen (NS), Dutch national railway operator',
       },
       'politie.nl': {
-        verdict: 'different_company',
-        reason: 'title reads “Politie”',
+        verdict: 'looks_right',
+        description: 'Dutch national police website with organizational and local bureau information',
       },
       'amsterdam.nl': {
-        verdict: 'different_company',
-        reason: 'title reads “Gemeente Amsterdam”',
+        verdict: 'couldnt_check',
+        description: 'No page returned — HTTP 403',
       },
       'uwv.nl': {
         verdict: 'different_company',
-        reason: 'title reads “UWV”',
+        description: 'UWV, the Dutch employee insurance agency',
       },
     },
   },
@@ -320,24 +387,24 @@ const FIXTURES: Record<string, Fixture> = {
     }),
     verdicts: {
       'visiblescm.com': {
-        verdict: 'different_company',
-        reason: 'title reads “Visible SCM”',
+        verdict: 'couldnt_check',
+        description: 'No page returned — nothing in 6s',
       },
       'mcicontainers.com': {
-        verdict: 'different_company',
-        reason: 'title reads “MCI — Maersk Container Industry”',
+        verdict: 'looks_right',
+        description: 'Maersk Container Industry — reefer containers and cold-chain logistics',
       },
       'kghcustoms.com': {
         verdict: 'different_company',
-        reason: 'title reads “KGH Customs Services”',
+        description: 'Redirects to maersk.com — KGH Customs rebranded as Maersk Customs Services',
       },
       'maerskdrilling.com': {
-        verdict: 'not_a_website',
-        reason: 'redirects to a PDF',
+        verdict: 'couldnt_check',
+        description: 'No such host — DNS did not resolve',
       },
       'b2ceurope.eu': {
-        verdict: 'couldnt_check',
-        reason: 'DNS did not resolve — no such host',
+        verdict: 'different_company',
+        description: 'Redirects to maersk.com — Maersk\'s e-commerce logistics service',
       },
     },
   },
@@ -372,13 +439,13 @@ const FIXTURES: Record<string, Fixture> = {
       matched_on: 'name',
     }),
     verdicts: {
-      'minfin.go.ao': {
-        verdict: 'looks_right',
-        reason: 'title names the Ministério das Finanças',
-      },
       'minfin.gov.ao': {
+        verdict: 'looks_right',
+        description: 'Angola\'s Finance Ministry official portal',
+      },
+      'minfin.go.ao': {
         verdict: 'couldnt_check',
-        reason: 'connection timed out',
+        description: 'No such host — DNS did not resolve',
       },
     },
   },
@@ -416,6 +483,7 @@ const SEARCH_CANDIDATES = [
   FIXTURES.nofix.candidate,
   FIXTURES.nowebsite.candidate,
   FIXTURES.two.candidate,
+  FIXTURES.nets.candidate,
   FIXTURES.one.candidate,
 ];
 
@@ -452,7 +520,7 @@ const stubFetcher = (async (path: string, init?: RequestInit) => {
     return jsonResponse({
       domain,
       verdict: hit?.verdict ?? 'couldnt_check',
-      reason: hit?.reason ?? 'no fixture verdict for this domain',
+      description: hit?.description ?? 'Not checked — no fixture verdict for this domain',
       page: null,
       latency_ms: 0,
     });

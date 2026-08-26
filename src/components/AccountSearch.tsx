@@ -3,7 +3,7 @@ import { Search, Check, Link, Shield, AlertTriangle, Clock, X, ExternalLink } fr
 import { workerFetch } from '../lib/supabase';
 import { parseDomainInput } from '../lib/domain';
 import { rankDomains, reasonText, type RankedDomain } from '../lib/domain-rank';
-import { displayName, possessive, formatMoney, formatCount } from '../lib/account-format';
+import { formatMoney, formatCount } from '../lib/account-format';
 import { salesforceAccountUrl } from '../lib/salesforce-url';
 
 /**
@@ -166,8 +166,18 @@ export type DomainVerdict = 'looks_right' | 'different_company' | 'not_a_website
 export interface DomainCheckResult {
   domain: string;
   verdict: DomainVerdict;
-  /** One line, from the model or from whatever went wrong. */
-  reason: string;
+  /**
+   * One line saying what the site IS — "Norway's national journey planner for
+   * public transport" — or, when the fetch failed, what happened instead.
+   *
+   * Not the ranking reason and not a justification of the verdict. Until
+   * 2026-08-26 this field held the latter, and on an account whose domains all
+   * pass it said the same thing about the name on every row while saying nothing
+   * about the sites the AE is actually choosing between. `reasonText()` from
+   * domain-rank is the ranking reason, it lives on the suggested row, and the
+   * two are unrelated.
+   */
+  description: string;
   page?: { title: string; description: string; status: number } | null;
   latency_ms?: number;
 }
@@ -363,49 +373,47 @@ const labelStyle: React.CSSProperties = {
 };
 
 /**
- * How each verdict reads.
+ * Which verdicts get a chip, and what it says.
  *
- * Reworded 2026-08-26, when the check went from opt-in to on by default. As an
- * annotation somebody switched on, "looks right" was a fair hedge. Shown to
- * every AE on every account it overclaims, because the evidence behind it is a
- * page title and a meta description and nothing else. So each label now says
- * what the check actually knows: that the page names this company, that it
- * names a different one, that it is not a website, or that it could not be
- * reached.
+ * `looks_right` gets none — that is the whole of this map's shape. A chip on
+ * every row costs the same attention whether it is a finding or not, and three
+ * green "Entur's site" chips down a list of three Entur domains is three chips
+ * carrying no information: the AE already knows which account they searched for.
+ * So the chip is now reserved for the rows with a problem, and its absence is
+ * how a row says it is fine.
  *
- * `looks_right` takes the account name because that is the whole content of the
- * finding — "Entur's site" is a claim a reader can check against the domain next
- * to it, and "looks right" is not. Long names fall back rather than overflow the
- * chip; the account name is on screen twice already by then.
+ * `not_a_website` is neutral rather than yellow for the same reason
+ * `couldnt_check` is: "this is a mail host" is a fact about the domain, not a
+ * warning about the company, and only `different_company` — the wrong-company
+ * case this feature exists for — earns a red.
+ *
+ * The description is printed on every row regardless, including the ones with no
+ * chip. It is the thing being chosen between.
  */
-const MAX_CHIP_NAME = 22;
-
-const VERDICT_STYLE: Record<DomainVerdict, {
-  label: (accountName: string) => string;
+const VERDICT_CHIP: Record<DomainVerdict, {
+  label: string;
   bg: string; fg: string; icon: typeof Check | null;
   /**
    * Overrides the border, which otherwise matches the fill and is invisible.
-   * Only `couldnt_check` sets it — see there. Every chip carries a 1px border
-   * either way so the four stay the same height.
+   * Only the neutral chips set it — see there. Every chip carries a 1px border
+   * either way so they stay the same height.
    */
   border?: string;
-}> = {
-  looks_right: {
-    label: (accountName) => {
-      const short = displayName(accountName);
-      return short.length <= MAX_CHIP_NAME
-        ? `${possessive(short)} site`
-        : 'this account’s site';
-    },
-    bg: 'var(--badge-green-bg)', fg: 'var(--badge-green-text)', icon: Check,
-  },
+} | null> = {
+  // No chip. The row passing is the default, and a default does not need a label.
+  looks_right: null,
   different_company: {
-    label: () => 'different company',
+    label: 'different company',
     bg: 'var(--badge-red-bg)', fg: 'var(--badge-red-text)', icon: AlertTriangle,
   },
+  // Neutral, and a hairline rather than a fill — same treatment as
+  // `couldnt_check`, and for the same collision: in light theme
+  // --badge-yellow-bg sits close enough to the surface to read as a smudge, and
+  // a filled warning colour overstated a domain that simply is not a website.
   not_a_website: {
-    label: () => 'not a website',
-    bg: 'var(--badge-yellow-bg)', fg: 'var(--badge-yellow-text)', icon: X,
+    label: 'not a website',
+    bg: 'transparent', fg: 'var(--badge-muted-text)', icon: X,
+    border: 'var(--chip-border)',
   },
   couldnt_check: {
     // No icon and no colour. "We could not ask" is not a finding, and dressing
@@ -417,7 +425,7 @@ const VERDICT_STYLE: Record<DomainVerdict, {
     // one step apart, so the only filled neutral chip in the component had no
     // visible edge and read as a grey smudge on the domain row. The border makes
     // it a chip; the muted text keeps it from reading as a finding.
-    label: () => 'couldn’t check',
+    label: 'couldn’t check',
     bg: 'transparent', fg: 'var(--badge-muted-text)', icon: null,
     border: 'var(--chip-border)',
   },
@@ -1018,7 +1026,7 @@ export default function AccountSearch({
           const result: DomainCheckResult = {
             domain,
             verdict,
-            reason: body?.reason || (verdict === 'couldnt_check' ? 'no reason given' : ''),
+            description: body?.description || (verdict === 'couldnt_check' ? 'No description given' : ''),
             page: body?.page ?? null,
             latency_ms: body?.latency_ms,
           };
@@ -1033,7 +1041,10 @@ export default function AccountSearch({
           // never recovers.
           setChecks(prev => ({
             ...prev,
-            [key]: { domain, verdict: 'couldnt_check', reason: err.message || 'the check could not be run', page: null },
+            [key]: {
+              domain, verdict: 'couldnt_check', page: null,
+              description: `Not checked — ${err.message || 'the check could not be run'}`,
+            },
           }));
         });
     }
@@ -1141,21 +1152,13 @@ export default function AccountSearch({
     const suggested = options[0];
     const suggestedReason = suggested ? reasonText(suggested) : null;
 
-    /**
-     * Whether the advisory check's one-line reason is worth printing.
-     *
-     * On Entur it was not: the record holds entur.org and entur.no, both are
-     * genuinely Entur's sites, and the check returned the same sentence for both.
-     * Two rows repeating one line is noise, and the verdict chip already carries
-     * the finding. So the reason is shown only when it actually separates the
-     * options — or when there is a single option, where there is nothing for it
-     * to be redundant with and it is the whole substance of the check.
-     */
-    const settledVerdicts = options
-      .map(o => checks[`${value.account_id}|${o.domain}`])
-      .filter((c): c is DomainCheckResult => !!c && c !== 'checking');
-    const showVerdictReason =
-      options.length === 1 || new Set(settledVerdicts.map(c => c.reason)).size > 1;
+    // There was a rule here that hid the check's one line when every option
+    // returned the same one. It was aimed at Entur — two domains, both Entur's,
+    // one identical sentence twice — and it removed the wrong half. What repeated
+    // on those rows was the chip and the name comparison behind it; the line is
+    // now a description of the SITE, which is precisely what tells entur.no from
+    // entur.org, and hiding it left the AE choosing between two bare domains.
+    // Every row prints its description, and no row is compared against another.
 
     return (
       <div ref={rootRef}>
@@ -1268,28 +1271,36 @@ export default function AccountSearch({
                           </div>
                         )}
                         {check && check !== 'checking' && (() => {
-                          const style = VERDICT_STYLE[check.verdict];
-                          const Icon = style.icon;
+                          const chip = VERDICT_CHIP[check.verdict];
+                          const Icon = chip?.icon;
                           return (
                             <div style={{
                               display: 'flex', alignItems: 'flex-start', gap: 5, marginTop: 4,
-                              fontSize: T.tiny, lineHeight: 1.5, color: style.fg,
+                              fontSize: T.tiny, lineHeight: 1.5,
                             }}>
-                              <span style={{
-                                display: 'inline-flex', alignItems: 'center', gap: 3,
-                                background: style.bg, color: style.fg, fontWeight: T.label,
-                                // Matches the fill unless the verdict overrides it, so
-                                // the coloured chips look unbordered and all four keep
-                                // the same height.
-                                border: `1px solid ${style.border ?? style.bg}`,
-                                padding: '2px 7px', borderRadius: T.pill, whiteSpace: 'nowrap',
-                                flexShrink: 0,
-                              }}>
-                                {Icon && <Icon size={10} />}
-                                {style.label(value.name)}
-                              </span>
-                              {check.reason && showVerdictReason && (
-                                <span style={{ color: 'var(--text-tertiary)' }}>{check.reason}</span>
+                              {chip && (
+                                <span style={{
+                                  display: 'inline-flex', alignItems: 'center', gap: 3,
+                                  background: chip.bg, color: chip.fg, fontWeight: T.label,
+                                  // Matches the fill unless the verdict overrides it, so
+                                  // the coloured chip looks unbordered and all three keep
+                                  // the same height.
+                                  border: `1px solid ${chip.border ?? chip.bg}`,
+                                  padding: '2px 7px', borderRadius: T.pill, whiteSpace: 'nowrap',
+                                  flexShrink: 0,
+                                }}>
+                                  {Icon && <Icon size={10} />}
+                                  {chip.label}
+                                </span>
+                              )}
+                              {/* --text-secondary, matching the account card's metric
+                                  labels. On tertiary this was the faintest thing on
+                                  screen, which is the wrong weight for the one line
+                                  that distinguishes two domains that both pass. */}
+                              {check.description && (
+                                <span style={{ color: 'var(--text-secondary)' }}>
+                                  {check.description}
+                                </span>
                               )}
                             </div>
                           );

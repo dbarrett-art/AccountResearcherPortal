@@ -49,25 +49,12 @@ export function formatLoadDate(iso: string | null | undefined): string | null {
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-/**
- * Strip a trailing legal suffix, for display only.
- *
- * Feeds the verdict chip, which reads "Entur's site" rather than "Entur AS's
- * site". Nothing matches, ranks or searches on the result — `normaliseName` in
- * the Worker's account-search.js is what does that, and this is deliberately not
- * a second copy of it. It is a possessive in a chip, and the cost of getting it
- * wrong is an awkward label, not a brief about the wrong company.
+/*
+ * `displayName()` and `possessive()` used to live here, feeding a green
+ * "Entur's site" chip on every domain row that passed the advisory check. That
+ * chip is gone as of 2026-08-26 — a passing row now carries no chip at all — and
+ * with it the only caller of either function. Deleted rather than left exported:
+ * the legal-suffix regex was a near-miss for `normaliseName` in the Worker's
+ * account-search.js, and an unused near-copy of the matching rules is exactly the
+ * thing that gets picked up by mistake later.
  */
-const LEGAL_SUFFIX = /[\s,]+(a\/s|as|ab|asa|oyj|aps|bv|nv|sa|se|ag|gmbh|plc|ltd|limited|inc|llc|corp|co|group|holdings|pte|kk)\.?$/i;
-
-export function displayName(name: string): string {
-  const trimmed = String(name || '').trim();
-  const stripped = trimmed.replace(LEGAL_SUFFIX, '').trim();
-  // Never strip to nothing: "AS", "Co" and "Group" are real account names.
-  return stripped.length >= 2 ? stripped : trimmed;
-}
-
-/** `Entur` -> `Entur's`, `Nets` -> `Nets'`. */
-export function possessive(name: string): string {
-  return /s$/i.test(name) ? `${name}\u2019` : `${name}\u2019s`;
-}

@@ -38,21 +38,30 @@ const OUT = resolve(flag('out', 'screenshots/domain-confirm'));
 /**
  * The matrix the sign-off asks for.
  *
- * `haiku` is now on by default, so it is no longer the axis it was — the
- * annotations are simply part of the card. It is captured OFF only where the
- * comparison is the point: the two-domain case, which is where the identical
- * reason line gets dropped, and the confirmed state, where the annotation is
- * gone from the screen anyway.
+ * `two` and `nets` are the two the 2026-08-26 row rule is signed off against.
+ * Entur is two rows that both pass, so neither carries a chip and the
+ * descriptions are the only thing separating them — which is the whole claim.
+ * Nets is one of each of the other three: passing, `different company`, and
+ * `couldn't check`, so the red chip and the two neutrals are visible side by
+ * side and can be checked against the surface behind them.
  *
- * The three edge fixtures are the reason the list is this long, and each one is a
- * real account: a `Website` naming no domain on the record (nofix), no `Website`
- * at all (nowebsite), null `employees` and `total_whitespace` so the card's `—`
+ * `haiku` is now on by default, so it is no longer the axis it was — the
+ * annotations are simply part of the card. It is captured OFF only in the
+ * confirmed state, where the annotation is gone from the screen anyway. The
+ * check-off two-domain shot that used to be here existed to show the identical
+ * reason line being dropped; that rule is deleted, so there is nothing for the
+ * comparison to show.
+ *
+ * The edge fixtures are the reason the list is this long, and each one is a real
+ * account: a `Website` naming no domain on the record (nofix), no `Website` at
+ * all (nowebsite), null `employees` and `total_whitespace` so the card's `—`
  * handling is visible (nulls), and a record with no domain at all (none).
  */
 const SHOTS = [
   { fixture: 'two',       confirmed: false, haiku: true },
-  { fixture: 'two',       confirmed: false, haiku: false },
   { fixture: 'two',       confirmed: true,  haiku: false },
+  { fixture: 'nets',      confirmed: false, haiku: true },
+  { fixture: 'nets',      confirmed: true,  haiku: false },
   { fixture: 'five',      confirmed: false, haiku: true },
   { fixture: 'five',      confirmed: true,  haiku: false },
   { fixture: 'nowebsite', confirmed: false, haiku: true },
