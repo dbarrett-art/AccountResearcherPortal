@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import Layout from '../components/Layout';
-import Banner from '../components/Banner';
 import usePageTitle from '../hooks/usePageTitle';
 import AccountSearch, { type AccountSelection } from '../components/AccountSearch';
 import { formatLoadDate } from '../lib/account-format';
@@ -246,12 +245,6 @@ export function AccountSearchPreviewBody({
           Preview
         </span>
       </div>
-
-      <Banner type="info" style={{ marginBottom: 16 }}>
-        The Submit page is unchanged and still uses free-text entry. Wiring this component
-        in is a separate task, pending sign-off on what you see here. This page cannot
-        start a run, spend a credit, or write anything.
-      </Banner>
 
       {/* The advisory-check switch used to be here. It is now on by default and
           its off-switch is in Admin → Preview — see lib/preview-settings. A
