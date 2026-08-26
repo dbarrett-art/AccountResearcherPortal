@@ -26,10 +26,11 @@ import { rankDomains } from '../src/lib/domain-rank';
  * page, and the banner says so on screen so a screenshot cannot be mistaken for
  * a live check.
  *
- *   ?fixture=one|two|five|nofix|nets|none|search   which account
+ *   ?fixture=one|two|five|nofix|nowebsite|nulls|none|search   which account
  *   ?confirmed=1                        skip to the confirmed state
- *   ?haiku=1                            advisory annotations on
+ *   ?haiku=1|0                          advisory annotations on/off (default: on)
  *   ?theme=light|dark
+ *   ?checkDelay=<ms>                     hold each /domain-check answer, to time the render
  */
 
 const params = new URLSearchParams(window.location.search);
@@ -38,13 +39,30 @@ document.documentElement.setAttribute('data-theme', theme);
 
 // ─── Fixtures ───────────────────────────────────────────────────────────────
 //
-// Real accounts, with the domain list and the Salesforce `Website` read off
-// Sigma on 2026-08-25 rather than invented, because the ranking these images
-// show is now a function of both. Each one exercises a different rule: Entur is
-// rule 0 breaking a tie rules 1-3 cannot; HSBC is rule 0 and rule 1 agreeing
-// over five options; Government of the Netherlands is a `Website` that names no
-// domain on the record, so rule 0 goes quiet; Nets has no `Website` at all,
-// which is every account in the book until the loader next runs.
+// Real accounts, every field read off `whitespace_accounts` at load 11 on
+// 2026-08-26 rather than invented -- the ranking these images show is a function
+// of the domain list and the Salesforce `Website`, and the card is now a function
+// of eight more columns besides.
+//
+// Each fixture exercises a different rule or a different edge:
+//   two      Entur AS -- rule 0 breaking a tie rules 1-3 cannot
+//   five     HSBC -- rule 0 and rule 1 agreeing over five options
+//   one      Adyen -- one domain, and the confirm step still happens
+//   nofix    Government of the Netherlands -- a `Website` naming no domain on
+//            the record, so rule 0 goes quiet
+//   nowebsite Maersk Supply Service -- no `Website` at all, five domains, none
+//            of them matching the name. Rule 3 alone: raw record order.
+//   nulls    Ministério DAS Finanças Angola -- `employees` and
+//            `total_whitespace` both null, so two of the card's figures read
+//            `—` while `dev_seats: 0` reads 0
+//   none     Roblox -- in the book with no domain at all
+//
+// The fixture that used to be here as `nets` is gone. It stood for "no `Website`
+// at all", which was every account in the book until the loader ran; load 11 has
+// since given Nets `www.nets.eu`, so it was documenting a state it no longer had.
+// Maersk Supply Service is one of the 20 active accounts where `website` is
+// genuinely null, and it is real.
+const LOADED_AT = '2026-08-26T07:52:08.733542+00:00';
 
 interface Fixture {
   label: string;
@@ -63,6 +81,11 @@ function candidate(over: Partial<WhitespaceCandidate>): WhitespaceCandidate {
     billing_country: null,
     total_whitespace: null,
     website: null,
+    account_owner: null,
+    employees: null,
+    full_seats: null,
+    dev_seats: null,
+    loaded_at: LOADED_AT,
     domains: [],
     primary_domain: null,
     rank_tier: 1,
@@ -84,10 +107,15 @@ const FIXTURES: Record<string, Fixture> = {
     candidate: candidate({
       account_id: '0013u00001GOvzVAAT',
       name: 'Adyen',
-      arr: 639240,
+      arr: 837360,
       sales_segment: 'MM',
       region: 'UKINN',
       billing_country: 'Netherlands',
+      account_owner: 'Sofia Ioana Ianas',
+      employees: 4345,
+      total_whitespace: 644820,
+      full_seats: 536,
+      dev_seats: 242,
       website: 'www.adyen.com',
       domains: ['adyen.com'],
       primary_domain: 'adyen.com',
@@ -119,10 +147,15 @@ const FIXTURES: Record<string, Fixture> = {
     candidate: candidate({
       account_id: '0013u00001GP1HQAA1',
       name: 'Entur AS',
-      arr: 38940,
+      arr: 58020,
       sales_segment: 'MM',
       region: 'UKINN',
       billing_country: 'Norway',
+      account_owner: 'George Harding',
+      employees: 227,
+      total_whitespace: 49482,
+      full_seats: 69,
+      dev_seats: 36,
       website: 'www.entur.no',
       domains: ['entur.org', 'entur.no'],
       primary_domain: 'entur.org',
@@ -153,10 +186,15 @@ const FIXTURES: Record<string, Fixture> = {
     candidate: candidate({
       account_id: '0013u00001GOvOtAAL',
       name: 'HSBC',
-      arr: 901260,
-      sales_segment: 'Ent',
+      arr: 2347860,
+      sales_segment: 'Strat',
       region: 'UKINN',
       billing_country: 'United Kingdom',
+      account_owner: 'Seán Feehan',
+      employees: 208844,
+      total_whitespace: 2998741.02,
+      full_seats: 949,
+      dev_seats: 1760,
       website: 'www.hsbc.com',
       domains: [
         'noexternalmail.hsbc.com',
@@ -205,10 +243,15 @@ const FIXTURES: Record<string, Fixture> = {
     candidate: candidate({
       account_id: '0013u00001ctdluAAA',
       name: 'Government of the Netherlands',
-      arr: 770580,
+      arr: 1075353,
       sales_segment: 'Ent',
       region: 'UKINN',
       billing_country: 'Netherlands',
+      account_owner: 'Eleanor Davies',
+      employees: 13000,
+      total_whitespace: 1524123.45,
+      full_seats: 901,
+      dev_seats: 351,
       website: 'www.government.nl',
       domains: ['belastingdienst.nl', 'ns.nl', 'politie.nl', 'amsterdam.nl', 'uwv.nl'],
       primary_domain: 'belastingdienst.nl',
@@ -240,33 +283,102 @@ const FIXTURES: Record<string, Fixture> = {
     },
   },
 
-  // Rule 2 alone, with no website at all -- which is every account in the book
-  // until the whitespace loader runs again. The fallback has to look exactly as
-  // it did before rule 0 existed.
-  nets: {
-    label: 'no website — rule 2 alone',
+  // No `Website` at all -- one of the 20 active accounts where the column is
+  // genuinely null. Rule 0 goes quiet, and none of the five domains contains the
+  // account name either, so rule 2 has nothing to say and the order is rule 3:
+  // the record's own. That fallback has to look exactly as it did before rule 0
+  // existed, and this is the account that shows it.
+  //
+  // Replaces the old `nets` fixture, which stood for the same state until load 11
+  // gave Nets `www.nets.eu`.
+  nowebsite: {
+    label: 'no Salesforce website — rule 3 alone',
     candidate: candidate({
-      account_id: '0011t00000B2NetsA',
-      name: 'Nets A/S',
-      arr: 318000,
-      sales_segment: 'Ent',
-      region: 'UKINN',
-      billing_country: 'Denmark',
+      account_id: '0013u00001ctfoYAAQ',
+      name: 'Maersk Supply Service',
+      arr: 0,
+      sales_segment: 'MM',
+      region: 'APAC',
+      billing_country: null,
+      account_owner: 'Timothy Beriau',
+      employees: 1350,
+      total_whitespace: 5220,
+      full_seats: 0,
+      dev_seats: 0,
       website: null,
-      domains: ['nexigroup.com', 'nets.eu'],
-      primary_domain: 'nexigroup.com',
+      domains: [
+        'visiblescm.com',
+        'mcicontainers.com',
+        'kghcustoms.com',
+        'maerskdrilling.com',
+        'b2ceurope.eu',
+      ],
+      primary_domain: 'visiblescm.com',
       rank_tier: 1,
       match: 'name_exact',
       matched_on: 'name',
     }),
     verdicts: {
-      'nets.eu': {
-        verdict: 'looks_right',
-        reason: 'title reads “Nets – Payments, cards and digital identity”',
-      },
-      'nexigroup.com': {
+      'visiblescm.com': {
         verdict: 'different_company',
-        reason: 'title reads “Nexi Group — European PayTech”',
+        reason: 'title reads “Visible SCM”',
+      },
+      'mcicontainers.com': {
+        verdict: 'different_company',
+        reason: 'title reads “MCI — Maersk Container Industry”',
+      },
+      'kghcustoms.com': {
+        verdict: 'different_company',
+        reason: 'title reads “KGH Customs Services”',
+      },
+      'maerskdrilling.com': {
+        verdict: 'not_a_website',
+        reason: 'redirects to a PDF',
+      },
+      'b2ceurope.eu': {
+        verdict: 'couldnt_check',
+        reason: 'DNS did not resolve — no such host',
+      },
+    },
+  },
+
+  // Null metrics. `employees` is null on 1,251 active accounts and
+  // `total_whitespace` on 3,026; this row has both, so those two figures read `—`
+  // while `dev_seats: 0` reads 0. That difference is the whole point of the
+  // fixture: one says nobody has measured, the other says somebody measured and
+  // found none.
+  nulls: {
+    label: 'null employee and whitespace figures',
+    candidate: candidate({
+      account_id: '001PX000001bwksYAA',
+      name: 'Ministério DAS Finanças Angola',
+      arr: 25287,
+      sales_segment: 'SMB',
+      region: 'South EMEA',
+      billing_country: null,
+      account_owner: 'Justine Belh',
+      employees: null,
+      total_whitespace: null,
+      full_seats: 20,
+      dev_seats: 0,
+      // Salesforce names minfin.go.ao, the record's first entry is minfin.gov.ao.
+      // Rule 0 fires on the second and moves it up, which is the rule doing its
+      // job on an account nobody would have looked at twice.
+      website: 'www.minfin.go.ao',
+      domains: ['minfin.gov.ao', 'minfin.go.ao'],
+      primary_domain: 'minfin.gov.ao',
+      rank_tier: 1,
+      match: 'name_exact',
+      matched_on: 'name',
+    }),
+    verdicts: {
+      'minfin.go.ao': {
+        verdict: 'looks_right',
+        reason: 'title names the Ministério das Finanças',
+      },
+      'minfin.gov.ao': {
+        verdict: 'couldnt_check',
+        reason: 'connection timed out',
       },
     },
   },
@@ -276,12 +388,21 @@ const FIXTURES: Record<string, Fixture> = {
   none: {
     label: 'no domain on record',
     candidate: candidate({
-      account_id: '0011t00000D4NoDom',
-      name: 'Rijksoverheid (Belastingdienst)',
+      account_id: '001PX00000ofFZNYA2',
+      name: 'Roblox',
       arr: 0,
-      sales_segment: 'Public Sector',
-      region: 'EMEA West',
-      billing_country: 'Netherlands',
+      sales_segment: 'Unassigned',
+      region: 'Program Manager',
+      billing_country: null,
+      account_owner: 'Jono Loeser',
+      // Both null on this row, so three of the four metrics read `—` and only
+      // ARR and the seat counts read 0. A card of em dashes on an account with
+      // nothing to confirm is the honest picture.
+      employees: null,
+      total_whitespace: null,
+      full_seats: 0,
+      dev_seats: 0,
+      website: null,
       domains: [],
       primary_domain: null,
     }),
@@ -293,7 +414,7 @@ const FIXTURES: Record<string, Fixture> = {
 const SEARCH_CANDIDATES = [
   FIXTURES.five.candidate,
   FIXTURES.nofix.candidate,
-  FIXTURES.nets.candidate,
+  FIXTURES.nowebsite.candidate,
   FIXTURES.two.candidate,
   FIXTURES.one.candidate,
 ];
@@ -311,12 +432,20 @@ const fixtureName = params.get('fixture') || 'five';
 const fixture: Fixture | undefined = FIXTURES[fixtureName];
 
 /**
- * Stands in for `workerFetch`. Resolves immediately, so a screenshot never
- * catches a half-painted list — the "checking…" state is real in the app and is
- * simply not what these images are for.
+ * How long the stub takes to answer /domain-check, in ms.
+ *
+ * 0 by default, so a screenshot never catches a half-painted list — the
+ * "checking…" state is real in the app and is simply not what those images are
+ * for. scripts/measure-card-render.mjs sets it to the figure measured against
+ * the real endpoint, to time the card's render against a check that is genuinely
+ * slow rather than against an instant one.
  */
+const CHECK_DELAY_MS = parseInt(params.get('checkDelay') || '0', 10) || 0;
+
+/** Stands in for `workerFetch`. */
 const stubFetcher = (async (path: string, init?: RequestInit) => {
   if (path.startsWith('/domain-check')) {
+    if (CHECK_DELAY_MS > 0) await new Promise(r => setTimeout(r, CHECK_DELAY_MS));
     const body = JSON.parse(String(init?.body || '{}')) as { domain?: string };
     const domain = body.domain || '';
     const hit = fixture?.verdicts[domain];
@@ -379,7 +508,10 @@ createRoot(document.getElementById('root')!).render(
     </div>
     <AccountSearchPreviewBody
       fetcher={stubFetcher}
-      initialDomainCheck={params.get('haiku') === '1'}
+      // On unless explicitly turned off, matching the component's own default.
+      // The harness passes it rather than reading Admin's localStorage key so a
+      // screenshot never depends on what the browser profile happens to hold.
+      initialDomainCheck={params.get('haiku') !== '0'}
       initialSelection={selection}
     />
   </div>,

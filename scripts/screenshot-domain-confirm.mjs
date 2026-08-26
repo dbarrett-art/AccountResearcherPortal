@@ -36,35 +36,42 @@ const BASE = flag('base', 'http://localhost:5173/AccountResearcherPortal/harness
 const OUT = resolve(flag('out', 'screenshots/domain-confirm'));
 
 /**
- * The matrix the sign-off asks for: one, two and five domains, each unconfirmed
- * and confirmed, with the advisory check off and on — plus the three states that
- * only exist at the edges (a `Website` naming no domain on the record, a record
- * with no `Website` at all, and a record with no domain at all) and the candidate
- * dropdown.
+ * The matrix the sign-off asks for.
  *
- * `confirmed` shots are captured with the check off: once the domain is
- * confirmed the annotation is gone from the screen, so a confirmed × haiku
- * variant would be the same image twice.
+ * `haiku` is now on by default, so it is no longer the axis it was — the
+ * annotations are simply part of the card. It is captured OFF only where the
+ * comparison is the point: the two-domain case, which is where the identical
+ * reason line gets dropped, and the confirmed state, where the annotation is
+ * gone from the screen anyway.
+ *
+ * The three edge fixtures are the reason the list is this long, and each one is a
+ * real account: a `Website` naming no domain on the record (nofix), no `Website`
+ * at all (nowebsite), null `employees` and `total_whitespace` so the card's `—`
+ * handling is visible (nulls), and a record with no domain at all (none).
  */
 const SHOTS = [
-  { fixture: 'one',    confirmed: false, haiku: false },
-  { fixture: 'one',    confirmed: false, haiku: true },
-  { fixture: 'one',    confirmed: true,  haiku: false },
-  { fixture: 'two',    confirmed: false, haiku: false },
-  { fixture: 'two',    confirmed: false, haiku: true },
-  { fixture: 'two',    confirmed: true,  haiku: false },
-  { fixture: 'five',   confirmed: false, haiku: false },
-  { fixture: 'five',   confirmed: false, haiku: true },
-  { fixture: 'five',   confirmed: true,  haiku: false },
-  { fixture: 'nofix',  confirmed: false, haiku: false },
-  { fixture: 'nofix',  confirmed: false, haiku: true },
-  { fixture: 'nets',   confirmed: false, haiku: false },
-  { fixture: 'nets',   confirmed: false, haiku: true },
-  { fixture: 'none',   confirmed: false, haiku: false },
-  { fixture: 'search', confirmed: false, haiku: false, type: 'hsbc' },
+  { fixture: 'two',       confirmed: false, haiku: true },
+  { fixture: 'two',       confirmed: false, haiku: false },
+  { fixture: 'two',       confirmed: true,  haiku: false },
+  { fixture: 'five',      confirmed: false, haiku: true },
+  { fixture: 'five',      confirmed: true,  haiku: false },
+  { fixture: 'nowebsite', confirmed: false, haiku: true },
+  { fixture: 'nulls',     confirmed: false, haiku: true },
+  { fixture: 'nulls',     confirmed: true,  haiku: false },
+  { fixture: 'one',       confirmed: false, haiku: true },
+  { fixture: 'one',       confirmed: true,  haiku: false },
+  { fixture: 'nofix',     confirmed: false, haiku: true },
+  { fixture: 'none',      confirmed: false, haiku: true },
+  { fixture: 'search',    confirmed: false, haiku: true, type: 'hsbc' },
 ];
 
-const THEMES = ['light', 'dark'];
+/**
+ * Dark first, and not as a formality. `--bg-app: #0f0f0f` is the `:root` value
+ * and light is the `[data-theme="light"]` override, so dark is what the app is
+ * and light is the variant. Reviewing light first is how a card ends up with
+ * borders that vanish against #0f0f0f.
+ */
+const THEMES = ['dark', 'light'];
 
 mkdirSync(OUT, { recursive: true });
 
@@ -84,7 +91,9 @@ try {
       url.searchParams.set('fixture', shot.fixture);
       url.searchParams.set('theme', theme);
       if (shot.confirmed) url.searchParams.set('confirmed', '1');
-      if (shot.haiku) url.searchParams.set('haiku', '1');
+      // The harness defaults the check ON, so what has to be said explicitly is
+      // the OFF case. Inverted from how this read when the check was opt-in.
+      url.searchParams.set('haiku', shot.haiku ? '1' : '0');
 
       await page.goto(url.href, { waitUntil: 'networkidle0' });
 
