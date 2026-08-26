@@ -109,13 +109,39 @@ too. Prefer an unfilled chip to picking a fill that nearly collides.
 
 The advisory page check is **on by default**. It calls the Worker's `POST /domain-check`,
 which fetches the domain's root URL, reads the `<title>` and meta description, and asks
-Haiku whether the page presents itself as that company. It annotates options and never
-picks, reorders, or blocks; a fetch or model failure reads "couldn't check" and never a
-guess. Verdicts read `<Account>'s site` / `different company` / `not a website` /
-`couldn't check` — "looks right" was a fair hedge for something you switched on and
-overclaims as a default. The one-line reason is dropped when it is identical across every
-option (Entur returns the same sentence for both of its domains) and kept where it
-distinguishes one.
+Haiku whether the page presents itself as that company and what the site is. It annotates
+options and never picks, reorders, or blocks; a fetch or model failure reads "couldn't
+check" and never a guess.
+
+**One rule per row, applied without comparing the options** (2026-08-26):
+
+| verdict | chip | description |
+|---|---|---|
+| passes | **none** | shown |
+| `different_company` | red | shown |
+| `not_a_website` | neutral hairline | shown |
+| `couldnt_check` | neutral hairline | shown |
+
+A passing row carries no chip, and its ABSENCE is how the row says it is fine. The green
+`<Account>'s site` chip that used to sit on every one of them was three chips down a list
+of three Entur domains carrying nothing the AE did not already know — they searched for the
+account. `not a website` is neutral, not yellow: "this is a mail host" is a fact about the
+domain, not a warning about the company, and only the wrong-company case earns a red.
+
+**The description always shows**, on `--text-secondary` (matching the card's metric
+labels), and it describes the SITE — "Norway's national journey planner for public
+transport", not "title names Entur". It is what the AE is choosing between: on Entur both
+domains pass and the description is the only thing separating them. The rule that used to
+hide it when every option returned the same line is gone — it was aimed at Entur and
+removed the wrong half, leaving two bare domains.
+
+The **ranking** reason (`suggested · Salesforce website`) is a different thing on a
+different row: it sits on the suggested option, describes the ranking, and is unaffected by
+the verdict.
+
+`AccountSearch.domain-rows.test.tsx` locks all of it, in both directions — the three
+problem chips present and the green one absent, because a test asserting only the former
+would pass with the latter restored.
 
 Measured: five domains in parallel resolve in 1.2–1.8s (Worker repo's
 `scripts/measure-domain-check-latency.mjs`), and the card plus domain list paint at a
