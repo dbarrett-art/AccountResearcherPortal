@@ -161,11 +161,39 @@ export interface LockedAccountSelection {
  * page title and a meta description is not good enough to outrank a person who
  * knows the account.
  */
-export type DomainVerdict = 'looks_right' | 'different_company' | 'not_a_website' | 'couldnt_check';
+export type DomainVerdict =
+  | 'looks_right'
+  /**
+   * A real site belonging to the account's corporate group but not to the
+   * account — its parent, a company it owns, or a sibling brand.
+   *
+   * Added 2026-08-26. Not a softer `different_company`: it is the answer the
+   * four-verdict set had no slot for, and the slot's absence is what made these
+   * rows flip. `nexigroup.com` on Nets is this — Nexi bought Nets in 2021 — and
+   * `entur.no` on Accenture is still `different_company`, because those two are
+   * strangers.
+   *
+   * Still the wrong domain to research. A brief titled Nets that describes an
+   * Italian payments company is broken whichever chip sat next to the row.
+   */
+  | 'related_company'
+  | 'different_company'
+  | 'not_a_website'
+  | 'couldnt_check';
+
+/**
+ * Which way the relationship runs, on `related_company` and nothing else.
+ *
+ * Read for the chip's wording and for nothing else. `unclear` is a real value —
+ * "in the group, direction not established" — and not a missing answer.
+ */
+export type DomainRelation = 'parent' | 'subsidiary' | 'sibling' | 'unclear';
 
 export interface DomainCheckResult {
   domain: string;
   verdict: DomainVerdict;
+  /** Null on every verdict except `related_company`. */
+  relation?: DomainRelation | null;
   /**
    * One line saying what the site IS — "Norway's national journey planner for
    * public transport" — or, when the fetch failed, what happened instead.
@@ -321,8 +349,32 @@ const MATCH_LABEL: Record<MatchTier, string> = {
  * is treated as "couldn't check" rather than mapped to the nearest match.
  */
 const VERDICT_ORDER: DomainVerdict[] = [
-  'looks_right', 'different_company', 'not_a_website', 'couldnt_check',
+  'looks_right', 'related_company', 'different_company', 'not_a_website', 'couldnt_check',
 ];
+
+/**
+ * The relation allowlist, used the same way: a value outside it becomes
+ * `unclear` rather than being printed, so a Worker that grows a sixth relation
+ * cannot put an unrecognised word in a chip.
+ */
+const RELATION_ORDER: DomainRelation[] = ['parent', 'subsidiary', 'sibling', 'unclear'];
+
+/**
+ * What the caution chip says, per relation.
+ *
+ * The wording is the whole reason `relation` is carried. "related company" is
+ * true of all four and useful for none of them: an AE choosing between domains
+ * needs to know that nexigroup.com is Nets' PARENT, because that tells them the
+ * brief would come out about the group rather than about a stranger. `unclear`
+ * falls back to the generic label, which is the honest thing to print when the
+ * direction was not established.
+ */
+const RELATION_LABEL: Record<DomainRelation, string> = {
+  parent: 'parent company',
+  subsidiary: 'subsidiary',
+  sibling: 'sibling brand',
+  unclear: 'related company',
+};
 
 /**
  * The portal's own values, not this component's.
@@ -384,8 +436,16 @@ const labelStyle: React.CSSProperties = {
  *
  * `not_a_website` is neutral rather than yellow for the same reason
  * `couldnt_check` is: "this is a mail host" is a fact about the domain, not a
- * warning about the company, and only `different_company` — the wrong-company
- * case this feature exists for — earns a red.
+ * warning about the company. Two verdicts earn a coloured fill, and they are the
+ * two that say the AE is looking at the wrong company: `different_company` in
+ * red, and `related_company` — added 2026-08-26 — in amber.
+ *
+ * Amber and not a third neutral, because a parent's domain is a mistake and not
+ * a fact. Amber and not red, because it is a different mistake: the AE is inside
+ * the right corporate group and has picked the wrong entity in it, which is a
+ * recoverable step rather than a wrong record. Neither of them is ever the
+ * suggested option — the suggestion comes from `rankDomains` and has never read
+ * a verdict, which is why this task changed no ranking code.
  *
  * The description is printed on every row regardless, including the ones with no
  * chip. It is the thing being chosen between.
@@ -402,6 +462,31 @@ const VERDICT_CHIP: Record<DomainVerdict, {
 } | null> = {
   // No chip. The row passing is the default, and a default does not need a label.
   looks_right: null,
+  /**
+   * Amber, filled, with a warning icon — the `different_company` treatment in a
+   * different hue, because that is where this belongs. An AE picking a parent's
+   * domain is still making a mistake; it is an understandable one rather than an
+   * absurd one, and the chip has to read as caution rather than as information.
+   *
+   * The label here is a placeholder and is overridden per row from `relation` —
+   * see `chipFor`. It reads "related company", which is what `unclear`
+   * legitimately resolves to, so a row that somehow reached this map without a
+   * relation still says something true.
+   *
+   * Filled rather than the hairline used by `not_a_website` and
+   * `couldnt_check`. Those two are neutral because they are facts about a domain
+   * rather than warnings about a company; this one is a warning. The border is
+   * set to the text colour instead of matching the fill, which is the one
+   * departure from `different_company`'s styling and is deliberate: in light
+   * theme --badge-yellow-bg is #fefce8 against a --bg-surface of #f5f4f0, close
+   * enough that a fill alone reads as a smudge — the collision already
+   * documented on --badge-muted-bg. The amber edge is what makes it a chip.
+   */
+  related_company: {
+    label: RELATION_LABEL.unclear,
+    bg: 'var(--badge-yellow-bg)', fg: 'var(--badge-yellow-text)', icon: AlertTriangle,
+    border: 'var(--badge-yellow-text)',
+  },
   different_company: {
     label: 'different company',
     bg: 'var(--badge-red-bg)', fg: 'var(--badge-red-text)', icon: AlertTriangle,
@@ -430,6 +515,28 @@ const VERDICT_CHIP: Record<DomainVerdict, {
     border: 'var(--chip-border)',
   },
 };
+
+/**
+ * The chip for one check result, with its label resolved.
+ *
+ * Exists so the row does not do two lookups. `VERDICT_CHIP` holds the shape and
+ * the colours — it is the allowlist, and a verdict missing from it is a bug — and
+ * this puts the relation's wording on top for the one verdict that carries one.
+ *
+ * A `related_company` with no relation, or one the Worker invented, resolves to
+ * `unclear`. That is a real answer rather than a hole: the verdict already says
+ * the page is in the group, and the direction is the part that can legitimately
+ * be unknown. Dropping the chip because the direction was missing would hide a
+ * finding to keep a label tidy.
+ */
+function chipFor(check: DomainCheckResult) {
+  const chip = VERDICT_CHIP[check.verdict];
+  if (!chip || check.verdict !== 'related_company') return chip;
+  const relation = check.relation && RELATION_ORDER.includes(check.relation)
+    ? check.relation
+    : 'unclear';
+  return { ...chip, label: RELATION_LABEL[relation] };
+}
 
 /**
  * One categorical label. Segment, region, employees.
@@ -1026,6 +1133,14 @@ export default function AccountSearch({
           const result: DomainCheckResult = {
             domain,
             verdict,
+            // Only meaningful on related_company, and only if it is one of the
+            // four the chip knows how to say. Anything else is dropped here
+            // rather than at the chip, so the value in state is always one the
+            // component can render.
+            relation: verdict === 'related_company'
+              && RELATION_ORDER.includes(body?.relation as DomainRelation)
+              ? body!.relation as DomainRelation
+              : null,
             description: body?.description || (verdict === 'couldnt_check' ? 'No description given' : ''),
             page: body?.page ?? null,
             latency_ms: body?.latency_ms,
@@ -1271,7 +1386,7 @@ export default function AccountSearch({
                           </div>
                         )}
                         {check && check !== 'checking' && (() => {
-                          const chip = VERDICT_CHIP[check.verdict];
+                          const chip = chipFor(check);
                           const Icon = chip?.icon;
                           return (
                             <div style={{

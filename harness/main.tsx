@@ -5,6 +5,7 @@ import {
   type AccountSelection,
   type WhitespaceCandidate,
   type DomainVerdict,
+  type DomainRelation,
 } from '../src/components/AccountSearch';
 import { rankDomains } from '../src/lib/domain-rank';
 
@@ -77,7 +78,12 @@ interface Fixture {
   label: string;
   candidate: WhitespaceCandidate;
   /** Fixture verdicts, keyed by domain. Absent means "couldn't check". */
-  verdicts: Record<string, { verdict: DomainVerdict; description: string }>;
+  verdicts: Record<string, {
+    verdict: DomainVerdict;
+    /** On `related_company` only. Drives the chip's wording. */
+    relation?: DomainRelation;
+    description: string;
+  }>;
 }
 
 function candidate(over: Partial<WhitespaceCandidate>): WhitespaceCandidate {
@@ -265,7 +271,7 @@ const FIXTURES: Record<string, Fixture> = {
   // sees the page. The verdict below was measured against the real title and meta
   // description, fetched with curl and handed to the same prompt.
   nets: {
-    label: 'three domains, three verdicts',
+    label: 'three domains, three verdicts — including the parent',
     candidate: candidate({
       account_id: '001PX00000QVdcQYAT',
       name: 'Nets',
@@ -290,9 +296,20 @@ const FIXTURES: Record<string, Fixture> = {
         verdict: 'looks_right',
         description: 'Payment solutions and services for financial institutions and merchants',
       },
+      // The fifth verdict, measured 2026-08-26 through
+      // cloudflare-worker/scripts/repeat-domain-check.mjs: related_company /
+      // parent, five reps out of five. It was different_company until then, and
+      // that was wrong in a specific way — Nexi acquired Nets in 2021, so this
+      // page is the parent's, not a stranger's. Still the wrong domain to
+      // research, which is why it keeps a chip and the chip reads as caution.
+      //
+      // The description no longer ends "and Nets' parent company". The chip says
+      // "parent company" now, and spending four of the twelve words repeating it
+      // was four words not spent on what the site is.
       'nexigroup.com': {
-        verdict: 'different_company',
-        description: 'Nexi Group, European paytech and Nets\' parent company',
+        verdict: 'related_company',
+        relation: 'parent',
+        description: 'Nexi — European payments and digital transaction technology',
       },
       'external.nexigroup.com': {
         verdict: 'couldnt_check',
@@ -520,6 +537,7 @@ const stubFetcher = (async (path: string, init?: RequestInit) => {
     return jsonResponse({
       domain,
       verdict: hit?.verdict ?? 'couldnt_check',
+      relation: hit?.relation ?? null,
       description: hit?.description ?? 'Not checked — no fixture verdict for this domain',
       page: null,
       latency_ms: 0,

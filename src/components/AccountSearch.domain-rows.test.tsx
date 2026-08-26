@@ -68,13 +68,16 @@ const NETS: WhitespaceCandidate = {
  * Anything not in the table comes back `couldnt_check`, which is what the
  * endpoint does too.
  */
-function fetcherFor(table: Record<string, { verdict: DomainVerdict; description: string }>) {
+type CheckRow = { verdict: DomainVerdict; description: string; relation?: string | null };
+
+function fetcherFor(table: Record<string, CheckRow>) {
   return (async (_path: string, init?: RequestInit) => {
     const body = JSON.parse(String(init?.body || '{}')) as { domain?: string };
     const hit = table[body.domain || ''];
     return new Response(JSON.stringify({
       domain: body.domain,
       verdict: hit?.verdict ?? 'couldnt_check',
+      relation: hit?.relation ?? null,
       description: hit?.description ?? 'No such host — DNS did not resolve',
       page: null,
     }), { status: 200, headers: { 'Content-Type': 'application/json' } });
@@ -96,7 +99,7 @@ function selectionFor(candidate: WhitespaceCandidate): AccountSelection {
 
 const renderPicker = (
   candidate: WhitespaceCandidate,
-  table: Record<string, { verdict: DomainVerdict; description: string }>,
+  table: Record<string, CheckRow>,
 ) => render(
   <AccountSearch
     label="Company"
@@ -114,7 +117,14 @@ const ENTUR_CHECKS = {
 
 const NETS_CHECKS = {
   'nets.eu': { verdict: 'looks_right' as const, description: 'Payment solutions and services for financial institutions and merchants' },
-  'nexigroup.com': { verdict: 'different_company' as const, description: "Nexi Group, European paytech and Nets' parent company" },
+  // Measured through the endpoint 2026-08-26, five reps out of five:
+  // related_company / parent. Nexi acquired Nets in 2021, so this was never a
+  // different company — it is the case the fifth verdict exists for. The
+  // description no longer restates the relationship, because the chip says it.
+  'nexigroup.com': {
+    verdict: 'related_company' as const, relation: 'parent',
+    description: 'Nexi — European payments and digital transaction technology',
+  },
   'external.nexigroup.com': { verdict: 'couldnt_check' as const, description: 'No such host — DNS did not resolve' },
 };
 
@@ -135,6 +145,9 @@ describe('a row that passes', () => {
     expect(screen.queryByText('different company')).toBeNull();
     expect(screen.queryByText('not a website')).toBeNull();
     expect(screen.queryByText('couldn’t check')).toBeNull();
+    // Nor the fifth. A passing row carries no chip of any kind.
+    expect(screen.queryByText('parent company')).toBeNull();
+    expect(screen.queryByText('related company')).toBeNull();
   });
 
   test('a description repeated across every option is still shown on both rows', async () => {
@@ -150,21 +163,88 @@ describe('a row that passes', () => {
 });
 
 describe('a row with a problem', () => {
-  test('Nets: one passing, one different company, one couldn’t check', async () => {
+  test('Nets: one passing, one parent company, one couldn’t check', async () => {
     renderPicker(NETS, NETS_CHECKS);
 
+    // The chip names the RELATION, not the verdict. "related company" would be
+    // true of all four directions and useful for none of them — the AE choosing
+    // between nets.eu and nexigroup.com needs to know which way it runs.
     await waitFor(() => {
-      expect(screen.getByText('different company')).toBeTruthy();
+      expect(screen.getByText('parent company')).toBeTruthy();
     });
     expect(screen.getByText('couldn’t check')).toBeTruthy();
     // Exactly one of each: nets.eu is the passing row and contributes no chip.
-    expect(screen.getAllByText('different company')).toHaveLength(1);
+    expect(screen.getAllByText('parent company')).toHaveLength(1);
     expect(screen.getAllByText('couldn’t check')).toHaveLength(1);
+    // And it is not the fourth verdict wearing a new name.
+    expect(screen.queryByText('different company')).toBeNull();
 
     // All three descriptions, including the one on the row with no chip.
     for (const { description } of Object.values(NETS_CHECKS)) {
       expect(screen.getByText(description)).toBeTruthy();
     }
+  });
+
+  test('the parent chip reads as caution, not as neutral and not as red', async () => {
+    renderPicker(NETS, NETS_CHECKS);
+
+    const chip = await screen.findByText('parent company');
+    // Filled amber. The two neutral chips are transparent with a hairline, and
+    // red is reserved for a genuinely unrelated company — an AE inside the right
+    // corporate group who picked the wrong entity has made a different mistake.
+    expect(chip.style.background).toBe('var(--badge-yellow-bg)');
+    expect(chip.style.color).toBe('var(--badge-yellow-text)');
+    expect(chip.style.background).not.toBe('transparent');
+    expect(chip.style.color).not.toBe('var(--badge-red-text)');
+  });
+
+  test('each relation gets its own wording, and an unknown one falls back', async () => {
+    const cases: Array<[string, string]> = [
+      ['parent', 'parent company'],
+      ['subsidiary', 'subsidiary'],
+      ['sibling', 'sibling brand'],
+      ['unclear', 'related company'],
+      // Not one of the four. Falls back rather than printing the raw value —
+      // a Worker that grows a fifth direction must not put an unknown word in
+      // a chip.
+      ['affiliate', 'related company'],
+      [null as unknown as string, 'related company'],
+    ];
+    for (const [relation, label] of cases) {
+      const { unmount } = renderPicker(NETS, {
+        ...NETS_CHECKS,
+        'nexigroup.com': { verdict: 'related_company', relation, description: 'Nexi — European payments' },
+      });
+      expect(await screen.findByText(label)).toBeTruthy();
+      unmount();
+    }
+  });
+
+  test('a relation on a passing verdict is discarded, not shown', async () => {
+    // The Worker forces this to null already. This asserts the portal does not
+    // depend on that, because a "parent company" chip on the account's own
+    // domain is the worst thing this feature could print.
+    renderPicker(NETS, {
+      ...NETS_CHECKS,
+      'nets.eu': { verdict: 'looks_right', relation: 'parent', description: 'Payment solutions for financial institutions' },
+    });
+
+    await waitFor(() => expect(screen.getByText('parent company')).toBeTruthy());
+    // One, from nexigroup.com. Not two.
+    expect(screen.getAllByText('parent company')).toHaveLength(1);
+  });
+
+  test('the fifth verdict is never the suggested option', async () => {
+    // Ranking is verdict-blind and this task did not change it. The assertion is
+    // that the suggested chip and the caution chip never land on one row —
+    // stated as a test because "we did not change the ranking" is not a property
+    // anyone can see from the ranking code six months from now.
+    renderPicker(NETS, NETS_CHECKS);
+
+    const chip = await screen.findByText('parent company');
+    const row = chip.closest('label');
+    expect(row).toBeTruthy();
+    expect(row!.textContent).not.toContain('suggested');
   });
 
   test('not a website reads neutral, not as a warning', async () => {
