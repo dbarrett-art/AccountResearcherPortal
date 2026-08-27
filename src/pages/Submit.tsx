@@ -6,7 +6,9 @@ import Banner from '../components/Banner';
 import AccountSearch, { type AccountSelection } from '../components/AccountSearch';
 import SubmitConfirmation, { type SubmittedRun } from '../components/SubmitConfirmation';
 import { supabase, workerFetch } from '../lib/supabase';
-import { submissionReadiness, buildSubmitBody } from '../lib/submission';
+import { submissionReadiness, buildSubmitBody, confirmedDomain } from '../lib/submission';
+import { LANGUAGE_OPTIONS, initialLanguageState, nextLanguageState, overrideLanguage }
+  from '../lib/language-detect';
 import { getDomainCheck } from '../lib/preview-settings';
 import usePageTitle from '../hooks/usePageTitle';
 import useWindowWidth from '../hooks/useWindowWidth';
@@ -83,20 +85,11 @@ interface BannerState {
   runId?: string;
 }
 
-const LANGUAGES = [
-  { code: 'auto', label: 'Auto-detect', flag: '\u{1F310}' },
-  { code: 'en',   label: 'English',     flag: '\u{1F1EC}\u{1F1E7}' },
-  { code: 'de',   label: 'German',      flag: '\u{1F1E9}\u{1F1EA}' },
-  { code: 'fr',   label: 'French',      flag: '\u{1F1EB}\u{1F1F7}' },
-  { code: 'es',   label: 'Spanish',     flag: '\u{1F1EA}\u{1F1F8}' },
-  { code: 'it',   label: 'Italian',     flag: '\u{1F1EE}\u{1F1F9}' },
-  { code: 'nl',   label: 'Dutch',       flag: '\u{1F1F3}\u{1F1F1}' },
-  { code: 'pt',   label: 'Portuguese',  flag: '\u{1F1F5}\u{1F1F9}' },
-  { code: 'ja',   label: 'Japanese',    flag: '\u{1F1EF}\u{1F1F5}' },
-  { code: 'ko',   label: 'Korean',      flag: '\u{1F1F0}\u{1F1F7}' },
-  { code: 'sv',   label: 'Swedish',     flag: '\u{1F1F8}\u{1F1EA}' },
-  { code: 'no',   label: 'Norwegian',   flag: '\u{1F1F3}\u{1F1F4}' },
-];
+// The select's options live in ../lib/language-detect, next to the TLD map that
+// fills it. There were two copies of this list — here and in
+// SubmitConfirmation — and both had drifted: neither offered Danish or Finnish,
+// while '.dk' and '.fi' have been in the detection map the whole time. A
+// detected language the select cannot render leaves it showing nothing.
 
 export default function Submit() {
   usePageTitle('Submit');
@@ -156,7 +149,39 @@ export function SubmitBody({
    * later.
    */
   const [selection, setSelection] = useState<AccountSelection | null>(initialSelection);
-  const [market, setMarket] = useState('auto');
+  /**
+   * The language the brief is researched and written in, and where that value
+   * came from.
+   *
+   * This used to default to 'auto' and stay there, which meant the detection ran
+   * inside the pipeline — after Run had been pressed, with nothing on screen to
+   * correct. On the portal path it never ran at all: 'auto' became
+   * `home_language=english` at the Worker, and app.js skips its own detection
+   * when a language is named. `runs.market` has never once held 'no', 'sv' or
+   * 'nl' across ~346 runs.
+   *
+   * The rule — detect once per confirmed domain, keep an override against the
+   * current one, discard it when the domain changes — is nextLanguageState in
+   * lib/language-detect, next to the TLD map, so it is testable without a DOM
+   * and the reasoning sits with the data it reasons about.
+   */
+  const [language, setLanguage] = useState(() => initialLanguageState(confirmedDomain(initialSelection)));
+  const market = language.code;
+
+  /**
+   * Detect the moment a domain is CONFIRMED, not before.
+   *
+   * Keyed on the confirmed domain — see confirmedDomain() in lib/submission. The
+   * ranked suggestion the picker shows before the confirm click is not an
+   * answer; it is the thing the confirm step exists to interrogate. Detecting
+   * from it would show a language derived from a domain nobody has agreed to,
+   * then change it under them when they agree to a different one.
+   */
+  const confirmed = confirmedDomain(selection);
+  useEffect(() => {
+    setLanguage(prev => nextLanguageState(prev, confirmed) ?? prev);
+  }, [confirmed]);
+
   const [includeContacts] = useState(true); // Always include contacts — M2 now ~$0.02 via Apollo
   const [submitting, setSubmitting] = useState(false);
   const [banner, setBanner] = useState<BannerState | null>(null);
@@ -465,23 +490,45 @@ export function SubmitBody({
           </div>
 
           <div style={{ marginBottom: 16 }}>
-            <label style={labelStyle}>Language</label>
-            <select value={market} onChange={e => setMarket(e.target.value)} style={{
-              background: 'var(--bg-input)', border: '1px solid var(--border-strong)',
-              borderRadius: 6, padding: '8px 12px', color: 'var(--text-primary)',
-              fontSize: 13, width: '100%', cursor: 'pointer', outline: 'none',
-            }}>
-              {LANGUAGES.map(lang => (
+            {/* htmlFor/id, where the other fields on this page have neither.
+                The select is now the thing that carries the answer rather than a
+                deferral, so it is worth being reachable by name — to a screen
+                reader, and to the test that asserts what it holds. */}
+            <label htmlFor="submit-language" style={labelStyle}>Language</label>
+            <select
+              id="submit-language"
+              value={market}
+              /* Setting it by hand clears the detection note, because the value
+                 is no longer detected. It re-detects if the confirmed domain
+                 changes after this — that is the effect above, and it is the
+                 right way round: the domain is what the detection reads. */
+              onChange={e => setLanguage(prev => overrideLanguage(prev, e.target.value))}
+              disabled={submitting}
+              style={{
+                background: 'var(--bg-input)', border: '1px solid var(--border-strong)',
+                borderRadius: 6, padding: '8px 12px', color: 'var(--text-primary)',
+                fontSize: 13, width: '100%', cursor: 'pointer', outline: 'none',
+              }}
+            >
+              {LANGUAGE_OPTIONS.map(lang => (
                 <option key={lang.code} value={lang.code}>
                   {lang.flag}  {lang.label}
                 </option>
               ))}
             </select>
-            {market === 'auto' && (
-              <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>
-                Language detected automatically from the company domain
-              </div>
-            )}
+            {/* Three states, three different sentences. The AE has to be able to
+                tell "we read this off the domain", "the domain told us nothing"
+                and "you chose this" apart — the old copy said only that
+                detection would happen later, which it then didn't. */}
+            <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>
+              {language.overridden
+                ? 'Set by hand — re-detects if you confirm a different domain'
+                : language.iso
+                  ? `Detected from ${language.forDomain} — change it if that is wrong`
+                  : confirmed
+                    ? `${confirmed} does not indicate a language — change this if the brief should not be in English`
+                    : 'Confirm a domain above and this updates to match it'}
+            </div>
           </div>
 
           {/* Contacts always included — M2 now ~$0.02 via Apollo (was ~$6.37 with EnrichLayer) */}

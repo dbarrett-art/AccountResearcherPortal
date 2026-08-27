@@ -110,6 +110,29 @@ export function submissionReadiness(selection: AccountSelection | null): Readine
  * otherwise cause — a run dispatched against an unconfirmed domain — is the one
  * this whole feature exists to prevent, so it fails loudly and locally instead.
  */
+/**
+ * The domain this selection has actually settled on, or null.
+ *
+ * Not the same as `selection.domain`. On the locked path that field holds the
+ * ranked SUGGESTION until somebody clicks confirm, and a suggestion is not an
+ * answer — it is the thing the confirm step exists to interrogate. Acting on it
+ * would be the `domains[0]` assumption the picker was built to remove, arriving
+ * by a different door.
+ *
+ * On the net-new path there is nothing to confirm: the domain was typed by hand
+ * and validated before the selection could be constructed, so it is settled the
+ * moment it exists.
+ *
+ * Language detection keys on this. Detecting from an unconfirmed suggestion
+ * would show the AE a language derived from a domain nobody has agreed to yet,
+ * and then quietly change it under them when they confirm a different one.
+ */
+export function confirmedDomain(selection: AccountSelection | null): string | null {
+  if (!selection) return null;
+  if (selection.kind === 'new_prospect') return selection.domain || null;
+  return selection.domain_confirmed ? (selection.domain || null) : null;
+}
+
 export function buildSubmitBody(
   selection: AccountSelection | null,
   opts: { market: string; includeContacts: boolean },

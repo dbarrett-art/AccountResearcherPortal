@@ -2,6 +2,9 @@ import { Check, Clock, AlertTriangle, ExternalLink } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { AccountSelection } from './AccountSearch';
 import { salesforceAccountUrl } from '../lib/salesforce-url';
+// Was a local copy that had drifted — it offered neither Danish nor Finnish,
+// while '.dk' and '.fi' have been in the detection map the whole time.
+import { LANGUAGE_LABEL } from '../lib/language-detect';
 
 /**
  * What Submit shows once a run has actually been dispatched.
@@ -60,12 +63,6 @@ export interface SubmittedRun {
    */
   queue?: { position: number | null; waitMinutes: number | null };
 }
-
-const LANGUAGE_LABEL: Record<string, string> = {
-  auto: 'Auto-detect', en: 'English', de: 'German', fr: 'French', es: 'Spanish',
-  it: 'Italian', nl: 'Dutch', pt: 'Portuguese', ja: 'Japanese', ko: 'Korean',
-  sv: 'Swedish', no: 'Norwegian',
-};
 
 interface Props {
   submitted: SubmittedRun;
