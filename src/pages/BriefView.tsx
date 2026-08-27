@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { servicesArrFloor, servicesContribution, foundServiceTriggers } from '../lib/services-value';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase, workerFetch, openBriefFile } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
@@ -108,7 +109,7 @@ type LabelKey =
   | 'ws_full_seat_make' | 'ws_pm_make_seats'
   | 'ws_governance_plus' | 'ws_governance_plus_addon' | 'ws_priority'
   | 'ws_enterprise_upgrade' | 'ws_enterprise_tier_upgrade'
-  | 'ws_services_opportunities' | 'ws_125k_engagement'
+  | 'ws_services_opportunities' | 'ws_services_trigger'
   | 'ws_arr_minimum' | 'ws_services_floor' | 'ws_arr_floor_note'
   | 'ws_total_whitespace_footer'
   | 'ws_no_record_heading' | 'ws_no_record_body'
@@ -193,10 +194,10 @@ const LABELS: Record<string, Record<LabelKey, string>> = {
     ws_enterprise_upgrade: 'ENTERPRISE UPGRADE',
     ws_enterprise_tier_upgrade: 'Enterprise tier upgrade',
     ws_services_opportunities: 'SERVICES OPPORTUNITIES',
-    ws_125k_engagement: '$125K ENGAGEMENT',
-    ws_arr_minimum: '25% ARR MINIMUM',
+    ws_services_trigger: 'SERVICES TRIGGER',
+    ws_arr_minimum: 'SERVICES ENGAGEMENT',
     ws_services_floor: 'Services floor',
-    ws_arr_floor_note: '25% ARR floor — use as anchor if selling a single bundled engagement.',
+    ws_arr_floor_note: '25% ARR floor, minimum $125K — one figure for the account, counted once however many triggers fired above.',
     ws_total_whitespace_footer: 'Total Whitespace — seats + Governance+ + services',
     ws_no_record_heading: 'No whitespace record for this account',
     ws_no_record_body: 'This account is not in the Figma whitespace book, so its seat counts, current ARR and opportunity value are unknown — not zero. Nothing here should be read as saying the opportunity is small; it has never been measured. Sizing becomes available once the account is scored.',
@@ -325,10 +326,10 @@ const LABELS: Record<string, Record<LabelKey, string>> = {
     ws_enterprise_upgrade: 'UPGRADE ENTERPRISE',
     ws_enterprise_tier_upgrade: 'Upgrade tier Enterprise',
     ws_services_opportunities: 'OPPORTUNIT\u00C9S DE SERVICES',
-    ws_125k_engagement: 'ENGAGEMENT 125K$',
-    ws_arr_minimum: 'MINIMUM 25% ARR',
+    ws_services_trigger: 'D\u00C9CLENCHEUR DE SERVICES',
+    ws_arr_minimum: 'ENGAGEMENT DE SERVICES',
     ws_services_floor: 'Plancher services',
-    ws_arr_floor_note: 'Plancher 25% ARR \u2014 \u00E0 utiliser comme ancre pour un engagement group\u00E9.',
+    ws_arr_floor_note: 'Plancher 25% ARR, minimum 125K$ \u2014 un seul montant pour le compte, compt\u00E9 une fois quel que soit le nombre de d\u00E9clencheurs ci-dessus.',
     ws_total_whitespace_footer: 'Whitespace total \u2014 si\u00E8ges + Governance+ + services',
     ws_no_record_heading: 'Aucune fiche whitespace pour ce compte',
     ws_no_record_body: "Ce compte n'est pas r\u00E9pertori\u00E9 dans le whitespace Figma : ses licences, son ARR actuel et sa valeur d'opportunit\u00E9 sont donc inconnus \u2014 et non nuls. Rien ici ne signifie que l'opportunit\u00E9 est faible ; elle n'a jamais \u00E9t\u00E9 mesur\u00E9e.",
@@ -1429,8 +1430,8 @@ function MetricsBar({ pov, isMobile }: { pov: any; hooksData?: any; personas?: a
   const pmGapVal = (gaps.make_pm?.gap || 0) * FIGMA_PRICES.fullSeat * 12;
   const govVal = gaps.governance_plus?.value || 0;
   const euVal = gaps.enterprise_upgrade?.eligible ? (gaps.enterprise_upgrade?.value || 0) : 0;
-  const services: any[] = (ws?.services_opportunities || []).filter((s: any) => s?.found);
-  const servicesTotal = services.length * 125000;
+  // Services once at the account's floor, not once per trigger.
+  const servicesTotal = servicesContribution(ws);
   const totalWhitespace = ws ? devGapVal + designerGapVal + pmGapVal + govVal + euVal + servicesTotal : null;
 
   const fmtDollar = (v: number | null | undefined) => {
@@ -2239,7 +2240,7 @@ function WhitespaceSection({ pov, feedbackNode, market }: { pov: any; feedbackNo
 
   const ws = pov.whitespace_section;
   const gaps = ws.key_gaps || {};
-  const services: any[] = (ws.services_opportunities || []).filter((s: any) => s?.found);
+  const services: any[] = foundServiceTriggers(ws);
   const L = getLabels(market);
 
   // Format currency
@@ -2255,7 +2256,11 @@ function WhitespaceSection({ pov, feedbackNode, market }: { pov: any; feedbackNo
   const pmGapVal = (gaps.make_pm?.gap || 0) * FIGMA_PRICES.fullSeat * 12;
   const govVal = gaps.governance_plus?.value || 0;
   const euVal = gaps.enterprise_upgrade?.eligible ? (gaps.enterprise_upgrade?.value || 0) : 0;
-  const servicesTotal = services.length * 125000;
+  // The account's one services figure, added once. Until 2026-08-27 this was
+  // services.length * 125000 — stacked per trigger, and it ignored the ARR floor
+  // the row below actually displays, so this total disagreed with the PDFs.
+  const servicesFloor = servicesArrFloor(ws);
+  const servicesTotal = servicesContribution(ws);
   const totalWhitespace = devGapVal + designerGapVal + pmGapVal + govVal + euVal + servicesTotal;
 
   const ACCENT = {
@@ -2375,11 +2380,8 @@ function WhitespaceSection({ pov, feedbackNode, market }: { pov: any; feedbackNo
           </div>
           {services.map((s: any, i: number) => (
             <div key={i} style={{ borderLeft: `3px solid ${ACCENT.services}`, padding: '12px 16px', marginBottom: 10, borderRadius: '0 6px 6px 0' }}>
-              <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: ACCENT.services, marginBottom: 4 }}>{L.ws_125k_engagement}</div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                <span style={{ fontSize: 16, fontWeight: 500, color: COLORS.heading }}>{s.engagement_label}</span>
-                <span style={{ fontFamily: FONTS.serif, fontSize: 18, fontWeight: 500, color: COLORS.heading }}>$125K</span>
-              </div>
+              <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: ACCENT.services, marginBottom: 4 }}>{L.ws_services_trigger}</div>
+              <div style={{ fontSize: 16, fontWeight: 500, color: COLORS.heading }}>{s.engagement_label}</div>
               {s.evidence && (
                 <div style={{ fontSize: 14, fontStyle: 'italic', color: COLORS.tertiary, marginTop: 8, paddingTop: 8, borderTop: `1px solid #f5f3ef`, lineHeight: 1.6 }}>{s.evidence.replace(/\s*\[SOURCE:\s*https?:\/\/[^\]]+\]/gi, '')}</div>
               )}
@@ -2391,7 +2393,7 @@ function WhitespaceSection({ pov, feedbackNode, market }: { pov: any; feedbackNo
             <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: ACCENT.arrFloor, marginBottom: 4 }}>{L.ws_arr_minimum}</div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
               <span style={{ fontSize: 16, fontWeight: 500, color: COLORS.heading }}>{L.ws_services_floor}</span>
-              <span style={{ fontFamily: FONTS.serif, fontSize: 18, fontWeight: 500, color: COLORS.heading }}>{fmtDollar(ws.services_arr_floor || 125000)}</span>
+              <span style={{ fontFamily: FONTS.serif, fontSize: 18, fontWeight: 500, color: COLORS.heading }}>{fmtDollar(servicesFloor)}</span>
             </div>
             <div style={{ fontSize: 15, color: COLORS.secondary, lineHeight: 1.65, marginTop: 6 }}>{L.ws_arr_floor_note}</div>
           </div>

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { servicesContribution } from '../lib/services-value';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { supabase, workerFetch } from '../lib/supabase';
@@ -77,8 +78,9 @@ function getTotalWhitespace(pov: any): number | null {
   const pmGapVal = (gaps.make_pm?.gap || 0) * FIGMA_PRICES.fullSeat * 12;
   const govVal = gaps.governance_plus?.value || 0;
   const euVal = gaps.enterprise_upgrade?.eligible ? (gaps.enterprise_upgrade?.value || 0) : 0;
-  const services: any[] = (ws.services_opportunities || []).filter((s: any) => s?.found);
-  const servicesTotal = services.length * 125000;
+  // Services once at the account's floor, not once per trigger. See
+  // src/lib/services-value.ts.
+  const servicesTotal = servicesContribution(ws);
   const total = devGapVal + designerGapVal + pmGapVal + govVal + euVal + servicesTotal;
   return total > 0 ? total : null;
 }
