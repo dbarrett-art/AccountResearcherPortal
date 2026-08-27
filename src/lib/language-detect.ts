@@ -161,6 +161,37 @@ export const LANGUAGE_LABEL: Record<string, string> = {
 };
 
 /**
+ * What the language field holds, where the value came from, and — when the
+ * domain implies something other than English — whether the AE has answered yet.
+ *
+ * WHY THIS ASKS RATHER THAN SWITCHES
+ * ──────────────────────────────────
+ * The first version set the select to the detected language the moment a domain
+ * was confirmed. That is a real change to the deliverable — `--home-language`
+ * drives the localised research pass AND the output language, so confirming
+ * entur.no silently meant "the whole brief comes back in Norwegian" — announced
+ * by a 12px line under a select the AE had no reason to look at. Easy to press
+ * Run past. A wrong language is not a small error either: it is a brief the AE
+ * cannot read, discovered after the Opus call.
+ *
+ * So the detection SUGGESTS. `code` stays English until somebody says otherwise,
+ * which means the failure mode of not noticing is the behaviour that was already
+ * there, and switching to Norwegian takes a deliberate click.
+ *
+ *   code       what goes on the wire. 'en' until accepted or set by hand.
+ *   forDomain  the confirmed domain this has already been resolved for. The
+ *              gate: it fires once per domain, not once per render.
+ *   detected   what the TLD implied, or null if it implied nothing. Kept apart
+ *              from `code` so the page can tell "detected English" from "told us
+ *              nothing, defaulted to English" — collapsing those two is what let
+ *              the dead auto-detect path go unnoticed for months.
+ *   decision   'pending'  a non-English suggestion is on screen, unanswered
+ *              'accepted' the AE took it
+ *              'declined' the AE said no; `code` stays English
+ *              'none'     nothing to answer — no domain, no signal, or the AE
+ *                         picked a language from the select directly
+ */
+/**
  * What the language field holds, and where the value came from.
  *
  * `code` is what goes on the wire. The other three exist so the page can say
@@ -176,17 +207,54 @@ export const LANGUAGE_LABEL: Record<string, string> = {
  *              unnoticed.
  *   overridden the AE set it by hand since the last detection.
  */
+export type LanguageDecision = 'pending' | 'accepted' | 'declined' | 'none';
+
 export interface LanguageState {
   code: string;
   forDomain: string | null;
-  iso: string | null;
-  overridden: boolean;
+  detected: string | null;
+  decision: LanguageDecision;
 }
 
-/** The state for a page that has not seen a confirmed domain yet. */
+/**
+ * Resolve for a confirmed domain: English, plus a suggestion if the TLD implies
+ * something else.
+ *
+ * `code` is 'en' on every path. Nothing here changes the language on its own —
+ * that is the whole point, see the interface above.
+ *
+ * A domain detecting 'en' would leave nothing to ask, and the map has no entry
+ * that produces it (generic TLDs are absent on purpose), but the check is
+ * written rather than assumed so adding one cannot produce a prompt that says
+ * "English? English?".
+ */
 export function initialLanguageState(confirmedDomain: string | null): LanguageState {
-  const iso = detectIsoFromUrl(confirmedDomain);
-  return { code: iso ?? 'en', forDomain: confirmedDomain, iso, overridden: false };
+  const detected = detectIsoFromUrl(confirmedDomain);
+  return {
+    code: 'en',
+    forDomain: confirmedDomain,
+    detected,
+    decision: detected && detected !== 'en' ? 'pending' : 'none',
+  };
+}
+
+/** The AE took the suggestion. The only path from a detection to a language. */
+export function acceptSuggestion(prev: LanguageState): LanguageState {
+  if (prev.decision !== 'pending' || !prev.detected) return prev;
+  return { ...prev, code: prev.detected, decision: 'accepted' };
+}
+
+/**
+ * The AE said no. `code` is already English and stays there.
+ *
+ * Recorded rather than just dismissed so the page can keep saying what the
+ * domain suggested — "English, though entur.no suggests Norwegian" is a useful
+ * thing to still be able to read, and it stops the prompt reappearing on the
+ * next render.
+ */
+export function declineSuggestion(prev: LanguageState): LanguageState {
+  if (prev.decision !== 'pending') return prev;
+  return { ...prev, decision: 'declined' };
 }
 
 /**
@@ -211,7 +279,13 @@ export function nextLanguageState(prev: LanguageState, confirmedDomain: string |
   return initialLanguageState(confirmedDomain);
 }
 
-/** The AE typed it. Same value, no longer attributable to a detection. */
+/**
+ * The AE picked from the select directly.
+ *
+ * `decision: 'none'` — there is no longer an open question, whichever way the
+ * suggestion was pointing. Choosing the suggested language by hand is the same
+ * outcome as accepting it, and choosing a third one answers it too.
+ */
 export function overrideLanguage(prev: LanguageState, code: string): LanguageState {
-  return { ...prev, code, overridden: true };
+  return { ...prev, code, decision: 'none' };
 }

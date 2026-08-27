@@ -13,6 +13,7 @@ import {
   detectLanguageFromUrl, detectIsoFromUrl, languageForDomain,
   DOMAIN_LANGUAGE_MAP, LANG_TO_ISO, LANGUAGE_OPTIONS, LANGUAGE_LABEL,
   initialLanguageState, nextLanguageState, overrideLanguage,
+  acceptSuggestion, declineSuggestion,
 } from './language-detect';
 
 describe('detection', () => {
@@ -109,55 +110,94 @@ describe('the select can render anything the map produces', () => {
   });
 });
 
-describe('the re-detect rule', () => {
+describe('the suggest-then-confirm rule', () => {
   // Extracted from the Submit effect so it can be asserted without a DOM. The
-  // React test covers rendering and the survives-a-render case; this covers the
-  // rule, which is where the mistakes are.
-  test('nothing confirmed yet is English, attributed to nothing', () => {
-    const s = initialLanguageState(null);
-    expect(s).toEqual({ code: 'en', forDomain: null, iso: null, overridden: false });
+  // React test covers the buttons and the copy; this covers the rule, which is
+  // where the mistakes are.
+
+  test('nothing confirmed yet is English, with nothing to answer', () => {
+    expect(initialLanguageState(null))
+      .toEqual({ code: 'en', forDomain: null, detected: null, decision: 'none' });
   });
 
-  test('a confirmed .no is Norwegian, attributed to the domain', () => {
+  test('a confirmed .no SUGGESTS Norwegian and stays English', () => {
+    // The heart of it. Detection does not change the language; it raises a
+    // question. --home-language drives the research pass and the output, so
+    // switching silently means the whole brief comes back in Norwegian on the
+    // strength of a TLD.
     expect(initialLanguageState('entur.no'))
-      .toEqual({ code: 'no', forDomain: 'entur.no', iso: 'no', overridden: false });
+      .toEqual({ code: 'en', forDomain: 'entur.no', detected: 'no', decision: 'pending' });
   });
 
-  test('a confirmed .com is English, attributed to nothing', () => {
-    // code 'en', iso null. The difference is the whole point: one is a
-    // detection, the other is a default, and the hint says which.
+  test('a confirmed .com is English with nothing to answer', () => {
     expect(initialLanguageState('keepit.com'))
-      .toEqual({ code: 'en', forDomain: 'keepit.com', iso: null, overridden: false });
+      .toEqual({ code: 'en', forDomain: 'keepit.com', detected: null, decision: 'none' });
+  });
+
+  test('accepting is the only path from a detection to a language', () => {
+    const accepted = acceptSuggestion(initialLanguageState('entur.no'));
+    expect(accepted.code).toBe('no');
+    expect(accepted.decision).toBe('accepted');
+  });
+
+  test('declining leaves English, and remembers what was offered', () => {
+    // Recorded rather than dismissed: "English, though entur.no suggests
+    // Norwegian" stays readable, and the prompt does not reappear next render.
+    const declined = declineSuggestion(initialLanguageState('entur.no'));
+    expect(declined.code).toBe('en');
+    expect(declined.detected).toBe('no');
+    expect(declined.decision).toBe('declined');
+  });
+
+  test('accept and decline only act on an open question', () => {
+    const declined = declineSuggestion(initialLanguageState('entur.no'));
+    expect(acceptSuggestion(declined)).toBe(declined);
+    const settled = initialLanguageState('keepit.com');
+    expect(acceptSuggestion(settled)).toBe(settled);
+    expect(declineSuggestion(settled)).toBe(settled);
   });
 
   test('the same domain again changes nothing', () => {
     // Returns null rather than an equal object — a fresh identity every render
-    // would loop the effect that calls this.
-    const s = initialLanguageState('entur.no');
-    expect(nextLanguageState(s, 'entur.no')).toBeNull();
+    // would loop the effect that calls this, and would resurrect a dismissed
+    // prompt on every keystroke elsewhere on the page.
+    expect(nextLanguageState(initialLanguageState('entur.no'), 'entur.no')).toBeNull();
+    expect(nextLanguageState(declineSuggestion(initialLanguageState('entur.no')), 'entur.no')).toBeNull();
+    expect(nextLanguageState(acceptSuggestion(initialLanguageState('entur.no')), 'entur.no')).toBeNull();
   });
 
-  test('an override against the current domain survives', () => {
+  test('an answer against the current domain survives', () => {
     // The bug this pins: an earlier version cleared the gate on override, so the
     // effect re-ran immediately and put the detected language straight back. The
     // select could not be changed at all.
-    const overridden = overrideLanguage(initialLanguageState('entur.no'), 'en');
-    expect(overridden.code).toBe('en');
-    expect(overridden.overridden).toBe(true);
+    const overridden = overrideLanguage(initialLanguageState('entur.no'), 'de');
+    expect(overridden.code).toBe('de');
+    expect(overridden.decision).toBe('none');
     expect(nextLanguageState(overridden, 'entur.no')).toBeNull();
   });
 
-  test('confirming a different domain discards the override', () => {
-    // The domain is the input to the detection, so changing it invalidates the
-    // output. The page says where the new value came from rather than moving it
-    // silently.
-    const overridden = overrideLanguage(initialLanguageState('keepit.com'), 'fr');
-    const next = nextLanguageState(overridden, 'entur.no');
-    expect(next).toEqual({ code: 'no', forDomain: 'entur.no', iso: 'no', overridden: false });
+  test('confirming a different domain asks again, discarding the answer', () => {
+    // The domain is what the detection reads, so changing it invalidates the
+    // answer — including an accepted one. An AE who accepted Norwegian for
+    // entur.no and then confirmed a .de is asked about German rather than
+    // silently kept on Norwegian.
+    const accepted = acceptSuggestion(initialLanguageState('entur.no'));
+    expect(nextLanguageState(accepted, 'lufthansa.de'))
+      .toEqual({ code: 'en', forDomain: 'lufthansa.de', detected: 'de', decision: 'pending' });
   });
 
-  test('clearing the selection goes back to English and to no attribution', () => {
-    const next = nextLanguageState(initialLanguageState('entur.no'), null);
-    expect(next).toEqual({ code: 'en', forDomain: null, iso: null, overridden: false });
+  test('clearing the selection goes back to English with nothing pending', () => {
+    const accepted = acceptSuggestion(initialLanguageState('entur.no'));
+    expect(nextLanguageState(accepted, null))
+      .toEqual({ code: 'en', forDomain: null, detected: null, decision: 'none' });
+  });
+
+  test('a language is never changed without an explicit act', () => {
+    // The property, stated once. Every transition that does not involve the AE
+    // leaves `code` at 'en'.
+    for (const domain of ['entur.no', 'lufthansa.de', 'sony.co.jp', 'keepit.com', null]) {
+      expect(initialLanguageState(domain).code).toBe('en');
+      expect(nextLanguageState(initialLanguageState('other.example'), domain)?.code).toBe('en');
+    }
   });
 });

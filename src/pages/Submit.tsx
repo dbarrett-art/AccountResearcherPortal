@@ -7,8 +7,10 @@ import AccountSearch, { type AccountSelection } from '../components/AccountSearc
 import SubmitConfirmation, { type SubmittedRun } from '../components/SubmitConfirmation';
 import { supabase, workerFetch } from '../lib/supabase';
 import { submissionReadiness, buildSubmitBody, confirmedDomain } from '../lib/submission';
-import { LANGUAGE_OPTIONS, initialLanguageState, nextLanguageState, overrideLanguage }
-  from '../lib/language-detect';
+import {
+  LANGUAGE_OPTIONS, LANGUAGE_LABEL, initialLanguageState, nextLanguageState,
+  overrideLanguage, acceptSuggestion, declineSuggestion,
+} from '../lib/language-detect';
 import { getDomainCheck } from '../lib/preview-settings';
 import usePageTitle from '../hooks/usePageTitle';
 import useWindowWidth from '../hooks/useWindowWidth';
@@ -160,10 +162,16 @@ export function SubmitBody({
    * when a language is named. `runs.market` has never once held 'no', 'sv' or
    * 'nl' across ~346 runs.
    *
-   * The rule — detect once per confirmed domain, keep an override against the
-   * current one, discard it when the domain changes — is nextLanguageState in
-   * lib/language-detect, next to the TLD map, so it is testable without a DOM
-   * and the reasoning sits with the data it reasons about.
+   * It SUGGESTS rather than switches. `--home-language` drives the localised
+   * research pass and the output language, so a detection acted on silently
+   * means the whole brief comes back in Norwegian on the strength of a TLD, with
+   * a 12px line under the select as the only notice. English stays until
+   * somebody clicks.
+   *
+   * The rule — resolve once per confirmed domain, keep an answer against the
+   * current one, ask again when the domain changes — is in lib/language-detect,
+   * next to the TLD map, so it is testable without a DOM and the reasoning sits
+   * with the data it reasons about.
    */
   const [language, setLanguage] = useState(() => initialLanguageState(confirmedDomain(initialSelection)));
   const market = language.code;
@@ -516,19 +524,71 @@ export function SubmitBody({
                 </option>
               ))}
             </select>
-            {/* Three states, three different sentences. The AE has to be able to
-                tell "we read this off the domain", "the domain told us nothing"
-                and "you chose this" apart — the old copy said only that
-                detection would happen later, which it then didn't. */}
-            <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>
-              {language.overridden
-                ? 'Set by hand — re-detects if you confirm a different domain'
-                : language.iso
-                  ? `Detected from ${language.forDomain} — change it if that is wrong`
-                  : confirmed
-                    ? `${confirmed} does not indicate a language — change this if the brief should not be in English`
-                    : 'Confirm a domain above and this updates to match it'}
-            </div>
+            {/* The suggestion, and it is a suggestion — the select above still
+                says English until this is answered.
+
+                It asks rather than switches because the language is not a
+                display setting: --home-language drives the localised research
+                pass AND the output, so accepting this means the whole brief
+                comes back in Norwegian. An earlier version set the select
+                silently and announced it in the 12px line below, which is easy
+                to press Run past — and the cost of not noticing is a brief the
+                AE cannot read, discovered after the Opus call. */}
+            {language.decision === 'pending' && language.detected && (
+              <div style={{
+                marginTop: 8, padding: '10px 12px',
+                background: 'var(--bg-surface)', border: '1px solid #d97706',
+                borderRadius: 6,
+              }}>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                  <strong>{language.forDomain}</strong> suggests{' '}
+                  <strong>{LANGUAGE_LABEL[language.detected] ?? language.detected}</strong>.
+                  {' '}The research and the finished brief would both be in{' '}
+                  {LANGUAGE_LABEL[language.detected] ?? language.detected}, not English.
+                </div>
+                <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                  <button
+                    type="button"
+                    onClick={() => setLanguage(acceptSuggestion)}
+                    style={{
+                      background: 'var(--accent)', color: '#fff', border: 'none',
+                      borderRadius: 6, padding: '6px 12px', fontSize: 12,
+                      fontWeight: 500, cursor: 'pointer',
+                    }}
+                  >
+                    Use {LANGUAGE_LABEL[language.detected] ?? language.detected}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLanguage(declineSuggestion)}
+                    style={{
+                      background: 'transparent', color: 'var(--text-secondary)',
+                      border: '1px solid var(--border-strong)', borderRadius: 6,
+                      padding: '6px 12px', fontSize: 12, cursor: 'pointer',
+                    }}
+                  >
+                    Keep English
+                  </button>
+                </div>
+              </div>
+            )}
+            {/* Four states, four different sentences. The AE has to be able to
+                tell "you accepted a suggestion", "the domain suggested something
+                and you said no", "the domain suggested nothing" and "you chose
+                this" apart. The old copy said only that detection would happen
+                later, which it then didn't. */}
+            {language.decision !== 'pending' && (
+              <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>
+                {language.decision === 'accepted'
+                  ? `From ${language.forDomain} — change it here if that is wrong`
+                  : language.decision === 'declined'
+                    ? `Staying in English — ${language.forDomain} suggested ` +
+                      `${LANGUAGE_LABEL[language.detected!] ?? language.detected}`
+                    : confirmed
+                      ? `${confirmed} does not suggest a language — change this if the brief should not be in English`
+                      : 'Confirm a domain above and we will suggest a language if the domain implies one'}
+              </div>
+            )}
           </div>
 
           {/* Contacts always included — M2 now ~$0.02 via Apollo (was ~$6.37 with EnrichLayer) */}
