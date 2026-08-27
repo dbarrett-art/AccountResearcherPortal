@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { servicesArrFloor, servicesContribution, foundServiceTriggers } from '../lib/services-value';
+import { servicesArrFloor, foundServiceTriggers } from '../lib/services-value';
+import { whitespaceTotalValue } from '../lib/whitespace-total';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase, workerFetch, openBriefFile } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
@@ -1424,15 +1425,8 @@ function MetricsBar({ pov, isMobile }: { pov: any; hooksData?: any; personas?: a
   // Whitespace data
   const ws = pov?.whitespace_section;
   const currentArr = ws?.current_arr;
-  const gaps = ws?.key_gaps || {};
-  const devGapVal = (gaps.dev_mode?.gap || 0) * FIGMA_PRICES.devSeat * 12;
-  const designerGapVal = (gaps.full_seats_designers?.gap || 0) * FIGMA_PRICES.fullSeat * 12;
-  const pmGapVal = (gaps.make_pm?.gap || 0) * FIGMA_PRICES.fullSeat * 12;
-  const govVal = gaps.governance_plus?.value || 0;
-  const euVal = gaps.enterprise_upgrade?.eligible ? (gaps.enterprise_upgrade?.value || 0) : 0;
-  // Services once at the account's floor, not once per trigger.
-  const servicesTotal = servicesContribution(ws);
-  const totalWhitespace = ws ? devGapVal + designerGapVal + pmGapVal + govVal + euVal + servicesTotal : null;
+  // One arithmetic for the whole app — src/lib/whitespace-total.ts.
+  const totalWhitespace = whitespaceTotalValue(pov);
 
   const fmtDollar = (v: number | null | undefined) => {
     if (v == null || isNaN(v)) return '\u2014';
@@ -2251,17 +2245,16 @@ function WhitespaceSection({ pov, feedbackNode, market }: { pov: any; feedbackNo
   };
 
   // Calculate seat gap values
-  const devGapVal = (gaps.dev_mode?.gap || 0) * FIGMA_PRICES.devSeat * 12;
-  const designerGapVal = (gaps.full_seats_designers?.gap || 0) * FIGMA_PRICES.fullSeat * 12;
-  const pmGapVal = (gaps.make_pm?.gap || 0) * FIGMA_PRICES.fullSeat * 12;
+  // Per-bucket figures are still needed for the individual rows; the TOTAL is
+  // not re-derived here. One arithmetic — src/lib/whitespace-total.ts — which
+  // scripts/verify-whitespace-total.mjs asserts against both PDF generators.
+  const devGapVal = Math.max(0, Math.round(gaps.dev_mode?.gap || 0)) * FIGMA_PRICES.devSeat * 12;
+  const designerGapVal = Math.max(0, Math.round(gaps.full_seats_designers?.gap || 0)) * FIGMA_PRICES.fullSeat * 12;
+  const pmGapVal = Math.max(0, Math.round(gaps.make_pm?.gap || 0)) * FIGMA_PRICES.fullSeat * 12;
   const govVal = gaps.governance_plus?.value || 0;
   const euVal = gaps.enterprise_upgrade?.eligible ? (gaps.enterprise_upgrade?.value || 0) : 0;
-  // The account's one services figure, added once. Until 2026-08-27 this was
-  // services.length * 125000 — stacked per trigger, and it ignored the ARR floor
-  // the row below actually displays, so this total disagreed with the PDFs.
   const servicesFloor = servicesArrFloor(ws);
-  const servicesTotal = servicesContribution(ws);
-  const totalWhitespace = devGapVal + designerGapVal + pmGapVal + govVal + euVal + servicesTotal;
+  const totalWhitespace = whitespaceTotalValue(pov) ?? 0;
 
   const ACCENT = {
     devMode: '#7c3aed',

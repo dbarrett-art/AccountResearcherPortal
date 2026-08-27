@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { servicesContribution } from '../lib/services-value';
+import { resolveWhitespaceTotal } from '../lib/whitespace-total';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { supabase, workerFetch } from '../lib/supabase';
@@ -67,22 +67,16 @@ function freshnessCategory(days: number): 'fresh' | 'review' | 'stale' {
   return 'fresh';
 }
 
-const FIGMA_PRICES = { fullSeat: 90, devSeat: 35 };
 
-function getTotalWhitespace(pov: any): number | null {
-  const ws = pov?.whitespace_section;
-  if (!ws) return null;
-  const gaps = ws.key_gaps || {};
-  const devGapVal = (gaps.dev_mode?.gap || 0) * FIGMA_PRICES.devSeat * 12;
-  const designerGapVal = (gaps.full_seats_designers?.gap || 0) * FIGMA_PRICES.fullSeat * 12;
-  const pmGapVal = (gaps.make_pm?.gap || 0) * FIGMA_PRICES.fullSeat * 12;
-  const govVal = gaps.governance_plus?.value || 0;
-  const euVal = gaps.enterprise_upgrade?.eligible ? (gaps.enterprise_upgrade?.value || 0) : 0;
-  // Services once at the account's floor, not once per trigger. See
-  // src/lib/services-value.ts.
-  const servicesTotal = servicesContribution(ws);
-  const total = devGapVal + designerGapVal + pmGapVal + govVal + euVal + servicesTotal;
-  return total > 0 ? total : null;
+/**
+ * The whitespace figure for a row: `runs.whitespace_total_value` when the
+ * column is populated, otherwise computed from the brief this query already
+ * loaded. Both paths run the same arithmetic — src/lib/whitespace-total.ts — so
+ * the column is a shortcut, never a second opinion.
+ */
+function getTotalWhitespace(pov: any, run?: any): number | null {
+  const total = resolveWhitespaceTotal(run, pov);
+  return total && total > 0 ? total : null;
 }
 
 function formatWhitespace(value: number | null): string {
@@ -136,18 +130,28 @@ export default function Territory() {
     async function load() {
       setLoading(true);
 
-      // Fetch completed runs with brief data in one query
-      let query = supabase
-        .from('runs')
-        .select('id, company, url, created_at, status, pdf_url, brief_id, user_id, briefs!briefs_run_id_fkey(pov_json, hooks_json)')
-        .eq('status', 'complete')
-        .order('created_at', { ascending: false });
+      // Fetch completed runs with brief data in one query.
+      //
+      // whitespace_total_value is hand-applied (sql/whitespace-total-value.sql in
+      // the pipeline repo), so it may not exist yet. Naming a missing column
+      // makes PostgREST reject the WHOLE query, which would blank the page — so
+      // ask for it, and on failure ask again without it and compute instead.
+      const BASE_COLS = 'id, company, url, created_at, status, pdf_url, brief_id, user_id, briefs!briefs_run_id_fkey(pov_json, hooks_json)';
+      const build = (cols: string) => {
+        let q = supabase.from('runs').select(cols)
+          .eq('status', 'complete')
+          .order('created_at', { ascending: false });
+        if (!teamView && userProfile) {
+          q = q.or(`user_id.eq.${userProfile.id},assigned_to.eq.${userProfile.id}`);
+        }
+        return q;
+      };
 
-      if (!teamView && userProfile) {
-        query = query.or(`user_id.eq.${userProfile.id},assigned_to.eq.${userProfile.id}`);
+      let { data, error } = await build(`${BASE_COLS}, whitespace_total_value`) as any;
+      if (error) {
+        ({ data, error } = await build(BASE_COLS) as any);
+        if (!error) console.info('Territory: whitespace_total_value not present, computing from briefs');
       }
-
-      const { data, error } = await query;
       if (error) console.error('Territory fetch error:', error);
       if (!data) { setRows([]); setLoading(false); return; }
 
@@ -180,7 +184,7 @@ export default function Territory() {
           trigger_count: triggerCount,
           contact_count: contactCount,
           has_contacts: contactCount > 0,
-          whitespace: getTotalWhitespace(pov),
+          whitespace: getTotalWhitespace(pov, run),
           pdf_url: run.pdf_url,
           brief_id: run.brief_id,
           user_id: run.user_id,
