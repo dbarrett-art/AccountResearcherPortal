@@ -21,9 +21,10 @@ import { describe, test, expect, vi } from 'vitest';
 // fireEvent rather than user-event, and toBeTruthy/toBeNull rather than jest-dom
 // matchers: the repo carries neither dependency and there is no setup file, so this
 // follows the house style in ClaimAudit.test.tsx instead of adding to the tree.
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import SubmitConfirmation, { type SubmittedRun } from './SubmitConfirmation';
+import type { QueueStatus } from '../lib/queue-status';
 import type { AccountSelection, WhitespaceCandidate } from './AccountSearch';
 
 /** Entur AS — the account the wrong-company failure was found on. Real row. */
@@ -69,12 +70,38 @@ const NEW_PROSPECT: AccountSelection = {
   no_whitespace_data: true,
 };
 
-const show = (submitted: SubmittedRun, onSubmitAnother = () => {}) =>
+/**
+ * `pollQueue` defaults to a stub that answers "nothing new". Without it a queued
+ * render would start a real interval against the production Worker through
+ * `workerFetch`, which in jsdom means an unauthenticated call on a timer for the
+ * life of the test file. Injecting it is also how the live-refresh assertions
+ * below drive the screen without a network.
+ */
+const show = (
+  submitted: SubmittedRun,
+  onSubmitAnother = () => {},
+  pollQueue: (runId: string) => Promise<QueueStatus | null> = async () => null,
+) =>
   render(
     <MemoryRouter>
-      <SubmitConfirmation submitted={submitted} onSubmitAnother={onSubmitAnother} />
+      <SubmitConfirmation
+        submitted={submitted}
+        onSubmitAnother={onSubmitAnother}
+        pollQueue={pollQueue}
+        pollIntervalMs={20}
+      />
     </MemoryRouter>,
   );
+
+const status = (over: Partial<QueueStatus> = {}): QueueStatus => ({
+  run_id: dispatched.runId!,
+  status: 'queued',
+  queue_position: 1,
+  estimated_wait_minutes: 2,
+  queued_reason: 'no-token',
+  in_flight: 5,
+  ...over,
+});
 
 const dispatched: SubmittedRun = {
   selection: locked(),
@@ -136,6 +163,76 @@ describe('a queued run', () => {
     expect(container.textContent).toMatch(/#2/);
     expect(container.textContent).toMatch(/~24 minutes/);
     expect(container.textContent).not.toMatch(/around 15 minutes/i);
+  });
+});
+
+/**
+ * The number on this screen used to be captured once at submit time and never
+ * touched again — twenty minutes later it still said what was true when the
+ * button was pressed. These are the assertions that it moves.
+ */
+describe('the queued number is live, not a snapshot', () => {
+  const queued: SubmittedRun = { ...dispatched, queue: { position: 4, waitMinutes: 40 } };
+
+  test('the poll replaces the submit-time position and wait', async () => {
+    const { container } = show(queued, () => {}, async () => status({ queue_position: 1, estimated_wait_minutes: 2 }));
+    // The snapshot renders first — there is nothing else to show yet.
+    expect(container.textContent).toMatch(/#4/);
+    await waitFor(() => expect(container.textContent).toMatch(/#1/));
+    expect(container.textContent).toMatch(/~2 minutes/);
+    expect(container.textContent).not.toMatch(/~40 minutes/);
+  });
+
+  test('keeps polling, so a queue that moves twice is followed twice', async () => {
+    let position = 3;
+    const { container } = show(queued, () => {}, async () => status({ queue_position: position--, estimated_wait_minutes: 5 }));
+    await waitFor(() => expect(container.textContent).toMatch(/#3/));
+    await waitFor(() => expect(container.textContent).toMatch(/#2/));
+    await waitFor(() => expect(container.textContent).toMatch(/#1/));
+  });
+
+  // A Worker without /queue-status — i.e. production, until the
+  // admission-controller build is deployed. The screen must not blank.
+  test('a poller that answers nothing leaves the snapshot standing', async () => {
+    const { container } = show(queued, () => {}, async () => null);
+    await new Promise(r => setTimeout(r, 60));
+    expect(container.textContent).toMatch(/#4/);
+    expect(container.textContent).toMatch(/~40 minutes/);
+  });
+
+  test('once the run starts, the screen says so and stops describing a queue', async () => {
+    const { container } = show(queued, () => {}, async () => status({ status: 'running', queue_position: null, estimated_wait_minutes: null, queued_reason: null }));
+    await waitFor(() => expect(screen.getByText(/research started/i)).toBeTruthy());
+    expect(container.textContent).toMatch(/running now/i);
+    expect(container.textContent).not.toMatch(/#\d/);
+    expect(container.textContent).not.toMatch(/in the queue/i);
+  });
+});
+
+/**
+ * Which gate is holding the run. 'no-token' is a drip and nothing has to finish;
+ * 'ceiling' is a genuine wait for capacity. Saying the second when the first is
+ * true is how a 90-second wait reads as a stall.
+ */
+describe('the copy says WHY the run is queued', () => {
+  const queued: SubmittedRun = { ...dispatched, queue: { position: 2, waitMinutes: 3 } };
+
+  test('no-token reads as metered, not as blocked', async () => {
+    const { container } = show(queued, () => {}, async () => status({ queued_reason: 'no-token', queue_position: 2, estimated_wait_minutes: 2 }));
+    await waitFor(() => expect(container.textContent).toMatch(/starting shortly/i));
+    expect(container.textContent).not.toMatch(/slot frees up/i);
+  });
+
+  test('ceiling names the number of briefs actually running', async () => {
+    const { container } = show(queued, () => {}, async () => status({ queued_reason: 'ceiling', in_flight: 18, estimated_wait_minutes: 26 }));
+    await waitFor(() => expect(container.textContent).toMatch(/waiting for capacity/i));
+    expect(container.textContent).toMatch(/18 briefs are currently running/);
+  });
+
+  // The branch that runs today, on a /submit response that carries no reason.
+  test('no reason at all keeps the copy that shipped', () => {
+    const { container } = show(queued);
+    expect(container.textContent).toMatch(/starts automatically when a slot frees up/i);
   });
 });
 

@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Check, Clock, AlertTriangle, ExternalLink } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { AccountSelection } from './AccountSearch';
@@ -5,6 +6,9 @@ import { salesforceAccountUrl } from '../lib/salesforce-url';
 // Was a local copy that had drifted — it offered neither Danish nor Finnish,
 // while '.dk' and '.fi' have been in the detection map the whole time.
 import { LANGUAGE_LABEL } from '../lib/language-detect';
+import {
+  fetchQueueStatus, queueWaitCopy, type QueueStatus, type QueuedReason,
+} from '../lib/queue-status';
 
 /**
  * What Submit shows once a run has actually been dispatched.
@@ -54,14 +58,29 @@ export interface SubmittedRun {
   selection: AccountSelection;
   /** The language select's value at submit time. */
   market: string;
-  /** Present on an immediate dispatch; absent on a queued one until it starts. */
+  /** The run id. Present on both paths — a queued run has a row too. */
   runId?: string;
   /**
    * Set only when the run was QUEUED rather than dispatched. Queued is still
    * submitted — the credit is spent and the row exists — so it gets the same
    * confirmation with a different timing line, not a warning banner.
+   *
+   * This is the snapshot `/submit` returned. It is the FIRST number shown, not
+   * the only one: the effect below re-reads it from `/queue-status/:runId` every
+   * few seconds for as long as the screen is up. Before that, the position and
+   * wait were captured once and never touched again, so twenty minutes later the
+   * confirmation still showed what was true at submit time.
+   *
+   * `reason` and `inFlight` come from the admission controller's queued
+   * response and are optional for a reason — a Worker without that build returns
+   * neither, and the copy falls back to the generic line.
    */
-  queue?: { position: number | null; waitMinutes: number | null };
+  queue?: {
+    position: number | null;
+    waitMinutes: number | null;
+    reason?: QueuedReason | null;
+    inFlight?: number | null;
+  };
 }
 
 interface Props {
@@ -73,9 +92,20 @@ interface Props {
    * otherwise throw on `useNavigate`.
    */
   onNavigate?: (path: string) => void;
+  /**
+   * The queue poller. Injected by tests so the live-refresh behaviour can be
+   * asserted without a network, and so a test rendering a queued run does not
+   * start a real interval against a Worker it cannot reach.
+   */
+  pollQueue?: (runId: string) => Promise<QueueStatus | null>;
+  /** Poll cadence. 10s in the app; tests drive it far faster. */
+  pollIntervalMs?: number;
 }
 
-export default function SubmitConfirmation({ submitted, onSubmitAnother, onNavigate }: Props) {
+export default function SubmitConfirmation({
+  submitted, onSubmitAnother, onNavigate,
+  pollQueue = fetchQueueStatus, pollIntervalMs = 10000,
+}: Props) {
   // Called unconditionally — hooks cannot be conditional — but only used when the
   // harness has not supplied a navigator. `useNavigate` is safe to call here
   // because the harness wraps this in a MemoryRouter for exactly that reason.
@@ -83,6 +113,51 @@ export default function SubmitConfirmation({ submitted, onSubmitAnother, onNavig
   const go = onNavigate ?? navigate;
 
   const { selection, market, runId, queue } = submitted;
+
+  /**
+   * The live queue reading, replacing the submit-time snapshot as soon as one
+   * arrives.
+   *
+   * This screen is the one an AE leaves open — it is where the "View in My
+   * Briefs" button is, so plenty of people read it and then do something else.
+   * A frozen "~24 minutes" on a screen that has been up for twenty of them is
+   * the bug; polling here rather than sending people to another page to get a
+   * fresh number is the fix, because a screen that is about to go stale is
+   * exactly what was being complained about.
+   *
+   * Stops on its own once the run leaves the queue, and the copy switches to
+   * "started" — so the screen goes right rather than merely stopping being
+   * wrong.
+   */
+  const [live, setLive] = useState<QueueStatus | null>(null);
+  const isQueued = !!queue;
+  const started = live != null && live.status !== 'queued';
+
+  useEffect(() => {
+    if (!isQueued || !runId || started) return;
+    let cancelled = false;
+    const tick = async () => {
+      const data = await pollQueue(runId);
+      // null means the endpoint refused, 404'd (a Worker without the route — the
+      // state production is in until the admission-controller build ships), or
+      // the network blipped. Keep whatever is on screen; never blank it.
+      if (!cancelled && data) setLive(data);
+    };
+    tick();
+    const id = setInterval(tick, pollIntervalMs);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [isQueued, runId, started, pollQueue, pollIntervalMs]);
+
+  /** Live where we have it, the submit-time snapshot until then. */
+  const queueView = queue
+    ? {
+        position: live?.queue_position ?? queue.position,
+        waitMinutes: live?.estimated_wait_minutes ?? queue.waitMinutes,
+        reason: live?.queued_reason ?? queue.reason ?? null,
+        inFlight: live?.in_flight ?? queue.inFlight ?? null,
+      }
+    : null;
+
   const isNewProspect = selection.kind === 'new_prospect';
   const typedDomain = selection.kind === 'whitespace_account'
     && selection.domain_source === 'user_entered';
@@ -122,16 +197,16 @@ export default function SubmitConfirmation({ submitted, onSubmitAnother, onNavig
           "succeeded" is the state, and the facts below it are just facts. */}
       <div style={{
         background: 'var(--bg-surface)',
-        border: `1px solid ${queue ? 'var(--border-strong)' : 'var(--status-complete-text, #16a34a)'}`,
+        border: `1px solid ${queue && !started ? 'var(--border-strong)' : 'var(--status-complete-text, #16a34a)'}`,
         borderRadius: 8,
         padding: 18,
       }}>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 14 }}>
-          {queue
+          {queue && !started
             ? <Clock size={16} style={{ flexShrink: 0, color: 'var(--text-secondary)' }} />
             : <Check size={16} style={{ flexShrink: 0, color: 'var(--status-complete-text, #16a34a)' }} />}
           <div style={{ fontSize: 14, fontWeight: 600 }}>
-            {queue ? 'Research queued' : 'Research submitted'}
+            {queue ? (started ? 'Research started' : 'Research queued') : 'Research submitted'}
           </div>
         </div>
 
@@ -214,10 +289,14 @@ export default function SubmitConfirmation({ submitted, onSubmitAnother, onNavig
           marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--border)',
           fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6,
         }}>
+          {/* One sentence, three shapes, chosen on `queued_reason` — see
+              lib/queue-status. The generic branch is today's copy verbatim and
+              is what renders against a Worker that does not send a reason. */}
           {queue
-            ? <>You&rsquo;re #{queue.position ?? '?'} in the queue — estimated wait
-                ~{queue.waitMinutes ?? '?'} minutes. It starts automatically when a slot
-                frees up, and you&rsquo;ll be notified when the brief is ready.</>
+            ? (started
+                ? <>It&rsquo;s running now — typically around 15 minutes from here. You&rsquo;ll
+                    be notified when it&rsquo;s ready; there is no need to keep this page open.</>
+                : queueWaitCopy(queueView!))
             : <>Typically around 15 minutes, longer if the system is busy. You&rsquo;ll be
                 notified when it&rsquo;s ready — there is no need to keep this page open.</>}
         </div>

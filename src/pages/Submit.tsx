@@ -355,6 +355,10 @@ export function SubmitBody({
           // Queued is submitted. The credit is spent and the row exists, so it
           // gets the confirmation rather than a warning banner — with the queue
           // position in place of the "~15 minutes" line.
+          //
+          // These are the numbers AT SUBMIT TIME. They are the confirmation's
+          // starting point, not its final word: it re-reads them from
+          // /queue-status/:runId while it is on screen.
           setSubmitted({
             selection: selection!,
             market,
@@ -362,6 +366,11 @@ export function SubmitBody({
             queue: {
               position: data.queue_position ?? null,
               waitMinutes: data.estimated_wait_minutes ?? null,
+              // Which gate is holding it. Undefined against a Worker without the
+              // admission-controller build, and the confirmation's copy falls
+              // back to the generic line on exactly that.
+              reason: data.queued_reason ?? null,
+              inFlight: data.in_flight ?? null,
             },
           });
           setSelection(null);

@@ -11,6 +11,10 @@ import TableSkeleton from '../components/TableSkeleton';
 import usePageTitle from '../hooks/usePageTitle';
 import useWindowWidth from '../hooks/useWindowWidth';
 import { FileText, RefreshCw, Eye, Clock, Trash2, RotateCcw } from 'lucide-react';
+import {
+  fetchQueueStatus, queueShortLabel, queueShortTitle, queueProgress,
+  type QueueStatus,
+} from '../lib/queue-status';
 
 interface Run {
   id: string;
@@ -25,6 +29,13 @@ interface Run {
   icp_score: string | null;
   market: string | null;
   queued_at: string | null;
+  /**
+   * On the row shape because the column exists; deliberately never read. It has
+   * never been written on any run (0 of 346, measured 2026-08-29), and starting
+   * to write it at INSERT would only swap "#?" for a number that goes stale the
+   * moment the run in front of it dispatches. The live position comes from
+   * `/queue-status/:runId` — see `queueViewFor`.
+   */
   queue_position: number | null;
   users?: { name: string; email?: string } | null;
 }
@@ -45,6 +56,29 @@ function relativeTime(dateStr: string): string {
   if (hrs < 24) return `${hrs}h ago`;
   const days = Math.floor(hrs / 24);
   return `${days}d ago`;
+}
+
+/** How many queued rows on screen get a live position. See the poll below. */
+const MAX_QUEUE_POLL = 8;
+
+/**
+ * What to show beside a queued run's badge.
+ *
+ * Live-only, and `run.queue_position` is deliberately NOT a fallback. That
+ * column has never been written on any of the 346 rows, so reading it can only
+ * ever produce "#?" — and if a later change starts writing it at INSERT, reading
+ * it would produce something worse: a number that was true once. The honest
+ * interim, against a Worker that does not have /queue-status yet, is the same
+ * "#?" the page shows today, with the hover text explaining the wait.
+ */
+function queueViewFor(run: Run, queueMap: Record<string, QueueStatus>) {
+  const live = queueMap[run.id];
+  return {
+    position: live?.queue_position ?? null,
+    waitMinutes: live?.estimated_wait_minutes ?? null,
+    reason: live?.queued_reason ?? null,
+    inFlight: live?.in_flight ?? null,
+  };
 }
 
 function FreshnessBadge({ createdAt, status }: { createdAt: string; status: string }) {
@@ -106,6 +140,10 @@ export default function MyBriefs() {
   const [healthOk, setHealthOk] = useState(true);
   const [retrying, setRetrying] = useState<string | null>(null);
   const [progressMap, setProgressMap] = useState<Record<string, { step: number; total: number; module: string | null; pct: number }>>({});
+  // Live queue status per queued run, keyed by run id. Never read from the row:
+  // `runs.queue_position` has never been written (0 of 346 rows), which is why
+  // every queued run rendered "Position #?".
+  const [queueMap, setQueueMap] = useState<Record<string, QueueStatus>>({});
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [rerunConfirm, setRerunConfirm] = useState<string | null>(null);
   const [rerunning, setRerunning] = useState<string | null>(null);
@@ -215,6 +253,52 @@ export default function MyBriefs() {
     const interval = setInterval(poll, 10000);
     return () => clearInterval(interval);
   }, [runningIds, session]);
+
+  // Poll queue position for queued runs.
+  //
+  // The running poll above deliberately excluded queued rows — `/progress/:id`
+  // returns `{status, progress: null}` for anything not running, so there was
+  // nothing to ask it. The consequence was that a queued run got no live updates
+  // at all: what an AE saw after fifteen minutes was "Queued · 15 minutes ago ·
+  // #?", which reads as stuck whether it is or not.
+  //
+  // Separate effect rather than a widened one, because it hits a different
+  // endpoint on a different cadence: /queue-status is a cheap Supabase read plus
+  // a cached admission peek, and the number it returns moves on the queue's
+  // timescale, not on a pipeline module's.
+  //
+  // Capped at MAX_QUEUE_POLL rows. Each call is a fresh snapshot — two Supabase
+  // reads plus an admission peek — and a manager on "show all" can be looking at
+  // a screen full of queued runs during exactly the pileup that makes the queue
+  // interesting. Ten rows on a 5s loop is 120 snapshots a minute for a number
+  // that is the same for all of them. The rows past the cap keep "#?", which is
+  // what every queued row shows today; the admin queue panel is the view for
+  // reading the whole queue at once.
+  const queuedIds = runs
+    .filter(r => r.status === 'queued')
+    .slice(0, MAX_QUEUE_POLL)
+    .map(r => r.id)
+    .join(',');
+  useEffect(() => {
+    if (!queuedIds || !session) return;
+    const ids = queuedIds.split(',');
+    let cancelled = false;
+    const poll = async () => {
+      const results = await Promise.all(ids.map(id => fetchQueueStatus(id)));
+      if (cancelled) return;
+      const updates: Record<string, QueueStatus> = {};
+      results.forEach((data, i) => { if (data) updates[ids[i]] = data; });
+      if (Object.keys(updates).length === 0) return;
+      setQueueMap(prev => ({ ...prev, ...updates }));
+      // A run that has left the queue answers with its new status. Pull the list
+      // in rather than waiting up to 5s for the next fetchRuns — the position
+      // and the badge would otherwise disagree with each other for a beat.
+      if (results.some(d => d && d.status !== 'queued')) fetchRuns();
+    };
+    poll();
+    const interval = setInterval(poll, 5000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [queuedIds, session, fetchRuns]);
 
   // Auto-refresh runs while any are running/queued (fallback for unreliable Realtime)
   const hasActive = runs.some(r => r.status === 'running' || r.status === 'queued');
@@ -366,14 +450,20 @@ export default function MyBriefs() {
 
                 {/* Row 2: Status + time */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                  <StatusBadge status={run.status} />
+                  <StatusBadge
+                    status={run.status}
+                    progress={queueProgress(run.queued_at, queueMap[run.id]?.estimated_wait_minutes ?? null)}
+                  />
                   <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
                     {relativeTime(run.created_at)}
                   </span>
                   <FreshnessBadge createdAt={run.created_at} status={run.status} />
                   {run.status === 'queued' && run.queued_at && (
-                    <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                      #{run.queue_position || '?'}
+                    <span
+                      style={{ fontSize: 12, color: 'var(--text-secondary)' }}
+                      title={queueShortTitle(queueViewFor(run, queueMap))}
+                    >
+                      {queueShortLabel(queueViewFor(run, queueMap))}
                     </span>
                   )}
                   {run.status === 'failed' && (
@@ -482,10 +572,16 @@ export default function MyBriefs() {
                     </td>
                     <td style={{ padding: '11px 16px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <StatusBadge status={run.status} />
+                        <StatusBadge
+                          status={run.status}
+                          progress={queueProgress(run.queued_at, queueMap[run.id]?.estimated_wait_minutes ?? null)}
+                        />
                         {run.status === 'queued' && run.queued_at && (
-                          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                            Position #{run.queue_position || '?'}
+                          <span
+                            style={{ fontSize: 12, color: 'var(--text-secondary)' }}
+                            title={queueShortTitle(queueViewFor(run, queueMap))}
+                          >
+                            Position {queueShortLabel(queueViewFor(run, queueMap))}
                           </span>
                         )}
                         {run.status === 'failed' && (

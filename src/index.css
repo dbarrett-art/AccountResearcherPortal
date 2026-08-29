@@ -173,6 +173,29 @@ body {
 
 .pulse { animation: pulse-dot 1.5s ease-in-out infinite; }
 
+/* Queued is a WAIT, not a stop.
+ *
+ * The queued dot was static grey, which put it in the same visual family as
+ * "complete" and "failed" — both terminal — and made a run that was progressing
+ * fine read as stuck. It now breathes, slowly and with a widening ring, at a
+ * rhythm nobody would confuse with `.pulse`: 1.5s opacity flicker for running,
+ * 2.8s expand-and-fade for queued. Different tempo, different motion, so the two
+ * are still told apart at a glance.
+ *
+ * `prefers-reduced-motion` drops both to a static dot — the badge text already
+ * says "Queued", so nothing is only conveyed by the animation. */
+@keyframes pulse-wait {
+  0%   { opacity: 0.55; box-shadow: 0 0 0 0 currentColor; }
+  55%  { opacity: 1;    box-shadow: 0 0 0 3px transparent; }
+  100% { opacity: 0.55; box-shadow: 0 0 0 0 transparent; }
+}
+
+.pulse-wait { animation: pulse-wait 2.8s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse, .pulse-wait { animation: none; }
+}
+
 @keyframes slideIn {
   from { transform: translateX(100%); opacity: 0; }
   to   { transform: translateX(0);   opacity: 1; }
